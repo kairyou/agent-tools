@@ -50,13 +50,10 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 ```
 
 Pass multiple skills after `--skill`, for example `--skill commit other-skill`.
-By default, `skills@latest` detects the current agent.
 
 ## Installing hooks & statusline
 
-Skills are installed with `npx -y skills@latest` (above). Hooks and statusline
-are installed separately with `scripts/install.mjs` because agent plugin
-manifests do not auto-load them.
+Install hooks and statusline with the repo installer:
 
 ```bash
 # Claude: statusLine + guard
@@ -83,8 +80,7 @@ Installed capabilities:
 - **Codex** — the `guard` hook, in `~/.codex/hooks.json`.
 - **opencode** — the `guard`, as a plugin stub dropped into `~/.config/opencode/plugin/`.
 
-The `guard` hook blocks a small deny-list of catastrophic shell commands. It is
-a safety net, not a sandbox, and it fails open.
+The `guard` hook blocks a small deny-list of catastrophic shell commands.
 
 After installing Codex hooks, run `/hooks` inside Codex and approve the
 agent-tooling guard. After installing the opencode plugin, restart opencode.

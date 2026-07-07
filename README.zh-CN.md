@@ -48,12 +48,10 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 ```
 
 多个 skill 可以跟在 `--skill` 后面，例如 `--skill commit other-skill`。
-默认情况下，`skills@latest` 会检测当前 agent。
 
 ## 安装 hooks 与 statusline
 
-Skills 用 `npx -y skills@latest` 安装（见上）。hooks 和 statusline 需要单独用
-`scripts/install.mjs` 接到各 agent 的配置里，因为 plugin manifest 不会自动加载它们。
+用仓库内置安装器安装 hooks 与 statusline：
 
 ```bash
 # Claude：statusLine + guard
@@ -80,7 +78,7 @@ node scripts/install.mjs --uninstall
 - **Codex** —— `guard` hook，写入 `~/.codex/hooks.json`。
 - **opencode** —— `guard`，作为插件桩放进 `~/.config/opencode/plugin/`。
 
-`guard` hook 会拦截一小份灾难性 shell 命令的 deny-list。它是安全网，不是沙箱；出错时会放行。
+`guard` hook 会拦截一小份灾难性 shell 命令的 deny-list。
 
 安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tooling guard。安装
 opencode plugin 后，需要重启 opencode。
