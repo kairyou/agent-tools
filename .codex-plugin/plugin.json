@@ -1,0 +1,7 @@
+{
+  "name": "agent-tooling",
+  "version": "0.1.0",
+  "description": "Personal and team agent tooling: skills, hooks, statusline snippets, and install helpers",
+  "license": "MIT",
+  "skills": "./skills/"
+}

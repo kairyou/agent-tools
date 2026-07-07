@@ -1,0 +1,7 @@
+{
+  "name": "agent-tooling",
+  "description": "Personal and team agent tooling: skills, hooks, statusline snippets, and install helpers",
+  "skills": [
+    "./skills/workflow/commit"
+  ]
+}

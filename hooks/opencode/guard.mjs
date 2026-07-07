@@ -1,0 +1,28 @@
+// opencode plugin: blocks catastrophic shell commands (agent-tooling guard).
+//
+// This is opencode's equivalent of the Claude/Codex PreToolUse guard. opencode
+// has no declarative hook config — extensions are JS/TS plugins — so the shared
+// deny-list lives in ../common/guard-rules.mjs and this thin plugin throws to
+// block a matching `bash` command.
+//
+// Wiring: registered via opencode.json `plugin` array as a file:// path to THIS
+// file in the repo (see scripts/install.mjs). Because it runs from its repo
+// location, the relative import of the shared rules resolves normally.
+//
+// Docs: https://opencode.ai/docs/plugins
+//
+// Known gap: opencode's tool.execute.before does NOT intercept tool calls made
+// by subagents spawned via the `task` tool (opencode issue #5894). This guard
+// cannot cover those until opencode fixes it.
+
+import { checkCommand } from "../common/guard-rules.mjs";
+
+export const AgentToolingGuard = async () => ({
+  "tool.execute.before": async (input, output) => {
+    if (input?.tool !== "bash") return;
+    const reason = checkCommand(output?.args?.command);
+    if (reason) {
+      throw new Error(`Blocked by agent-tooling guard: ${reason}`);
+    }
+  },
+});
