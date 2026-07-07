@@ -2,6 +2,7 @@
 // statusline.fields controls both visibility and order.
 // Remove a field to hide it; move a field to reorder it.
 // Available statusline fields: branch, model, fiveHour, week, context, directory.
+// providerUsage is used by the Codex provider-usage hook.
 {
   "statusline": {
     "fields": ["branch", "model", "fiveHour", "week"],
@@ -14,5 +15,10 @@
       "week": "w",
       "context": "ctx"
     }
+  },
+  "providerUsage": {
+    "days": 30,
+    "lowBalanceUsd": 10,
+    "debug": false
   }
 }

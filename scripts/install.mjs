@@ -5,6 +5,7 @@
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
 //   guard       PreToolUse hook blocking catastrophic shell commands (claude + codex).
+//   provider-usage  Codex hook showing active API provider quota/balance.
 //
 // Targets:
 //   claude   -> ~/.claude/settings.json          (statusLine key + hooks key)
@@ -47,6 +48,7 @@ const SOURCE = {
   guardCommand: path.join(REPO_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(REPO_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(REPO_ROOT, "hooks", "opencode", "guard.mjs"),
+  codexProviderUsage: path.join(REPO_ROOT, "hooks", "codex", "provider-usage.mjs"),
   config: path.join(REPO_ROOT, "config.default.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "statusline", "claude", "statusline.mjs"),
 };
@@ -54,10 +56,11 @@ const RUNTIME = {
   guardCommand: path.join(INSTALL_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(INSTALL_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(INSTALL_ROOT, "hooks", "opencode", "guard.mjs"),
+  codexProviderUsage: path.join(INSTALL_ROOT, "hooks", "codex", "provider-usage.mjs"),
   config: path.join(INSTALL_ROOT, "config.jsonc"),
   claudeStatusline: path.join(INSTALL_ROOT, "statusline", "claude", "statusline.mjs"),
 };
-const ALL_CAPS = ["statusline", "guard"];
+const ALL_CAPS = ["statusline", "guard", "provider-usage"];
 const ALL_AGENTS = ["claude", "codex", "opencode"];
 
 function fwd(p) {
@@ -179,18 +182,21 @@ function copyRuntimeFile(src, dest, dryRun, options = {}) {
 function installRuntimeAssets(opts) {
   if (opts.uninstall) return;
   const files = [];
+  function addFile(src, dest, options) {
+    if (!files.some(([, existingDest]) => existingDest === dest)) files.push([src, dest, options]);
+  }
   if (wants(opts, "guard")) {
-    files.push(
-      [SOURCE.guardCommand, RUNTIME.guardCommand],
-      [SOURCE.guardRules, RUNTIME.guardRules],
-      [SOURCE.opencodeGuard, RUNTIME.opencodeGuard]
-    );
+    addFile(SOURCE.guardCommand, RUNTIME.guardCommand);
+    addFile(SOURCE.guardRules, RUNTIME.guardRules);
+    addFile(SOURCE.opencodeGuard, RUNTIME.opencodeGuard);
   }
   if (wants(opts, "statusline")) {
-    files.push(
-      [SOURCE.claudeStatusline, RUNTIME.claudeStatusline],
-      [SOURCE.config, RUNTIME.config, { mergeJsonc: true }]
-    );
+    addFile(SOURCE.claudeStatusline, RUNTIME.claudeStatusline);
+    addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
+  }
+  if (wants(opts, "provider-usage")) {
+    addFile(SOURCE.codexProviderUsage, RUNTIME.codexProviderUsage);
+    addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (files.length === 0) return;
   console.log(`runtime: ${INSTALL_ROOT}`);
@@ -330,6 +336,47 @@ function applyGuard(cfg, { matcher, remove }) {
   cfg.hooks.PreToolUse.push(guardEntry(matcher));
 }
 
+function providerUsageEntry() {
+  return {
+    hooks: [
+      {
+        type: "command",
+        command: `${nodeCmd(RUNTIME.codexProviderUsage)} hook`,
+        timeout: 5,
+        statusMessage: "Refreshing API usage",
+      },
+    ],
+  };
+}
+
+function isOurProviderUsageEntry(entry) {
+  return (
+    entry &&
+    Array.isArray(entry.hooks) &&
+    entry.hooks.some(
+      (h) => typeof h?.command === "string" && h.command.includes("provider-usage.mjs")
+    )
+  );
+}
+
+function applyProviderUsage(cfg, { remove }) {
+  cfg.hooks = cfg.hooks || {};
+  const events = ["UserPromptSubmit", "Stop"];
+  for (const event of events) {
+    if (remove) {
+      if (cfg.hooks[event]) {
+        cfg.hooks[event] = cfg.hooks[event].filter((entry) => !isOurProviderUsageEntry(entry));
+        if (cfg.hooks[event].length === 0) delete cfg.hooks[event];
+      }
+      continue;
+    }
+    cfg.hooks[event] = cfg.hooks[event] || [];
+    cfg.hooks[event] = cfg.hooks[event].filter((entry) => !isOurProviderUsageEntry(entry));
+    cfg.hooks[event].push(providerUsageEntry());
+  }
+  if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
+}
+
 // ---- Claude: statusLine (backed up in _agentTooling) + guard hook. ----
 
 function runClaude(opts) {
@@ -379,30 +426,43 @@ function runClaude(opts) {
   writeJson(settings, cfg, opts.dryRun);
 }
 
-// ---- Codex: guard hook only, in a standalone hooks.json. No meta key is
+// ---- Codex: hooks in a standalone hooks.json. No meta key is
 // written (Codex validates hooks.json against a schema); our hook is found by
 // command signature instead. ----
 
 function runCodex(opts) {
-  if (!wants(opts, "guard")) {
-    console.log("codex: nothing to do (only supports: guard).");
+  if (!wants(opts, "guard") && !wants(opts, "provider-usage")) {
+    console.log("codex: nothing to do (supports: guard, provider-usage).");
     return;
   }
   const file = opts.codexHooks || path.join(os.homedir(), ".codex", "hooks.json");
   console.log(`codex (global): ${file}`);
   const cfg = readJson(file);
 
-  if (opts.uninstall) {
-    applyGuard(cfg, { remove: true });
-    console.log("  - guard");
-    if (Object.keys(cfg).length === 0 && fs.existsSync(file)) {
-      removeFile(file, opts.dryRun);
-      return;
+  if (wants(opts, "guard")) {
+    if (opts.uninstall) {
+      applyGuard(cfg, { remove: true });
+      console.log("  - guard");
+    } else {
+      // Codex matches the tool name (normalized to "Bash") as a regex.
+      applyGuard(cfg, { matcher: "^Bash$" });
+      console.log("  + guard (PreToolUse Bash)");
     }
-  } else {
-    // Codex matches the tool name (normalized to "Bash") as a regex.
-    applyGuard(cfg, { matcher: "^Bash$" });
-    console.log("  + guard (PreToolUse Bash)");
+  }
+
+  if (wants(opts, "provider-usage")) {
+    if (opts.uninstall) {
+      applyProviderUsage(cfg, { remove: true });
+      console.log("  - provider-usage");
+    } else {
+      applyProviderUsage(cfg, { remove: false });
+      console.log("  + provider-usage (UserPromptSubmit + Stop)");
+    }
+  }
+
+  if (opts.uninstall && Object.keys(cfg).length === 0 && fs.existsSync(file)) {
+    removeFile(file, opts.dryRun);
+    return;
   }
 
   writeJson(file, cfg, opts.dryRun);
@@ -410,7 +470,7 @@ function runCodex(opts) {
   if (!opts.uninstall && !opts.dryRun) {
     console.log(
       "  NOTE: Codex will not run this hook until you trust it — run `/hooks` " +
-        "inside Codex and approve the agent-tooling guard."
+        "inside Codex and approve the agent-tooling hooks."
     );
   }
 }

@@ -59,8 +59,8 @@ Install hooks and statusline with the repo installer:
 # Claude: statusLine + guard
 npx -y github:kairyou/agent-tooling statusline guard -a claude
 
-# Codex: guard
-npx -y github:kairyou/agent-tooling guard -a codex
+# Codex: guard + API provider usage
+npx -y github:kairyou/agent-tooling guard provider-usage -a codex
 
 # opencode: guard plugin
 npx -y github:kairyou/agent-tooling guard -a opencode
@@ -69,8 +69,8 @@ npx -y github:kairyou/agent-tooling guard -a opencode
 npx -y github:kairyou/agent-tooling guard -a claude codex opencode
 
 # Preview or uninstall
-npx -y github:kairyou/agent-tooling guard -a codex --dry-run
-npx -y github:kairyou/agent-tooling guard -a codex --uninstall
+npx -y github:kairyou/agent-tooling guard provider-usage -a codex --dry-run
+npx -y github:kairyou/agent-tooling guard provider-usage -a codex --uninstall
 ```
 
 The installer copies runtime scripts into `~/.agent-tooling/` and points agent
@@ -79,13 +79,15 @@ configs there.
 Installed capabilities:
 
 - **Claude** — `statusLine` + the `guard` PreToolUse hook, in `~/.claude/settings.json`.
-- **Codex** — the `guard` hook, in `~/.codex/hooks.json`.
+- **Codex** — the `guard` hook and `provider-usage` hook, in `~/.codex/hooks.json`.
 - **opencode** — the `guard`, as a plugin stub dropped into `~/.config/opencode/plugin/`.
 
 The `guard` hook blocks a small deny-list of catastrophic shell commands.
+The `provider-usage` hook shows the active API provider's balance, quota, or plan
+usage when the provider exposes a compatible `/v1/usage` endpoint.
 
 After installing Codex hooks, run `/hooks` inside Codex and approve the
-agent-tooling guard. After installing the opencode plugin, restart opencode.
+agent-tooling hooks. After installing the opencode plugin, restart opencode.
 
 Claude statusLine defaults to:
 
