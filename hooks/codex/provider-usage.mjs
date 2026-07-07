@@ -49,7 +49,7 @@ function textOut(message) {
 
 function failSoft(message, error) {
   const detail = error?.message ? `: ${error.message}` : "";
-  if (mode === "hook" || mode === "stop") hookOut();
+  if (mode === "hook") hookOut();
   else if (mode !== "refresh") textOut(`${message}${detail}`);
 }
 
@@ -671,36 +671,6 @@ function formatUsageLine(label, root) {
   return parts.join(" | ");
 }
 
-async function warningForUsage(text, raw) {
-  const config = await agentConfig();
-  const root = usageRoot(raw);
-  const remaining = pickNumber(root, ["remaining"]);
-  const quotaRemaining = pickNumber(root?.quota, ["remaining"]);
-  const balance = pickNumber(root, ["balance", "remaining", "remain", "available"]);
-  const sub = root?.subscription || {};
-  const dailyLimit = pickNumber(sub, ["daily_limit_usd"]);
-  const dailyUsage = pickNumber(sub, ["daily_usage_usd"]);
-  const weeklyLimit = pickNumber(sub, ["weekly_limit_usd"]);
-  const weeklyUsage = pickNumber(sub, ["weekly_usage_usd"]);
-  const monthlyLimit = pickNumber(sub, ["monthly_limit_usd"]);
-  const monthlyUsage = pickNumber(sub, ["monthly_usage_usd"]);
-  const lowBalanceUsd = Number(process.env.PROVIDER_USAGE_LOW_BALANCE_USD || config.lowBalanceUsd || "10");
-
-  if (isQuotaLimitedUsage(root) && quotaRemaining !== undefined && quotaRemaining <= lowBalanceUsd) {
-    return `API key quota low: ${text}`;
-  }
-  if (isWalletUsage(root) && balance !== undefined && balance <= lowBalanceUsd) {
-    return `API wallet balance low: ${text}`;
-  }
-  if (isSubscriptionUsage(root) && remaining !== undefined && remaining >= 0 && remaining <= lowBalanceUsd) {
-    return `API quota low: ${text}`;
-  }
-  if (dailyLimit > 0 && dailyUsage / dailyLimit >= 0.9) return `API daily quota high: ${text}`;
-  if (weeklyLimit > 0 && weeklyUsage / weeklyLimit >= 0.9) return `API weekly quota high: ${text}`;
-  if (monthlyLimit > 0 && monthlyUsage / monthlyLimit >= 0.9) return `API monthly quota high: ${text}`;
-  return "";
-}
-
 // Sub2API and several private OpenAI-compatible gateways expose a lightweight
 // OpenAI-style endpoint at /v1/usage. This is intentionally probed first for
 // generic non-OpenAI base URLs because it does not require a management token.
@@ -939,10 +909,6 @@ try {
   } else if (mode === "hook") {
     const result = await refresh();
     hookOut(result?.text || "");
-  } else if (mode === "stop") {
-    const result = await refresh();
-    const warning = result?.text ? await warningForUsage(result.text, result.raw) : "";
-    hookOut(warning);
   } else {
     throw new Error(`unknown mode: ${mode}`);
   }
