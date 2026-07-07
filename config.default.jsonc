@@ -3,6 +3,8 @@
 // Remove a field to hide it; move a field to reorder it.
 // Available statusline fields: branch, model, fiveHour, week, context, directory.
 // providerUsage is used by the Codex provider-usage hook.
+// preset auto probes compatible usage endpoints for Sub2API-like, NewAPI/OneAPI
+// family gateways, and OpenRouter-style gateways.
 {
   "statusline": {
     "fields": ["branch", "model", "fiveHour", "week"],
@@ -17,8 +19,11 @@
     }
   },
   "providerUsage": {
+    "preset": "auto",
     "days": 30,
     "lowBalanceUsd": 10,
+    "newApiQuotaScale": 500000,
+    "userId": null,
     "debug": false
   }
 }

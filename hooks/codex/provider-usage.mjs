@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Codex provider usage hook (agent-tooling).
-// Reads the active Codex provider from ~/.codex/config.toml, calls a compatible
-// /v1/usage endpoint, and prints a compact balance/quota message as a Codex hook
-// systemMessage. Fails open when provider usage cannot be fetched.
+// Reads the active Codex provider from ~/.codex/config.toml, probes known
+// gateway usage endpoints, and prints a compact balance/quota message as a
+// Codex hook systemMessage. Fails open when provider usage cannot be fetched.
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -18,6 +18,7 @@ const DEBUG_PATH = join(AGENT_TOOLING_HOME, "logs", "provider-usage-debug.log");
 const REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_USAGE_DAYS = 30;
 const MAX_USAGE_DAYS = 90;
+const DEFAULT_NEW_API_QUOTA_SCALE = 500000;
 
 const mode = process.argv[2] || "hook";
 
@@ -169,6 +170,27 @@ function isOfficialBaseUrl(baseUrl) {
   return clean === "https://api.openai.com" || clean === "https://api.openai.com/v1";
 }
 
+function cleanBaseUrl(baseUrl) {
+  return String(baseUrl || "").replace(/\/+$/, "");
+}
+
+function serviceRoot(baseUrl) {
+  const clean = cleanBaseUrl(baseUrl);
+  return clean.endsWith("/v1") ? clean.slice(0, -3) : clean;
+}
+
+function joinUrl(baseUrl, path) {
+  return `${cleanBaseUrl(baseUrl)}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function hostIncludes(baseUrl, value) {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase().includes(value);
+  } catch {
+    return false;
+  }
+}
+
 async function providerUsageDays() {
   const config = await agentConfig();
   const value = Number(process.env.PROVIDER_USAGE_DAYS || config.days || DEFAULT_USAGE_DAYS);
@@ -180,6 +202,65 @@ async function subscriptionUrl(baseUrl) {
   const clean = baseUrl.replace(/\/+$/, "");
   const url = clean.endsWith("/v1") ? `${clean}/usage` : `${clean}/v1/usage`;
   return `${url}?days=${await providerUsageDays()}`;
+}
+
+async function usagePreset() {
+  const config = await agentConfig();
+  return String(process.env.PROVIDER_USAGE_PRESET || config.preset || "auto").toLowerCase();
+}
+
+async function panelUserId() {
+  const config = await agentConfig();
+  const raw = process.env.PROVIDER_USAGE_USER_ID || config.userId || "";
+  const parsed = Number.parseInt(String(raw), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function panelUserHeaders() {
+  const userId = await panelUserId();
+  if (!userId) return {};
+  const value = String(userId);
+  return {
+    "New-API-User": value,
+    "Veloera-User": value,
+    "voapi-user": value,
+    "User-id": value,
+    "X-User-Id": value,
+    "Rix-Api-User": value,
+    "neo-api-user": value,
+  };
+}
+
+async function requestJson(url, key, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${options.authKey || key}`,
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    const body = await response.text();
+    let json = {};
+    try {
+      json = body ? JSON.parse(body) : {};
+    } catch {
+      throw new Error(`${options.name || "usage"} returned non-JSON (${response.status})`);
+    }
+
+    if (!response.ok) {
+      const message = json?.error?.message || json?.message || response.statusText;
+      throw new Error(`${options.name || "usage"} failed (${response.status} ${message})`);
+    }
+
+    return json;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function apiKeyFor(auth, provider) {
@@ -206,6 +287,23 @@ function pickNumber(obj, keys) {
 
 function formatMoney(value) {
   return `$${value.toFixed(value >= 100 ? 0 : 1)}`;
+}
+
+function formatMaybeMoney(value, unit = "USD") {
+  if (unit === "USD" || unit === "$") return formatMoney(value);
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+async function formatNewApiQuota(value) {
+  const scale = await newApiQuotaScale();
+  if (Number.isFinite(scale) && scale > 0) return formatMoney(value / scale);
+  return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+async function newApiQuotaScale() {
+  const config = await agentConfig();
+  const scale = Number(config.newApiQuotaScale || DEFAULT_NEW_API_QUOTA_SCALE);
+  return Number.isFinite(scale) && scale > 0 ? scale : 0;
 }
 
 function usageRoot(data) {
@@ -248,7 +346,7 @@ function isWalletUsage(root) {
   );
 }
 
-function formatQuota(label, data) {
+async function formatQuota(label, data) {
   const root = usageRoot(data);
   const unit = root?.unit || "USD";
   const remaining = pickNumber(root, ["remaining"]);
@@ -258,16 +356,104 @@ function formatQuota(label, data) {
 
   if (isQuotaLimitedUsage(root)) return formatQuotaLimitedLine(label, root);
   if (isSubscriptionUsage(root)) return formatUsageLine(label, root);
-  if (isWalletUsage(root)) return formatWalletLine(label, root);
+  if (isWalletUsage(root)) return await formatWalletLine(label, root);
   if (remaining !== undefined) return formatUsageLine(label, root);
-  if (balance !== undefined) return `${label} quota ${formatMoney(balance)} left`;
+  if (balance !== undefined) return `${label} quota ${formatMaybeMoney(balance, unit)} left`;
   if (hardLimit !== undefined && used !== undefined) {
-    return `${label} quota ${formatMoney(Math.max(0, hardLimit - used))} left`;
+    return `${label} quota ${formatMaybeMoney(Math.max(0, hardLimit - used), unit)} left`;
   }
-  if (hardLimit !== undefined) return `${label} quota ${formatMoney(hardLimit)} total`;
+  if (hardLimit !== undefined) return `${label} quota ${formatMaybeMoney(hardLimit, unit)} total`;
 
   const keys = Object.keys(root || {}).slice(0, 4).join(", ");
   return keys ? `${label} quota received (${keys})` : `${label} quota checked (${unit})`;
+}
+
+async function formatNewApiTokenLine(label, data) {
+  const root = usageRoot(data);
+  const title = root?.token_name || root?.key_name || root?.name || label || "NewAPI";
+  const unlimited = root?.unlimited_quota === true || root?.unlimitedQuota === true;
+  const quota = pickNumber(root, ["quota", "limit", "total_quota", "totalQuota"]);
+  const used = pickNumber(root, ["used_quota", "usedQuota", "used"]);
+  let remaining = pickNumber(root, ["remain_quota", "remainQuota", "remaining", "balance"]);
+  if (remaining === undefined && quota !== undefined && used !== undefined) {
+    remaining = Math.max(0, quota - used);
+  }
+
+  if (!unlimited && quota === undefined && used === undefined && remaining === undefined) {
+    throw new Error("NewAPI token usage payload has no quota fields");
+  }
+
+  const parts = [`[额度] ${title}`];
+  if (unlimited) parts.push("无限额度");
+  if (remaining !== undefined) parts.push(`余额 ${await formatNewApiQuota(remaining)}`);
+  if (used !== undefined && quota !== undefined) {
+    parts.push(`已用 ${await formatNewApiQuota(used)}/${await formatNewApiQuota(quota)}`);
+  } else if (used !== undefined) {
+    parts.push(`已用 ${await formatNewApiQuota(used)}`);
+  }
+  return parts.join(" | ");
+}
+
+function formatOpenRouterLine(label, data) {
+  const root = usageRoot(data);
+  const limit = pickNumber(root, ["limit", "limit_remaining", "total_credits"]);
+  const remaining = pickNumber(root, ["limit_remaining", "remaining_credits"]);
+  const used = pickNumber(root, ["usage", "total_usage", "spend"]);
+  const reset = root?.limit_reset || root?.reset_at ? shortDate(root.limit_reset || root.reset_at) : "";
+  const parts = [`[额度] ${label || "OpenRouter"}`];
+
+  if (remaining !== undefined) parts.push(`余额 ${formatMoney(remaining)}`);
+  if (used !== undefined && limit !== undefined && limit !== remaining) {
+    parts.push(`已用 ${formatMoney(used)}/${formatMoney(limit)}`);
+  } else if (used !== undefined) {
+    parts.push(`已用 ${formatMoney(used)}`);
+  }
+  if (reset) parts.push(`Reset ${reset}`);
+
+  if (parts.length === 1) throw new Error("OpenRouter payload has no usage fields");
+  return parts.join(" | ");
+}
+
+function panelQuotaScale(kind) {
+  return kind === "veloera" ? 1000000 : DEFAULT_NEW_API_QUOTA_SCALE;
+}
+
+function panelQuotaLooksRemaining(kind) {
+  return ["new-api", "anyrouter", "agentrouter", "done-hub", "donehub"].includes(kind);
+}
+
+async function formatPanelUserSelfLine(label, data, kind) {
+  const root = usageRoot(data);
+  const title = root?.username || root?.display_name || label || kind || "API";
+  const scale = panelQuotaScale(kind);
+  const quota = pickNumber(root, ["quota"]);
+  const used = pickNumber(root, ["used_quota", "usedQuota"]);
+  const todayIncome = pickNumber(root, ["today_income", "todayIncome"]);
+  const todayUsed = pickNumber(root, ["today_quota_consumption", "todayQuotaConsumption"]);
+
+  if (quota === undefined && used === undefined) {
+    throw new Error("panel /api/user/self payload has no quota fields");
+  }
+
+  const quotaUsd = quota === undefined ? undefined : quota / scale;
+  const usedUsd = used === undefined ? undefined : used / scale;
+  const remainingUsd = panelQuotaLooksRemaining(kind)
+    ? quotaUsd
+    : (quotaUsd === undefined || usedUsd === undefined ? quotaUsd : Math.max(0, quotaUsd - usedUsd));
+  const totalUsd = panelQuotaLooksRemaining(kind)
+    ? (quotaUsd === undefined || usedUsd === undefined ? quotaUsd : quotaUsd + usedUsd)
+    : quotaUsd;
+
+  const parts = [`[额度] ${title}`];
+  if (remainingUsd !== undefined) parts.push(`余额 ${formatMoney(remainingUsd)}`);
+  if (usedUsd !== undefined && totalUsd !== undefined) {
+    parts.push(`已用 ${formatMoney(usedUsd)}/${formatMoney(totalUsd)}`);
+  } else if (usedUsd !== undefined) {
+    parts.push(`已用 ${formatMoney(usedUsd)}`);
+  }
+  if (todayUsed !== undefined) parts.push(`今日 ${formatMoney(todayUsed / scale)}`);
+  if (todayIncome !== undefined) parts.push(`收入 ${formatMoney(todayIncome / scale)}`);
+  return parts.join(" | ");
 }
 
 function formatQuotaLimitedLine(label, root) {
@@ -367,6 +553,177 @@ async function warningForUsage(text, raw) {
   return "";
 }
 
+// Sub2API and several private OpenAI-compatible gateways expose a lightweight
+// OpenAI-style endpoint at /v1/usage. This is intentionally probed first for
+// generic non-OpenAI base URLs because it does not require a management token.
+async function fetchOpenAiCompatibleUsage(context) {
+  const json = await requestJson(await subscriptionUrl(context.baseUrl), context.key, {
+    name: "OpenAI-compatible usage",
+  });
+  return usageResult(context, "openai-compatible-usage", await formatQuota(context.label, json), json);
+}
+
+// NewAPI / OneAPI family, including AnyRouter/AgentRouter-style deployments:
+// use the current API key as Bearer auth and query token usage from the service
+// root rather than the /v1 OpenAI-compatible path.
+async function fetchNewApiTokenUsage(context) {
+  const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/usage/token/"), context.key, {
+    name: "NewAPI token usage",
+  });
+  const root = usageRoot(json);
+  const quota = pickNumber(root, ["quota", "limit", "total_quota", "totalQuota"]);
+  const used = pickNumber(root, ["used_quota", "usedQuota", "used"]);
+  let remaining = pickNumber(root, ["remain_quota", "remainQuota", "remaining", "balance"]);
+  if (remaining === undefined && quota !== undefined && used !== undefined) {
+    remaining = Math.max(0, quota - used);
+  }
+  const scale = await newApiQuotaScale();
+  const quotaForWarning = scale ? quota / scale : quota;
+  const usedForWarning = scale ? used / scale : used;
+  const remainingForWarning = scale ? remaining / scale : remaining;
+  const normalized = {
+    mode: "quota_limited",
+    quota: {
+      limit: quotaForWarning,
+      used: usedForWarning,
+      remaining: remainingForWarning,
+    },
+    unit: scale ? "USD" : "quota",
+    source: "new-api-token-usage",
+    raw: json,
+  };
+  return usageResult(
+    context,
+    "new-api-token-usage",
+    await formatNewApiTokenLine(context.label, json),
+    normalized
+  );
+}
+
+// NewAPI / OneAPI / OneHub / DoneHub / Veloera panel session endpoint, based on
+// Metapi's platform adapters. This works when PROVIDER_USAGE_API_KEY is a panel
+// access/session token, or when the site accepts the API key for /api/user/self.
+async function fetchPanelUserSelfUsage(context) {
+  const preset = await usagePreset();
+  const kind = preset === "auto" ? "new-api" : preset;
+  const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/user/self"), context.key, {
+    name: "panel /api/user/self",
+    headers: await panelUserHeaders(),
+  });
+  const root = usageRoot(json);
+  const scale = panelQuotaScale(kind);
+  const quota = pickNumber(root, ["quota"]);
+  const used = pickNumber(root, ["used_quota", "usedQuota"]);
+  const remaining = panelQuotaLooksRemaining(kind)
+    ? quota
+    : (quota === undefined || used === undefined ? quota : Math.max(0, quota - used));
+  const total = panelQuotaLooksRemaining(kind)
+    ? (quota === undefined || used === undefined ? quota : quota + used)
+    : quota;
+  const normalized = {
+    mode: "quota_limited",
+    quota: {
+      limit: total === undefined ? undefined : total / scale,
+      used: used === undefined ? undefined : used / scale,
+      remaining: remaining === undefined ? undefined : remaining / scale,
+    },
+    unit: "USD",
+    source: "panel-user-self",
+    raw: json,
+  };
+  return usageResult(
+    context,
+    "panel-user-self",
+    await formatPanelUserSelfLine(context.label, json, kind),
+    normalized
+  );
+}
+
+// Sub2API exposes user balance as USD at /api/v1/auth/me. Newer deployments may
+// also expose subscription summaries, but the auth/me balance is the reliable
+// low-noise signal used by Metapi's Sub2API adapter.
+async function fetchSub2ApiAuthMeUsage(context) {
+  const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/v1/auth/me"), context.key, {
+    name: "Sub2API auth/me",
+  });
+  const root = usageRoot(json);
+  const balance = pickNumber(root, ["balance"]);
+  if (balance === undefined) throw new Error("Sub2API auth/me payload has no balance field");
+  const title = root?.username || root?.email || context.label || "Sub2API";
+  const normalized = {
+    mode: "unrestricted",
+    planName: title,
+    balance,
+    unit: "USD",
+    source: "sub2api-auth-me",
+    raw: json,
+  };
+  return usageResult(
+    context,
+    "sub2api-auth-me",
+    `[额度] ${title} | 余额 ${formatMoney(balance)}`,
+    normalized
+  );
+}
+
+// OpenRouter exposes normal API-key usage at /api/v1/key. Some accounts also
+// expose credits at /api/v1/credits; keep this adapter isolated because
+// OpenRouter's base URL already includes /api/v1, unlike NewAPI/OneAPI.
+async function fetchOpenRouterUsage(context) {
+  const base = cleanBaseUrl(context.baseUrl).includes("/api/v1")
+    ? cleanBaseUrl(context.baseUrl)
+    : joinUrl(serviceRoot(context.baseUrl), "/api/v1");
+  const endpoints = [
+    { source: "openrouter-key", url: joinUrl(base, "/key") },
+    { source: "openrouter-credits", url: joinUrl(base, "/credits") },
+  ];
+  let lastError;
+  for (const endpoint of endpoints) {
+    try {
+      const json = await requestJson(endpoint.url, context.key, { name: endpoint.source });
+      return usageResult(context, endpoint.source, formatOpenRouterLine("OpenRouter", json), json);
+    } catch (error) {
+      lastError = error;
+      await debugLog({ source: endpoint.source, error: error.message });
+    }
+  }
+  throw lastError || new Error("OpenRouter usage unavailable");
+}
+
+function usageResult(context, source, text, raw) {
+  return {
+    updatedAt: new Date().toISOString(),
+    baseUrl: context.baseUrl,
+    provider: context.providerName,
+    source,
+    text,
+    raw,
+  };
+}
+
+async function usageAdapters(context) {
+  const preset = await usagePreset();
+  const adapters = {
+    "sub2api": [fetchSub2ApiAuthMeUsage, fetchOpenAiCompatibleUsage],
+    "openai-compatible": [fetchOpenAiCompatibleUsage],
+    "new-api": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "one-api": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "onehub": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "one-hub": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "donehub": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "done-hub": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage],
+    "veloera": [fetchPanelUserSelfUsage, fetchNewApiTokenUsage],
+    "anyrouter": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage, fetchOpenAiCompatibleUsage],
+    "agentrouter": [fetchNewApiTokenUsage, fetchPanelUserSelfUsage, fetchOpenAiCompatibleUsage],
+    "openrouter": [fetchOpenRouterUsage],
+  };
+  if (adapters[preset]) return adapters[preset];
+
+  if (preset !== "auto") return [];
+  if (hostIncludes(context.baseUrl, "openrouter.ai")) return [fetchOpenRouterUsage];
+  return [fetchOpenAiCompatibleUsage, fetchSub2ApiAuthMeUsage, fetchNewApiTokenUsage, fetchPanelUserSelfUsage];
+}
+
 async function refresh() {
   const auth = existsSync(AUTH_PATH) ? await readJson(AUTH_PATH) : {};
   const codexConfig = parseTomlLite(await readTextIfExists(CODEX_CONFIG_PATH));
@@ -378,11 +735,19 @@ async function refresh() {
     provider.base_url ||
     "";
   const key = apiKeyFor(auth, provider);
+  const context = {
+    providerName,
+    provider,
+    baseUrl,
+    key,
+    label: providerLabel(providerName, provider),
+  };
 
   await debugLog({
     mode,
     providerName,
     baseUrl,
+    preset: await usagePreset(),
     providerEnvKey: provider.env_key || "",
     hasProviderUsageKey: Boolean(process.env.PROVIDER_USAGE_API_KEY),
     hasSub2apiKey: Boolean(process.env.SUB2API_API_KEY),
@@ -395,42 +760,18 @@ async function refresh() {
     return { skipped: true, text: "" };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(await subscriptionUrl(baseUrl), {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${key}`,
-      },
-      signal: controller.signal,
-    });
-
-    const body = await response.text();
-    let json = {};
+  let lastError;
+  for (const adapter of await usageAdapters(context)) {
     try {
-      json = body ? JSON.parse(body) : {};
-    } catch {
-      throw new Error(`usage endpoint returned non-JSON (${response.status})`);
+      return await adapter(context);
+    } catch (error) {
+      lastError = error;
+      await debugLog({ adapter: adapter.name, error: error.message });
     }
-
-    if (!response.ok) {
-      const message = json?.error?.message || json?.message || response.statusText;
-      throw new Error(`usage endpoint failed (${response.status} ${message})`);
-    }
-
-    const label = providerLabel(providerName, provider);
-    const text = await formatQuota(label, json);
-    return {
-      updatedAt: new Date().toISOString(),
-      baseUrl,
-      provider: providerName,
-      text,
-      raw: json,
-    };
-  } finally {
-    clearTimeout(timeout);
   }
+
+  if (lastError) throw lastError;
+  return { skipped: true, text: "" };
 }
 
 try {

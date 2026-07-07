@@ -80,8 +80,8 @@ npx -y github:kairyou/agent-tooling guard provider-usage -a codex --uninstall
 - **opencode** —— `guard`，作为插件桩放进 `~/.config/opencode/plugin/`。
 
 `guard` hook 会拦截一小份灾难性 shell 命令的 deny-list。
-`provider-usage` hook 会在 API provider 提供兼容 `/v1/usage` 接口时显示余额、
-额度或套餐用量。
+`provider-usage` hook 会显示兼容 Sub2API-like、NewAPI/OneAPI/OneHub/DoneHub/
+Veloera/AnyRouter-like 与 OpenRouter 网关的余额、额度或套餐用量。
 
 安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tooling hooks。安装
 opencode plugin 后，需要重启 opencode。

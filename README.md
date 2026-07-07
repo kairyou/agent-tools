@@ -84,7 +84,8 @@ Installed capabilities:
 
 The `guard` hook blocks a small deny-list of catastrophic shell commands.
 The `provider-usage` hook shows the active API provider's balance, quota, or plan
-usage when the provider exposes a compatible `/v1/usage` endpoint.
+usage for compatible Sub2API-like, NewAPI/OneAPI/OneHub/DoneHub/Veloera/
+AnyRouter-like, and OpenRouter gateways.
 
 After installing Codex hooks, run `/hooks` inside Codex and approve the
 agent-tooling hooks. After installing the opencode plugin, restart opencode.
