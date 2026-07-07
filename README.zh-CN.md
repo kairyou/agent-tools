@@ -31,24 +31,24 @@ agent-tooling/
 查看可用 skills：
 
 ```bash
-npx skills@latest add kairyou/agent-tooling --list
+npx -y skills@latest add kairyou/agent-tooling --list
 ```
 
 全局安装 `commit` skill 到 Codex：
 
 ```bash
-npx skills@latest add kairyou/agent-tooling -g -a codex --skill commit -y
+npx -y skills@latest add kairyou/agent-tooling -g -a codex --skill commit -y
 ```
 
 如果是项目级安装，且安装结果可能提交到 Git，优先使用 `--copy`，不要提交 symlink：
 
 ```bash
-npx skills@latest add kairyou/agent-tooling --copy -a codex --skill commit -y
+npx -y skills@latest add kairyou/agent-tooling --copy -a codex --skill commit -y
 ```
 
 ## 安装 hooks 与 statusline
 
-Skills 用 `npx skills` 安装（见上）。hooks 和 statusline **不会**被 plugin manifest
+Skills 用 `npx -y skills@latest` 安装（见上）。hooks 和 statusline **不会**被 plugin manifest
 自动加载，因此由 `scripts/install.mjs`（Node，无依赖）写入各 agent 的配置。
 
 能力（目前都全局，写入用户级配置）：
@@ -122,7 +122,7 @@ re-export 仓库里的插件——opencode 通过正常插件扫描发现它，*
 ## 说明
 
 - `skills/` 放可复用的 `SKILL.md` 能力。项目可以只安装自己需要的 skills。
-- `npx skills` 可以通过扫描当前目录结构发现 skills。Plugin manifest 主要面向原生 plugin 生态，需要时应写显式 skill 路径。
+- `npx -y skills@latest` 可以通过扫描当前目录结构发现 skills。Plugin manifest 主要面向原生 plugin 生态，需要时应写显式 skill 路径。
 - `hooks/` 和 `statusline/` 不会被 plugin manifest 自动加载。后续应由 `scripts/` 下的安装/同步脚本写入各 agent 期望的配置位置。
 - 可复用 hook 业务逻辑放在 `hooks/common/`。Codex / Claude 专用的配置片段、接线逻辑和薄 wrapper 分别放在 `hooks/codex/` 与 `hooks/claude/`。
 - **opencode，按能力区分：**

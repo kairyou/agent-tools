@@ -33,24 +33,24 @@ agent-tooling/
 List available skills:
 
 ```bash
-npx skills@latest add kairyou/agent-tooling --list
+npx -y skills@latest add kairyou/agent-tooling --list
 ```
 
 Install the `commit` skill globally for Codex:
 
 ```bash
-npx skills@latest add kairyou/agent-tooling -g -a codex --skill commit -y
+npx -y skills@latest add kairyou/agent-tooling -g -a codex --skill commit -y
 ```
 
 For project-level installs that may be committed to Git, prefer `--copy` over symlinks:
 
 ```bash
-npx skills@latest add kairyou/agent-tooling --copy -a codex --skill commit -y
+npx -y skills@latest add kairyou/agent-tooling --copy -a codex --skill commit -y
 ```
 
 ## Installing hooks & statusline
 
-Skills are installed with `npx skills` (above). Hooks and statusline are **not**
+Skills are installed with `npx -y skills@latest` (above). Hooks and statusline are **not**
 auto-loaded by the plugin manifests, so they are wired into each agent's config
 by `scripts/install.mjs` (Node, no dependencies).
 
@@ -139,7 +139,7 @@ Codex through the `guard-command.mjs` stdin/stdout CLI, opencode through the
 ## Notes
 
 - `skills/` contains reusable `SKILL.md` capabilities. Projects may install only the skills they need.
-- `npx skills` can discover skills by scanning this layout. Plugin manifests are kept for native plugin ecosystems and should list explicit skill paths when required.
+- `npx -y skills@latest` can discover skills by scanning this layout. Plugin manifests are kept for native plugin ecosystems and should list explicit skill paths when required.
 - `hooks/` and `statusline/` are not auto-loaded by the plugin manifests. Future scripts under `scripts/` should install or sync those files into each agent's expected config location.
 - Keep reusable hook logic in `hooks/common/`. Put Codex and Claude-specific hook wiring, config fragments, and thin wrappers in `hooks/codex/` and `hooks/claude/`.
 - **opencode, per capability:**
