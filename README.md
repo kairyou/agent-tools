@@ -20,8 +20,7 @@ agent-tooling/
 │   └── workflow/      # Workflow-oriented skills.
 │       └── commit/    # Conventional Commit message skill.
 └── statusline/        # Statusline scripts/templates, grouped by agent.
-    ├── claude/        # Claude command-backed statusLine script + example config.
-    └── codex/         # Codex tui.status_line snippet (built-in fields only; no script).
+    └── claude/        # Claude command-backed statusLine script + example config.
 ```
 
 ## Current Skills
@@ -59,8 +58,8 @@ Install hooks and statusline with the repo installer:
 # Claude: statusLine + guard
 npx -y github:kairyou/agent-tooling statusline guard -a claude
 
-# Codex: guard + API provider usage
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex
+# Codex: guard + API usage
+npx -y github:kairyou/agent-tooling guard usage -a codex
 
 # opencode: guard plugin
 npx -y github:kairyou/agent-tooling guard -a opencode
@@ -69,8 +68,8 @@ npx -y github:kairyou/agent-tooling guard -a opencode
 npx -y github:kairyou/agent-tooling guard -a claude codex opencode
 
 # Preview or uninstall
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex --dry-run
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex --uninstall
+npx -y github:kairyou/agent-tooling guard usage -a codex --dry-run
+npx -y github:kairyou/agent-tooling guard usage -a codex --uninstall
 ```
 
 The installer copies runtime scripts into `~/.agent-tooling/` and points agent
@@ -79,11 +78,11 @@ configs there.
 Installed capabilities:
 
 - **Claude** — `statusLine` + the `guard` PreToolUse hook, in `~/.claude/settings.json`.
-- **Codex** — the `guard` hook and `provider-usage` hook, in `~/.codex/hooks.json`.
+- **Codex** — the `guard` hook and `usage` hook, in `~/.codex/hooks.json`.
 - **opencode** — the `guard`, as a plugin stub dropped into `~/.config/opencode/plugin/`.
 
 The `guard` hook blocks a small deny-list of catastrophic shell commands.
-The `provider-usage` hook shows the active API provider's balance, quota, or plan
+The `usage` hook shows the active API provider's balance, quota, or plan
 usage for compatible Sub2API-like, NewAPI/OneAPI/OneHub/DoneHub/Veloera/
 AnyRouter-like, and OpenRouter gateways.
 

@@ -5,7 +5,7 @@
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
 //   guard       PreToolUse hook blocking catastrophic shell commands (claude + codex).
-//   provider-usage  Codex hook showing active API provider quota/balance.
+//   usage      Codex hook showing active API provider quota/balance.
 //
 // Targets:
 //   claude   -> ~/.claude/settings.json          (statusLine key + hooks key)
@@ -48,7 +48,7 @@ const SOURCE = {
   guardCommand: path.join(REPO_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(REPO_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(REPO_ROOT, "hooks", "opencode", "guard.mjs"),
-  codexProviderUsage: path.join(REPO_ROOT, "hooks", "codex", "provider-usage.mjs"),
+  codexUsage: path.join(REPO_ROOT, "hooks", "codex", "usage.mjs"),
   config: path.join(REPO_ROOT, "config.default.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "statusline", "claude", "statusline.mjs"),
 };
@@ -56,11 +56,11 @@ const RUNTIME = {
   guardCommand: path.join(INSTALL_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(INSTALL_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(INSTALL_ROOT, "hooks", "opencode", "guard.mjs"),
-  codexProviderUsage: path.join(INSTALL_ROOT, "hooks", "codex", "provider-usage.mjs"),
+  codexUsage: path.join(INSTALL_ROOT, "hooks", "codex", "usage.mjs"),
   config: path.join(INSTALL_ROOT, "config.jsonc"),
   claudeStatusline: path.join(INSTALL_ROOT, "statusline", "claude", "statusline.mjs"),
 };
-const ALL_CAPS = ["statusline", "guard", "provider-usage"];
+const ALL_CAPS = ["statusline", "guard", "usage"];
 const ALL_AGENTS = ["claude", "codex", "opencode"];
 
 function fwd(p) {
@@ -194,8 +194,8 @@ function installRuntimeAssets(opts) {
     addFile(SOURCE.claudeStatusline, RUNTIME.claudeStatusline);
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
-  if (wants(opts, "provider-usage")) {
-    addFile(SOURCE.codexProviderUsage, RUNTIME.codexProviderUsage);
+  if (wants(opts, "usage")) {
+    addFile(SOURCE.codexUsage, RUNTIME.codexUsage);
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (files.length === 0) return;
@@ -336,12 +336,12 @@ function applyGuard(cfg, { matcher, remove }) {
   cfg.hooks.PreToolUse.push(guardEntry(matcher));
 }
 
-function providerUsageEntry() {
+function usageEntry() {
   return {
     hooks: [
       {
         type: "command",
-        command: `${nodeCmd(RUNTIME.codexProviderUsage)} hook`,
+        command: `${nodeCmd(RUNTIME.codexUsage)} hook`,
         timeout: 5,
         statusMessage: "Refreshing API usage",
       },
@@ -354,7 +354,7 @@ function isOurProviderUsageEntry(entry) {
     entry &&
     Array.isArray(entry.hooks) &&
     entry.hooks.some(
-      (h) => typeof h?.command === "string" && h.command.includes("provider-usage.mjs")
+      (h) => typeof h?.command === "string" && /(?:^|[/\\])usage\.mjs(?:["\s]|$)/.test(h.command)
     )
   );
 }
@@ -372,7 +372,7 @@ function applyProviderUsage(cfg, { remove }) {
     }
     cfg.hooks[event] = cfg.hooks[event] || [];
     cfg.hooks[event] = cfg.hooks[event].filter((entry) => !isOurProviderUsageEntry(entry));
-    cfg.hooks[event].push(providerUsageEntry());
+    cfg.hooks[event].push(usageEntry());
   }
   if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
 }
@@ -431,8 +431,8 @@ function runClaude(opts) {
 // command signature instead. ----
 
 function runCodex(opts) {
-  if (!wants(opts, "guard") && !wants(opts, "provider-usage")) {
-    console.log("codex: nothing to do (supports: guard, provider-usage).");
+  if (!wants(opts, "guard") && !wants(opts, "usage")) {
+    console.log("codex: nothing to do (supports: guard, usage).");
     return;
   }
   const file = opts.codexHooks || path.join(os.homedir(), ".codex", "hooks.json");
@@ -450,13 +450,13 @@ function runCodex(opts) {
     }
   }
 
-  if (wants(opts, "provider-usage")) {
+  if (wants(opts, "usage")) {
     if (opts.uninstall) {
       applyProviderUsage(cfg, { remove: true });
-      console.log("  - provider-usage");
+      console.log("  - usage");
     } else {
       applyProviderUsage(cfg, { remove: false });
-      console.log("  + provider-usage (UserPromptSubmit + Stop)");
+      console.log("  + usage (UserPromptSubmit + Stop)");
     }
   }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Codex provider usage hook (agent-tooling).
+// Codex usage hook (agent-tooling).
 // Reads the active Codex provider from ~/.codex/config.toml, probes known
 // gateway usage endpoints, and prints a compact balance/quota message as a
 // Codex hook systemMessage. Fails open when provider usage cannot be fetched.
@@ -15,7 +15,7 @@ const AGENT_TOOLING_HOME = process.env.AGENT_TOOLING_HOME || join(homedir(), ".a
 const AUTH_PATH = join(CODEX_HOME, "auth.json");
 const CODEX_CONFIG_PATH = join(CODEX_HOME, "config.toml");
 const AGENT_CONFIG_PATH = process.env.AGENT_TOOLING_CONFIG || join(AGENT_TOOLING_HOME, "config.jsonc");
-const DEBUG_PATH = join(AGENT_TOOLING_HOME, "logs", "provider-usage-debug.log");
+const DEBUG_PATH = join(AGENT_TOOLING_HOME, "logs", "usage-debug.log");
 const REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_USAGE_DAYS = 30;
 const MAX_USAGE_DAYS = 90;

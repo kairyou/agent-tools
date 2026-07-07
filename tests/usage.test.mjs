@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PROVIDER_SCRIPT = join(ROOT, "hooks", "codex", "provider-usage.mjs");
+const PROVIDER_SCRIPT = join(ROOT, "hooks", "codex", "usage.mjs");
 
 async function withServer(handler, fn) {
   const server = http.createServer(handler);

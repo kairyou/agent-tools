@@ -20,22 +20,22 @@ function runInstall(args, env) {
   return result;
 }
 
-test("installer wires and unwires Codex provider-usage without removing guard", () => {
+test("installer wires and unwires Codex usage without removing guard", () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tooling-install-"));
   const runtime = join(temp, "runtime");
   const hooksFile = join(temp, "hooks.json");
   const env = { AGENT_TOOLING_HOME: runtime };
 
-  runInstall(["guard", "provider-usage", "-a", "codex", "--codex-hooks", hooksFile], env);
+  runInstall(["guard", "usage", "-a", "codex", "--codex-hooks", hooksFile], env);
   const installed = JSON.parse(readFileSync(hooksFile, "utf8"));
 
   assert.equal(installed.hooks.PreToolUse.length, 1);
   assert.match(installed.hooks.PreToolUse[0].hooks[0].command, /guard-command\.mjs/);
   assert.equal(installed.hooks.UserPromptSubmit.length, 1);
-  assert.match(installed.hooks.UserPromptSubmit[0].hooks[0].command, /provider-usage\.mjs" hook$/);
+  assert.match(installed.hooks.UserPromptSubmit[0].hooks[0].command, /usage\.mjs" hook$/);
   assert.equal(installed.hooks.Stop.length, 1);
 
-  runInstall(["provider-usage", "-a", "codex", "--codex-hooks", hooksFile, "--uninstall"], env);
+  runInstall(["usage", "-a", "codex", "--codex-hooks", hooksFile, "--uninstall"], env);
   const afterUninstall = JSON.parse(readFileSync(hooksFile, "utf8"));
 
   assert.equal(afterUninstall.hooks.PreToolUse.length, 1);

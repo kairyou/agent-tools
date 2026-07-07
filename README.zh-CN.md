@@ -18,8 +18,7 @@ agent-tooling/
 │   └── workflow/      # 工作流类 skills。
 │       └── commit/    # Conventional Commit message skill。
 └── statusline/        # Statusline 配置片段/模板，按 agent 分组。
-    ├── claude/        # Claude command-backed statusLine 脚本和示例配置。
-    └── codex/         # Codex tui.status_line 片段（仅内置字段，无脚本）。
+    └── claude/        # Claude command-backed statusLine 脚本和示例配置。
 ```
 
 ## 当前 Skills
@@ -57,8 +56,8 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 # Claude：statusLine + guard
 npx -y github:kairyou/agent-tooling statusline guard -a claude
 
-# Codex：guard + API provider usage
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex
+# Codex：guard + API usage
+npx -y github:kairyou/agent-tooling guard usage -a codex
 
 # opencode：guard plugin
 npx -y github:kairyou/agent-tooling guard -a opencode
@@ -67,8 +66,8 @@ npx -y github:kairyou/agent-tooling guard -a opencode
 npx -y github:kairyou/agent-tooling guard -a claude codex opencode
 
 # 预览或卸载
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex --dry-run
-npx -y github:kairyou/agent-tooling guard provider-usage -a codex --uninstall
+npx -y github:kairyou/agent-tooling guard usage -a codex --dry-run
+npx -y github:kairyou/agent-tooling guard usage -a codex --uninstall
 ```
 
 安装器会把运行时脚本复制到 `~/.agent-tooling/`，然后让各 agent 配置指向这里。
@@ -76,11 +75,11 @@ npx -y github:kairyou/agent-tooling guard provider-usage -a codex --uninstall
 已接线能力：
 
 - **Claude** —— `statusLine` + `guard` PreToolUse hook，写入 `~/.claude/settings.json`。
-- **Codex** —— `guard` hook 与 `provider-usage` hook，写入 `~/.codex/hooks.json`。
+- **Codex** —— `guard` hook 与 `usage` hook，写入 `~/.codex/hooks.json`。
 - **opencode** —— `guard`，作为插件桩放进 `~/.config/opencode/plugin/`。
 
 `guard` hook 会拦截一小份灾难性 shell 命令的 deny-list。
-`provider-usage` hook 会显示兼容 Sub2API-like、NewAPI/OneAPI/OneHub/DoneHub/
+`usage` hook 会显示兼容 Sub2API-like、NewAPI/OneAPI/OneHub/DoneHub/
 Veloera/AnyRouter-like 与 OpenRouter 网关的余额、额度或套餐用量。
 
 显示效果示例：
