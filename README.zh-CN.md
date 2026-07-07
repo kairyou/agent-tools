@@ -87,7 +87,7 @@ opencode plugin 后，需要重启 opencode。
 Claude statusLine 默认显示：
 
 ```text
-⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
+⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 ```
 
 如需控制显示项，直接修改 `~/.agent-tooling/config.jsonc` 里的 `statusline.fields`。

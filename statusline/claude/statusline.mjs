@@ -3,7 +3,7 @@
 // Reads session JSON from stdin and prints one compact status line.
 //
 // Default:
-//   ⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
+//   ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 //
 // Customize with either:
 //   node statusline.mjs --fields branch,model,fiveHour,week
@@ -20,13 +20,11 @@ const DEFAULT_CONFIG_FILE = join(SCRIPT_DIR, "..", "..", "config.jsonc");
 
 const DEFAULT_CONFIG = {
   fields: ["branch", "model", "fiveHour", "week"],
-  separator: "  |  ",
+  separator: " | ",
   symbols: {
     branch: "⎇",
     reset: "⟳",
     empty: "–",
-  },
-  labels: {
     fiveHour: "5h",
     week: "w",
     context: "ctx",
@@ -136,7 +134,6 @@ function mergeConfig(cli) {
     ...DEFAULT_CONFIG,
     ...fileConfig,
     symbols: { ...DEFAULT_CONFIG.symbols, ...(fileConfig.symbols || {}) },
-    labels: { ...DEFAULT_CONFIG.labels, ...(fileConfig.labels || {}) },
   };
 
   const fields =
@@ -212,12 +209,12 @@ function renderField(field, data, config) {
     case "model":
       return shortModelName(data?.model?.display_name || data?.model?.id || "");
     case "fiveHour":
-      return `${config.labels.fiveHour} ${usageWindow(data?.rate_limits?.five_hour, config)}`;
+      return `${config.symbols.fiveHour} ${usageWindow(data?.rate_limits?.five_hour, config)}`;
     case "week":
-      return `${config.labels.week} ${usageWindow(data?.rate_limits?.seven_day, config)}`;
+      return `${config.symbols.week} ${usageWindow(data?.rate_limits?.seven_day, config)}`;
     case "context": {
       const pct = data?.context_window?.used_percentage;
-      return typeof pct === "number" ? `${config.labels.context} ${Math.round(pct)}%` : "";
+      return typeof pct === "number" ? `${config.symbols.context} ${Math.round(pct)}%` : "";
     }
     case "directory":
       return dir ? basename(dir) : "";

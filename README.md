@@ -90,7 +90,7 @@ agent-tooling guard. After installing the opencode plugin, restart opencode.
 Claude statusLine defaults to:
 
 ```text
-⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
+⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 ```
 
 To choose what appears, edit `statusline.fields` in

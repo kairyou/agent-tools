@@ -1,16 +1,15 @@
 // agent-tooling config.
-// Edit statusline.fields to choose what appears and in what order.
+// statusline.fields controls both visibility and order.
+// Remove a field to hide it; move a field to reorder it.
 // Available statusline fields: branch, model, fiveHour, week, context, directory.
 {
   "statusline": {
     "fields": ["branch", "model", "fiveHour", "week"],
-    "separator": "  |  ",
+    "separator": " | ",
     "symbols": {
       "branch": "⎇",
       "reset": "⟳",
-      "empty": "–"
-    },
-    "labels": {
+      "empty": "–",
       "fiveHour": "5h",
       "week": "w",
       "context": "ctx"
