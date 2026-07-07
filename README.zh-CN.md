@@ -48,15 +48,7 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 ```
 
 多个 skill 可以跟在 `--skill` 后面，例如 `--skill commit other-skill`。
-默认情况下，`skills@latest` 会检测当前 agent。只有需要覆盖自动检测时才需要 `-a`：
-
-```bash
-# Claude Code + Codex
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -a claude-code codex -y
-
-# 安装到 skills@latest 支持的全部 agent
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -a "*" -y
-```
+默认情况下，`skills@latest` 会检测当前 agent。
 
 ## 安装 hooks 与 statusline
 

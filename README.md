@@ -50,16 +50,7 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 ```
 
 Pass multiple skills after `--skill`, for example `--skill commit other-skill`.
-By default, `skills@latest` detects the current agent. Use `-a` only when you
-want to override that:
-
-```bash
-# Claude Code + Codex
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -a claude-code codex -y
-
-# All agents supported by skills@latest
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -a "*" -y
-```
+By default, `skills@latest` detects the current agent.
 
 ## Installing hooks & statusline
 
