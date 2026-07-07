@@ -59,8 +59,8 @@ are installed separately with `scripts/install.mjs` because agent plugin
 manifests do not auto-load them.
 
 ```bash
-# Claude (default): statusLine + guard
-node scripts/install.mjs
+# Claude: statusLine + guard
+node scripts/install.mjs -a claude
 
 # Codex: guard
 node scripts/install.mjs -a codex
