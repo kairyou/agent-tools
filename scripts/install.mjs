@@ -48,7 +48,7 @@ const SOURCE = {
   guardCommand: path.join(REPO_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(REPO_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(REPO_ROOT, "hooks", "opencode", "guard.mjs"),
-  config: path.join(REPO_ROOT, "config.example.jsonc"),
+  config: path.join(REPO_ROOT, "config.default.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "statusline", "claude", "statusline.mjs"),
 };
 const RUNTIME = {
