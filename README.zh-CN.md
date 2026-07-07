@@ -90,9 +90,8 @@ Claude statusLine 默认显示：
 ⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
 ```
 
-如需控制显示项，把
-`~/.agent-tooling/statusline/claude/statusline.config.example.json` 复制为
-`~/.agent-tooling/statusline/claude/statusline.config.json`，然后修改 `fields`。
+如需控制显示项，直接修改 `~/.agent-tooling/config.jsonc` 里的 `statusline.fields`。
+安装器更新时可能会补充新的默认键；文件顶部注释和已有值会保留。
 
 ## 说明
 

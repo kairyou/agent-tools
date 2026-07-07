@@ -12,4 +12,4 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-statusline/claude/statusline.config.json
+config.jsonc

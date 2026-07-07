@@ -93,9 +93,10 @@ Claude statusLine defaults to:
 ⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
 ```
 
-To choose what appears, copy
-`~/.agent-tooling/statusline/claude/statusline.config.example.json` to
-`~/.agent-tooling/statusline/claude/statusline.config.json` and edit `fields`.
+To choose what appears, edit `statusline.fields` in
+`~/.agent-tooling/config.jsonc`.
+The installer may add new default keys on update; it preserves top-of-file
+comments and existing values.
 
 ## Notes
 

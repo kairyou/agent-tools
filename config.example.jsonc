@@ -1,0 +1,19 @@
+// agent-tooling config.
+// Edit statusline.fields to choose what appears and in what order.
+// Available statusline fields: branch, model, fiveHour, week, context, directory.
+{
+  "statusline": {
+    "fields": ["branch", "model", "fiveHour", "week"],
+    "separator": "  |  ",
+    "symbols": {
+      "branch": "⎇",
+      "reset": "⟳",
+      "empty": "–"
+    },
+    "labels": {
+      "fiveHour": "5h",
+      "week": "w",
+      "context": "ctx"
+    }
+  }
+}

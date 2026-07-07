@@ -48,25 +48,15 @@ const SOURCE = {
   guardCommand: path.join(REPO_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(REPO_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(REPO_ROOT, "hooks", "opencode", "guard.mjs"),
+  config: path.join(REPO_ROOT, "config.example.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "statusline", "claude", "statusline.mjs"),
-  claudeStatuslineExample: path.join(
-    REPO_ROOT,
-    "statusline",
-    "claude",
-    "statusline.config.example.json"
-  ),
 };
 const RUNTIME = {
   guardCommand: path.join(INSTALL_ROOT, "hooks", "common", "guard-command.mjs"),
   guardRules: path.join(INSTALL_ROOT, "hooks", "common", "guard-rules.mjs"),
   opencodeGuard: path.join(INSTALL_ROOT, "hooks", "opencode", "guard.mjs"),
+  config: path.join(INSTALL_ROOT, "config.jsonc"),
   claudeStatusline: path.join(INSTALL_ROOT, "statusline", "claude", "statusline.mjs"),
-  claudeStatuslineExample: path.join(
-    INSTALL_ROOT,
-    "statusline",
-    "claude",
-    "statusline.config.example.json"
-  ),
 };
 const ALL_CAPS = ["statusline", "guard"];
 const ALL_AGENTS = ["claude", "codex", "opencode"];
@@ -79,7 +69,106 @@ function nodeCmd(absScript) {
   return `node "${fwd(absScript)}"`;
 }
 
-function copyRuntimeFile(src, dest, dryRun) {
+function stripJsonComments(input) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    const next = input[i + 1];
+    if (inString) {
+      out += ch;
+      escaped = ch === "\\" ? !escaped : false;
+      if (ch === "\"" && !escaped) inString = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      while (i < input.length && input[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      i += 2;
+      while (i < input.length && !(input[i] === "*" && input[i + 1] === "/")) i++;
+      i++;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function readJsonc(file) {
+  if (!fs.existsSync(file)) return {};
+  const raw = fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "");
+  return raw.trim() ? JSON.parse(stripJsonComments(raw)) : {};
+}
+
+function headerComments(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const header = [];
+  for (const line of lines) {
+    if (/^\s*(?:\/\/.*)?$/.test(line)) {
+      header.push(line);
+      continue;
+    }
+    break;
+  }
+  return header.length ? header.join("\n").replace(/\s+$/, "") + "\n" : "";
+}
+
+function mergeDefaults(target, defaults) {
+  if (Array.isArray(defaults)) return target === undefined ? defaults : target;
+  if (!defaults || typeof defaults !== "object") {
+    return target === undefined ? defaults : target;
+  }
+  const out = target && typeof target === "object" && !Array.isArray(target) ? { ...target } : {};
+  for (const [key, value] of Object.entries(defaults)) {
+    out[key] = mergeDefaults(out[key], value);
+  }
+  return out;
+}
+
+function writeText(file, text, dryRun) {
+  if (dryRun) {
+    console.log(`  [dry-run] would write ${file}:`);
+    console.log(text.split("\n").map((l) => "    " + l).join("\n"));
+    return;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+  console.log(`  wrote ${file}`);
+}
+
+function mergeJsoncFile(src, dest, dryRun) {
+  const defaults = readJsonc(src);
+  const defaultHeader = headerComments(fs.readFileSync(src, "utf8"));
+  if (!fs.existsSync(dest)) {
+    writeText(dest, fs.readFileSync(src, "utf8"), dryRun);
+    return;
+  }
+  const currentText = fs.readFileSync(dest, "utf8");
+  const current = readJsonc(dest);
+  const merged = mergeDefaults(current, defaults);
+  const currentHeader = headerComments(currentText) || defaultHeader;
+  const mergedText = currentHeader + JSON.stringify(merged, null, 2) + "\n";
+  if (stripJsonComments(currentText).trim() === JSON.stringify(merged, null, 2)) {
+    console.log(`  kept existing ${dest}`);
+    return;
+  }
+  writeText(dest, mergedText, dryRun);
+}
+
+function copyRuntimeFile(src, dest, dryRun, options = {}) {
+  if (options.mergeJsonc) {
+    mergeJsoncFile(src, dest, dryRun);
+    return;
+  }
   if (dryRun) {
     console.log(`  [dry-run] would copy ${src} -> ${dest}`);
     return;
@@ -101,12 +190,12 @@ function installRuntimeAssets(opts) {
   if (wants(opts, "statusline")) {
     files.push(
       [SOURCE.claudeStatusline, RUNTIME.claudeStatusline],
-      [SOURCE.claudeStatuslineExample, RUNTIME.claudeStatuslineExample]
+      [SOURCE.config, RUNTIME.config, { mergeJsonc: true }]
     );
   }
   if (files.length === 0) return;
   console.log(`runtime: ${INSTALL_ROOT}`);
-  for (const [src, dest] of files) copyRuntimeFile(src, dest, opts.dryRun);
+  for (const [src, dest, options] of files) copyRuntimeFile(src, dest, opts.dryRun, options);
 }
 
 function parseArgs(argv) {

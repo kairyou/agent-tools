@@ -8,7 +8,7 @@
 // Customize with either:
 //   node statusline.mjs --fields branch,model,fiveHour,week
 //   AGENT_TOOLING_STATUSLINE_FIELDS=branch,model,context
-//   statusline.config.json next to this file
+//   ~/.agent-tooling/config.jsonc
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -16,7 +16,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const CONFIG_FILE = join(SCRIPT_DIR, "statusline.config.json");
+const DEFAULT_CONFIG_FILE = join(SCRIPT_DIR, "..", "..", "config.jsonc");
 
 const DEFAULT_CONFIG = {
   fields: ["branch", "model", "fiveHour", "week"],
@@ -55,11 +55,45 @@ async function readStdin() {
 function readJsonFile(file) {
   try {
     if (!fs.existsSync(file)) return {};
-    const raw = fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "");
+    const raw = stripJsonComments(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
     return raw.trim() ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
+}
+
+function stripJsonComments(input) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    const next = input[i + 1];
+    if (inString) {
+      out += ch;
+      escaped = ch === "\\" ? !escaped : false;
+      if (ch === "\"" && !escaped) inString = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      while (i < input.length && input[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      i += 2;
+      while (i < input.length && !(input[i] === "*" && input[i + 1] === "/")) i++;
+      i++;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 function parseArgs(argv) {
@@ -93,7 +127,8 @@ function normalizeField(field) {
 }
 
 function mergeConfig(cli) {
-  const fileConfig = readJsonFile(CONFIG_FILE);
+  const rootConfig = readJsonFile(process.env.AGENT_TOOLING_CONFIG || DEFAULT_CONFIG_FILE);
+  const fileConfig = rootConfig.statusline || {};
   const envFields = process.env.AGENT_TOOLING_STATUSLINE_FIELDS;
   const envSeparator = process.env.AGENT_TOOLING_STATUSLINE_SEPARATOR;
 
