@@ -31,7 +31,6 @@
 //   --opencode-plugin-dir <p> Override the opencode plugin dir (for testing).
 //   --uninstall               Remove what this installer added, restoring backups.
 //   --dry-run                 Print planned changes without writing anything.
-//   --force                   Overwrite a pre-existing, non-managed statusLine.
 //   -h, --help                Show this help.
 
 import fs from "node:fs";
@@ -207,7 +206,6 @@ function parseArgs(argv) {
     opencodePluginDir: null,
     uninstall: false,
     dryRun: false,
-    force: false,
     help: false,
   };
   function readAgentValues(index, option) {
@@ -238,7 +236,6 @@ function parseArgs(argv) {
       case "--opencode-plugin-dir": opts.opencodePluginDir = argv[++i]; break;
       case "--uninstall": opts.uninstall = true; break;
       case "--dry-run": opts.dryRun = true; break;
-      case "--force": opts.force = true; break;
       case "-h":
       case "--help": opts.help = true; break;
       default:
@@ -358,13 +355,6 @@ function runClaude(opts) {
     } else {
       const command = nodeCmd(RUNTIME.claudeStatusline);
       const alreadyOurs = Boolean(managed.statusLine);
-      if (cfg.statusLine && !alreadyOurs && !opts.force) {
-        console.error(
-          "  statusline: refusing to overwrite an existing non-managed statusLine; " +
-            "re-run with --force (the old value will be backed up)."
-        );
-        process.exit(1);
-      }
       managed.statusLine = {
         backup: alreadyOurs ? managed.statusLine.backup ?? null : cfg.statusLine ?? null,
       };
