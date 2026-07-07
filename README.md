@@ -100,4 +100,3 @@ agent-tooling guard. After installing the opencode plugin, restart opencode.
 - `hooks/common/` contains shared guard logic; agent-specific wiring lives under `hooks/<agent>/`.
 - `statusline/claude/` contains the command-backed Claude statusLine script.
 - The installer marks and removes only the config entries it owns.
-- `package.json` is private on purpose; this repository is installed from GitHub, not published to npm.

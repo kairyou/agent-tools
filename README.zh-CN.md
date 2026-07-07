@@ -95,4 +95,3 @@ opencode plugin 后，需要重启 opencode。
 - `hooks/common/` 放共享 guard 逻辑；各 agent 的接线放在 `hooks/<agent>/`。
 - `statusline/claude/` 放 Claude command-backed statusLine 脚本。
 - 安装器只标记并移除自己写入的配置项。
-- `package.json` 保持 private 是有意的；本仓库从 GitHub 安装，不发布到 npm。
