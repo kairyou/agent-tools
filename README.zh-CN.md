@@ -18,7 +18,7 @@ agent-tooling/
 │   └── workflow/      # 工作流类 skills。
 │       └── commit/    # Conventional Commit message skill。
 └── statusline/        # Statusline 配置片段/模板，按 agent 分组。
-    ├── claude/        # Claude command-backed statusLine 脚本。
+    ├── claude/        # Claude command-backed statusLine 脚本和示例配置。
     └── codex/         # Codex tui.status_line 片段（仅内置字段，无脚本）。
 ```
 
@@ -55,21 +55,23 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 
 ```bash
 # Claude：statusLine + guard
-node scripts/install.mjs statusline guard -a claude
+npx -y github:kairyou/agent-tooling statusline guard -a claude
 
 # Codex：guard
-node scripts/install.mjs guard -a codex
+npx -y github:kairyou/agent-tooling guard -a codex
 
 # opencode：guard plugin
-node scripts/install.mjs guard -a opencode
+npx -y github:kairyou/agent-tooling guard -a opencode
 
 # 多个 agent 一起安装
-node scripts/install.mjs guard -a claude codex opencode
+npx -y github:kairyou/agent-tooling guard -a claude codex opencode
 
 # 预览或卸载
-node scripts/install.mjs guard -a codex --dry-run
-node scripts/install.mjs guard -a codex --uninstall
+npx -y github:kairyou/agent-tooling guard -a codex --dry-run
+npx -y github:kairyou/agent-tooling guard -a codex --uninstall
 ```
+
+安装器会把运行时脚本复制到 `~/.agent-tooling/`，然后让各 agent 配置指向这里。
 
 已接线能力：
 
@@ -81,6 +83,16 @@ node scripts/install.mjs guard -a codex --uninstall
 
 安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tooling guard。安装
 opencode plugin 后，需要重启 opencode。
+
+Claude statusLine 默认显示：
+
+```text
+⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
+```
+
+如需控制显示项，把
+`~/.agent-tooling/statusline/claude/statusline.config.example.json` 复制为
+`~/.agent-tooling/statusline/claude/statusline.config.json`，然后修改 `fields`。
 
 ## 说明
 

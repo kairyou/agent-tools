@@ -20,7 +20,7 @@ agent-tooling/
 │   └── workflow/      # Workflow-oriented skills.
 │       └── commit/    # Conventional Commit message skill.
 └── statusline/        # Statusline scripts/templates, grouped by agent.
-    ├── claude/        # Claude command-backed statusLine script.
+    ├── claude/        # Claude command-backed statusLine script + example config.
     └── codex/         # Codex tui.status_line snippet (built-in fields only; no script).
 ```
 
@@ -57,21 +57,24 @@ Install hooks and statusline with the repo installer:
 
 ```bash
 # Claude: statusLine + guard
-node scripts/install.mjs statusline guard -a claude
+npx -y github:kairyou/agent-tooling statusline guard -a claude
 
 # Codex: guard
-node scripts/install.mjs guard -a codex
+npx -y github:kairyou/agent-tooling guard -a codex
 
 # opencode: guard plugin
-node scripts/install.mjs guard -a opencode
+npx -y github:kairyou/agent-tooling guard -a opencode
 
 # Multiple agents
-node scripts/install.mjs guard -a claude codex opencode
+npx -y github:kairyou/agent-tooling guard -a claude codex opencode
 
 # Preview or uninstall
-node scripts/install.mjs guard -a codex --dry-run
-node scripts/install.mjs guard -a codex --uninstall
+npx -y github:kairyou/agent-tooling guard -a codex --dry-run
+npx -y github:kairyou/agent-tooling guard -a codex --uninstall
 ```
+
+The installer copies runtime scripts into `~/.agent-tooling/` and points agent
+configs there.
 
 Installed capabilities:
 
@@ -83,6 +86,16 @@ The `guard` hook blocks a small deny-list of catastrophic shell commands.
 
 After installing Codex hooks, run `/hooks` inside Codex and approve the
 agent-tooling guard. After installing the opencode plugin, restart opencode.
+
+Claude statusLine defaults to:
+
+```text
+⎇ main  |  Opus 4.8  |  5h 7% ⟳2h54m  |  w 41% ⟳3d1h
+```
+
+To choose what appears, copy
+`~/.agent-tooling/statusline/claude/statusline.config.example.json` to
+`~/.agent-tooling/statusline/claude/statusline.config.json` and edit `fields`.
 
 ## Notes
 

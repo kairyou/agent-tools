@@ -5,9 +5,8 @@
 // deny-list lives in ../common/guard-rules.mjs and this thin plugin throws to
 // block a matching `bash` command.
 //
-// Wiring: registered via opencode.json `plugin` array as a file:// path to THIS
-// file in the repo (see scripts/install.mjs). Because it runs from its repo
-// location, the relative import of the shared rules resolves normally.
+// Wiring: scripts/install.mjs copies this file plus the shared rules into the
+// user runtime directory, then drops an opencode plugin stub that re-exports it.
 //
 // Docs: https://opencode.ai/docs/plugins
 //

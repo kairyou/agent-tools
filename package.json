@@ -3,5 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Reusable agent skills, hooks, statusline tooling, and install helpers",
-  "license": "MIT"
+  "license": "MIT",
+  "bin": {
+    "agent-tooling": "./scripts/install.mjs"
+  }
 }
