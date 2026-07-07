@@ -22,9 +22,9 @@
 //   node scripts/install.mjs [options]
 //
 // Options:
-//   -a, --agent <name>        Target agent: claude | codex | opencode (repeatable).
+//   -a, --agent <names>       Target agents: claude | codex | opencode.
 //                             Default: claude.
-//   --only <capability>       Only this capability (repeatable): statusline | guard.
+//   --only <capabilities>     Only these capabilities: statusline | guard.
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
 //   --opencode-plugin-dir <p> Override the opencode plugin dir (for testing).
@@ -65,12 +65,35 @@ function parseArgs(argv) {
     force: false,
     help: false,
   };
+  function readValues(index, option) {
+    const values = [];
+    let i = index + 1;
+    while (i < argv.length && !argv[i].startsWith("-")) {
+      values.push(argv[i]);
+      i++;
+    }
+    if (values.length === 0) {
+      console.error(`Missing value for ${option}`);
+      process.exit(2);
+    }
+    return { values, next: i - 1 };
+  }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
       case "-a":
-      case "--agent": opts.agents.push(argv[++i]); break;
-      case "--only": opts.only.push(argv[++i]); break;
+      case "--agent": {
+        const parsed = readValues(i, a);
+        opts.agents.push(...parsed.values);
+        i = parsed.next;
+        break;
+      }
+      case "--only": {
+        const parsed = readValues(i, a);
+        opts.only.push(...parsed.values);
+        i = parsed.next;
+        break;
+      }
       case "--settings": opts.settings = argv[++i]; break;
       case "--codex-hooks": opts.codexHooks = argv[++i]; break;
       case "--opencode-plugin-dir": opts.opencodePluginDir = argv[++i]; break;

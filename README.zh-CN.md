@@ -64,7 +64,7 @@ node scripts/install.mjs -a codex
 node scripts/install.mjs -a opencode
 
 # 多个 agent 一起安装
-node scripts/install.mjs -a claude -a codex -a opencode
+node scripts/install.mjs -a claude codex opencode
 
 # 只装某个能力、预览或卸载
 node scripts/install.mjs --only guard

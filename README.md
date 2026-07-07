@@ -66,7 +66,7 @@ node scripts/install.mjs -a codex
 node scripts/install.mjs -a opencode
 
 # Multiple agents
-node scripts/install.mjs -a claude -a codex -a opencode
+node scripts/install.mjs -a claude codex opencode
 
 # Only one capability, preview, or uninstall
 node scripts/install.mjs --only guard
