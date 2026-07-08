@@ -77,7 +77,7 @@ test("provider usage reads Sub2API balance from /api/v1/auth/me", async () => {
   }, async (base) => {
     const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "sub2api" });
     assert.equal(payload.continue, true);
-    assert.equal(payload.systemMessage, "[额度] sub-user | 余额 $12.3");
+    assert.equal(payload.systemMessage, "API | balance $12.3");
   });
 });
 
@@ -100,7 +100,7 @@ test("provider usage reads AnyRouter/NewAPI-style panel balance", async () => {
     res.end("{}");
   }, async (base) => {
     const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "anyrouter" });
-    assert.equal(payload.systemMessage, "[额度] any-user | 余额 $7.5 | 已用 $2.5/$10.0");
+    assert.equal(payload.systemMessage, "API | balance $7.5 | used $2.5/$10.0");
   });
 });
 
@@ -118,7 +118,7 @@ test("provider usage reads Veloera panel balance with Veloera scale", async () =
     res.end("{}");
   }, async (base) => {
     const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "veloera" });
-    assert.equal(payload.systemMessage, "[额度] velo-user | 余额 $7.5 | 已用 $2.5/$10.0");
+    assert.equal(payload.systemMessage, "API | balance $7.5 | used $2.5/$10.0");
   });
 });
 
@@ -155,8 +155,8 @@ test("provider usage caches the successful route for a service root", async () =
   }, async (base) => {
     const first = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
     const second = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
-    assert.equal(first.systemMessage, "[额度] cached-user | 余额 $42.0");
-    assert.equal(second.systemMessage, "[额度] cached-user | 余额 $42.0");
+    assert.equal(first.systemMessage, "API | balance $42.0");
+    assert.equal(second.systemMessage, "API | balance $42.0");
     assert.deepEqual(seen, ["/v1/usage?days=30", "/api/v1/auth/me", "/api/v1/auth/me"]);
 
     const cache = JSON.parse(readFileSync(join(agentHome, "cache", "usage-routes.json"), "utf8"));

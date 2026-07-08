@@ -88,11 +88,14 @@ Veloera/AnyRouter-like 与 OpenRouter 网关的余额、额度或套餐用量；
 
 ```text
 # 订阅/套餐额度。
-warning: [额度] 订阅套餐 | D $0.0/$100 | W $0.0/$300 | Exp 07-08
+warning: API | D $0.0/$100 | W $0.0/$300 | Exp 07-08
 
 # 钱包余额。
-warning: [额度] 钱包余额 | 余额 $362 | 今日 $61.7 | 近30天 $566
+warning: API | balance $362 | today $61.7 | 30d $566
 ```
+
+字段含义：`D/W/M` 是日/周/月套餐消耗与上限，`Exp` 是套餐到期日，
+`balance` 是钱包余额，`today` / `30d` 是今日与近 30 天 API 消耗。
 
 安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tooling hooks。安装
 opencode plugin 后，需要重启 opencode。
@@ -102,6 +105,8 @@ Claude statusLine 默认显示：
 ```text
 ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 ```
+
+其中 `5h` / `w` 是 Claude 的滚动用量窗口，`⟳` 后面是重置倒计时。
 
 如需控制显示项，直接修改 `~/.agent-tooling/config.jsonc` 里的 `statusline.fields`。
 安装器更新时可能会补充新的默认键；文件顶部注释和已有值会保留。

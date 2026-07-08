@@ -595,6 +595,10 @@ function formatMaybeMoney(value, unit = "USD") {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} ${unit}`;
 }
 
+function usageParts() {
+  return ["API"];
+}
+
 async function formatNewApiQuota(value) {
   const scale = await newApiQuotaScale();
   if (Number.isFinite(scale) && scale > 0) return formatMoney(value / scale);
@@ -681,19 +685,18 @@ async function formatQuota(label, data) {
   if (isSubscriptionUsage(root)) return formatUsageLine(label, root);
   if (isWalletUsage(root)) return await formatWalletLine(label, root);
   if (remaining !== undefined) return formatUsageLine(label, root);
-  if (balance !== undefined) return `${label} quota ${formatMaybeMoney(balance, unit)} left`;
+  if (balance !== undefined) return `API | balance ${formatMaybeMoney(balance, unit)}`;
   if (hardLimit !== undefined && used !== undefined) {
-    return `${label} quota ${formatMaybeMoney(Math.max(0, hardLimit - used), unit)} left`;
+    return `API | remaining ${formatMaybeMoney(Math.max(0, hardLimit - used), unit)}`;
   }
-  if (hardLimit !== undefined) return `${label} quota ${formatMaybeMoney(hardLimit, unit)} total`;
+  if (hardLimit !== undefined) return `API | total ${formatMaybeMoney(hardLimit, unit)}`;
 
   const keys = Object.keys(root || {}).slice(0, 4).join(", ");
-  return keys ? `${label} quota received (${keys})` : `${label} quota checked (${unit})`;
+  return keys ? `API | received (${keys})` : `API | checked ${unit}`;
 }
 
 async function formatNewApiTokenLine(label, data) {
   const root = usageRoot(data);
-  const title = root?.token_name || root?.key_name || root?.name || label || "NewAPI";
   const unlimited = root?.unlimited_quota === true || root?.unlimitedQuota === true;
   const quota = pickNumber(root, ["quota", "limit", "total_quota", "totalQuota"]);
   const used = pickNumber(root, ["used_quota", "usedQuota", "used"]);
@@ -706,13 +709,13 @@ async function formatNewApiTokenLine(label, data) {
     throw new Error("NewAPI token usage payload has no quota fields");
   }
 
-  const parts = [`[额度] ${title}`];
-  if (unlimited) parts.push("无限额度");
-  if (remaining !== undefined) parts.push(`余额 ${await formatNewApiQuota(remaining)}`);
+  const parts = usageParts();
+  if (unlimited) parts.push("unlimited");
+  if (remaining !== undefined) parts.push(`balance ${await formatNewApiQuota(remaining)}`);
   if (used !== undefined && quota !== undefined) {
-    parts.push(`已用 ${await formatNewApiQuota(used)}/${await formatNewApiQuota(quota)}`);
+    parts.push(`used ${await formatNewApiQuota(used)}/${await formatNewApiQuota(quota)}`);
   } else if (used !== undefined) {
-    parts.push(`已用 ${await formatNewApiQuota(used)}`);
+    parts.push(`used ${await formatNewApiQuota(used)}`);
   }
   return parts.join(" | ");
 }
@@ -723,13 +726,13 @@ function formatOpenRouterLine(label, data) {
   const remaining = pickNumber(root, ["limit_remaining", "remaining_credits"]);
   const used = pickNumber(root, ["usage", "total_usage", "spend"]);
   const reset = root?.limit_reset || root?.reset_at ? shortDate(root.limit_reset || root.reset_at) : "";
-  const parts = [`[额度] ${label || "OpenRouter"}`];
+  const parts = usageParts();
 
-  if (remaining !== undefined) parts.push(`余额 ${formatMoney(remaining)}`);
+  if (remaining !== undefined) parts.push(`balance ${formatMoney(remaining)}`);
   if (used !== undefined && limit !== undefined && limit !== remaining) {
-    parts.push(`已用 ${formatMoney(used)}/${formatMoney(limit)}`);
+    parts.push(`used ${formatMoney(used)}/${formatMoney(limit)}`);
   } else if (used !== undefined) {
-    parts.push(`已用 ${formatMoney(used)}`);
+    parts.push(`used ${formatMoney(used)}`);
   }
   if (reset) parts.push(`Reset ${reset}`);
 
@@ -747,7 +750,6 @@ function panelQuotaLooksRemaining(kind) {
 
 async function formatPanelUserSelfLine(label, data, kind) {
   const root = usageRoot(data);
-  const title = root?.username || root?.display_name || label || kind || "API";
   const scale = panelQuotaScale(kind);
   const quota = pickNumber(root, ["quota"]);
   const used = pickNumber(root, ["used_quota", "usedQuota"]);
@@ -767,15 +769,15 @@ async function formatPanelUserSelfLine(label, data, kind) {
     ? (quotaUsd === undefined || usedUsd === undefined ? quotaUsd : quotaUsd + usedUsd)
     : quotaUsd;
 
-  const parts = [`[额度] ${title}`];
-  if (remainingUsd !== undefined) parts.push(`余额 ${formatMoney(remainingUsd)}`);
+  const parts = usageParts();
+  if (remainingUsd !== undefined) parts.push(`balance ${formatMoney(remainingUsd)}`);
   if (usedUsd !== undefined && totalUsd !== undefined) {
-    parts.push(`已用 ${formatMoney(usedUsd)}/${formatMoney(totalUsd)}`);
+    parts.push(`used ${formatMoney(usedUsd)}/${formatMoney(totalUsd)}`);
   } else if (usedUsd !== undefined) {
-    parts.push(`已用 ${formatMoney(usedUsd)}`);
+    parts.push(`used ${formatMoney(usedUsd)}`);
   }
-  if (todayUsed !== undefined) parts.push(`今日 ${formatMoney(todayUsed / scale)}`);
-  if (todayIncome !== undefined) parts.push(`收入 ${formatMoney(todayIncome / scale)}`);
+  if (todayUsed !== undefined) parts.push(`today ${formatMoney(todayUsed / scale)}`);
+  if (todayIncome !== undefined) parts.push(`income ${formatMoney(todayIncome / scale)}`);
   return parts.join(" | ");
 }
 
@@ -784,12 +786,12 @@ function formatQuotaLimitedLine(label, root) {
   const limit = pickNumber(quota, ["limit", "quota"]);
   const used = pickNumber(quota, ["used", "quota_used"]);
   const remaining = pickNumber(quota, ["remaining"]) ?? pickNumber(root, ["remaining"]);
-  const parts = [`[额度] ${label} key`];
+  const parts = usageParts();
 
   if (limit !== undefined && used !== undefined) {
     parts.push(`Q ${formatMoney(used)}/${formatMoney(limit)}`);
   } else if (remaining !== undefined) {
-    parts.push(`剩余 ${formatMoney(remaining)}`);
+    parts.push(`remaining ${formatMoney(remaining)}`);
   }
 
   if (Array.isArray(root?.rate_limits) && root.rate_limits.length > 0) {
@@ -810,24 +812,22 @@ function formatQuotaLimitedLine(label, root) {
 }
 
 async function formatWalletLine(label, root) {
-  const title = root?.planName || label || "API";
   const balance = pickNumber(root, ["balance", "remaining", "remain", "available"]);
   const todayCost = pickNumber(root?.usage?.today, ["actual_cost", "cost"]);
   const recentUsage = Array.isArray(root?.daily_usage)
     ? root.daily_usage.reduce((sum, day) => sum + (pickNumber(day, ["actual_cost", "cost"]) || 0), 0)
     : undefined;
 
-  const parts = [`[额度] ${title}`];
-  if (balance !== undefined) parts.push(`余额 ${formatMoney(balance)}`);
-  if (todayCost !== undefined) parts.push(`今日 ${formatMoney(todayCost)}`);
+  const parts = usageParts();
+  if (balance !== undefined) parts.push(`balance ${formatMoney(balance)}`);
+  if (todayCost !== undefined) parts.push(`today ${formatMoney(todayCost)}`);
   if (recentUsage !== undefined && root.daily_usage.length > 0) {
-    parts.push(`近${await providerUsageDays()}天 ${formatMoney(recentUsage)}`);
+    parts.push(`${await providerUsageDays()}d ${formatMoney(recentUsage)}`);
   }
   return parts.join(" | ");
 }
 
 function formatUsageLine(label, root) {
-  const plan = root?.planName || "";
   const sub = root?.subscription || {};
   const dailyLimit = pickNumber(sub, ["daily_limit_usd"]);
   const dailyUsage = pickNumber(sub, ["daily_usage_usd"]);
@@ -837,8 +837,7 @@ function formatUsageLine(label, root) {
   const monthlyUsage = pickNumber(sub, ["monthly_usage_usd"]);
   const expires = shortDate(sub.expires_at);
 
-  const title = plan || label || "API";
-  const parts = [`[额度] ${title}`];
+  const parts = usageParts();
   if (dailyLimit > 0 && dailyUsage !== undefined) parts.push(`D ${formatMoney(dailyUsage)}/${formatMoney(dailyLimit)}`);
   if (weeklyLimit > 0 && weeklyUsage !== undefined) parts.push(`W ${formatMoney(weeklyUsage)}/${formatMoney(weeklyLimit)}`);
   if (monthlyLimit > 0 && monthlyUsage !== undefined) parts.push(`M ${formatMoney(monthlyUsage)}/${formatMoney(monthlyLimit)}`);
@@ -946,10 +945,9 @@ async function fetchSub2ApiAuthMeUsage(context) {
   const root = usageRoot(json);
   const balance = pickNumber(root, ["balance"]);
   if (balance === undefined) throw new Error("Sub2API auth/me payload has no balance field");
-  const title = root?.username || root?.email || context.label || "Sub2API";
   const normalized = {
     mode: "unrestricted",
-    planName: title,
+    planName: root?.username || root?.email || context.label || "Sub2API",
     balance,
     unit: "USD",
     source: "sub2api-auth-me",
@@ -958,7 +956,7 @@ async function fetchSub2ApiAuthMeUsage(context) {
   return usageResult(
     context,
     "sub2api-auth-me",
-    `[额度] ${title} | 余额 ${formatMoney(balance)}`,
+    `API | balance ${formatMoney(balance)}`,
     normalized
   );
 }

@@ -120,7 +120,7 @@ test("Claude statusline appends relay usage snapshot", () => {
     version: 1,
     items: {
       "https://relay.example.com": {
-        text: "[额度] 钱包余额 | 余额 $362 | 今日 $61.7 | 近30天 $566",
+        text: "API | balance $362 | today $61.7 | 30d $566",
         source: "v1-usage",
         baseUrl: "https://relay.example.com/v1",
         updatedAt: new Date().toISOString(),
@@ -145,6 +145,6 @@ test("Claude statusline appends relay usage snapshot", () => {
   assert.equal(result.stderr, "");
   assert.equal(
     result.stdout,
-    "Sonnet 4.5 | [额度] 钱包余额 | 余额 $362 | 今日 $61.7 | 近30天 $566"
+    "Sonnet 4.5 | API | balance $362 | today $61.7 | 30d $566"
   );
 });
