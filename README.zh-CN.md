@@ -1,11 +1,11 @@
-# Agent Tooling
+# Agent Tools
 
-面向 Codex、Claude Code 与 opencode 的可复用 agent 工具集。本仓库集中维护 skills、hooks、statusline 支持与安装脚本；不同项目可以只安装或同步自己需要的部分。
+面向 Codex、Claude Code 与 opencode 的可复用 skills、hooks、statusline 工具与安装器。本仓库把各项能力放在可预期的位置；不同项目可以只安装自己需要的部分。
 
 ## 目录结构
 
 ```text
-agent-tooling/
+agent-tools/
 ├── .claude-plugin/    # Claude Code/plugin 生态的 manifest。
 ├── .codex-plugin/     # Codex plugin manifest。
 ├── hooks/             # Hook 脚本和配置片段，区分通用逻辑与 agent 接线。
@@ -31,20 +31,20 @@ agent-tooling/
 查看可用 skills：
 
 ```bash
-npx -y skills@latest add kairyou/agent-tooling --list
+npx -y skills@latest add kairyou/agent-tools --list
 ```
 
 全局安装 skill：
 
 ```bash
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -y
+npx -y skills@latest add kairyou/agent-tools --skill commit -g -y
 ```
 
 项目级安装：
 
 ```bash
 # 如果安装结果可能提交到 Git，优先使用 --copy，不要提交 symlink。
-npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
+npx -y skills@latest add kairyou/agent-tools --skill commit --copy -y
 ```
 
 多个 skill 可以跟在 `--skill` 后面，例如 `--skill commit other-skill`。
@@ -55,20 +55,20 @@ npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
 
 ```bash
 # Claude：statusLine + guard
-npx -y github:kairyou/agent-tooling statusline guard -a claude
+npx -y github:kairyou/agent-tools statusline guard -a claude
 
 # Codex：guard + API usage
-npx -y github:kairyou/agent-tooling guard usage -a codex
+npx -y github:kairyou/agent-tools guard usage -a codex
 
 # opencode：guard plugin
-npx -y github:kairyou/agent-tooling guard -a opencode
+npx -y github:kairyou/agent-tools guard -a opencode
 
 # 多个 agent 一起安装
-npx -y github:kairyou/agent-tooling guard -a claude codex opencode
+npx -y github:kairyou/agent-tools guard -a claude codex opencode
 
 # 预览或卸载
-npx -y github:kairyou/agent-tooling guard usage -a codex --dry-run
-npx -y github:kairyou/agent-tooling guard usage -a codex --uninstall
+npx -y github:kairyou/agent-tools guard usage -a codex --dry-run
+npx -y github:kairyou/agent-tools guard usage -a codex --uninstall
 ```
 
 安装器会把运行时脚本复制到 `~/.agent-tooling/`，然后让各 agent 配置指向这里。

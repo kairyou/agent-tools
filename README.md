@@ -1,13 +1,13 @@
-# Agent Tooling
+# Agent Tools
 
-Reusable agent tooling for Codex, Claude Code, and opencode. This repository packages skills, hooks, statusline support, and install helpers in predictable locations so each project can opt into only what it needs.
+Reusable skills, hooks, statusline tools, and installers for Codex, Claude Code, and opencode. This repository keeps each capability in predictable locations so projects can opt into only what they need.
 
 [中文](README.zh-CN.md)
 
 ## Directory Layout
 
 ```text
-agent-tooling/
+agent-tools/
 ├── .claude-plugin/    # Claude Code/plugin ecosystem manifest.
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── hooks/             # Hook scripts and config fragments, split by shared logic and agent wiring.
@@ -33,20 +33,20 @@ agent-tooling/
 List available skills:
 
 ```bash
-npx -y skills@latest add kairyou/agent-tooling --list
+npx -y skills@latest add kairyou/agent-tools --list
 ```
 
 Install skills globally:
 
 ```bash
-npx -y skills@latest add kairyou/agent-tooling --skill commit -g -y
+npx -y skills@latest add kairyou/agent-tools --skill commit -g -y
 ```
 
 Project-level install:
 
 ```bash
 # Prefer --copy when installed files may be committed to Git.
-npx -y skills@latest add kairyou/agent-tooling --skill commit --copy -y
+npx -y skills@latest add kairyou/agent-tools --skill commit --copy -y
 ```
 
 Pass multiple skills after `--skill`, for example `--skill commit other-skill`.
@@ -57,20 +57,20 @@ Install hooks and statusline with the repo installer:
 
 ```bash
 # Claude: statusLine + guard
-npx -y github:kairyou/agent-tooling statusline guard -a claude
+npx -y github:kairyou/agent-tools statusline guard -a claude
 
 # Codex: guard + API usage
-npx -y github:kairyou/agent-tooling guard usage -a codex
+npx -y github:kairyou/agent-tools guard usage -a codex
 
 # opencode: guard plugin
-npx -y github:kairyou/agent-tooling guard -a opencode
+npx -y github:kairyou/agent-tools guard -a opencode
 
 # Multiple agents
-npx -y github:kairyou/agent-tooling guard -a claude codex opencode
+npx -y github:kairyou/agent-tools guard -a claude codex opencode
 
 # Preview or uninstall
-npx -y github:kairyou/agent-tooling guard usage -a codex --dry-run
-npx -y github:kairyou/agent-tooling guard usage -a codex --uninstall
+npx -y github:kairyou/agent-tools guard usage -a codex --dry-run
+npx -y github:kairyou/agent-tools guard usage -a codex --uninstall
 ```
 
 The installer copies runtime scripts into `~/.agent-tooling/` and points agent
