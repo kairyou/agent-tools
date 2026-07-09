@@ -30,7 +30,7 @@ function deny(reason, command) {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
         permissionDecisionReason:
-          `Blocked by agent-tooling guard: ${reason}. ` +
+          `Blocked by agent-tools guard: ${reason}. ` +
           `Command: ${String(command).trim().slice(0, 200)}`,
       },
     })

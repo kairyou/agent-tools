@@ -73,7 +73,7 @@ npx -y github:kairyou/agent-tools guard usage -a codex --dry-run
 npx -y github:kairyou/agent-tools guard usage -a codex --uninstall
 ```
 
-The installer copies runtime scripts into `~/.agent-tooling/` and points agent
+The installer copies runtime scripts into `~/.agent-tools/` and points agent
 configs there.
 
 Installed capabilities:
@@ -102,7 +102,7 @@ Fields: `D/W/M` are daily/weekly/monthly spend against plan limits; `Exp` is
 the plan expiry; `balance` is wallet credit; `today` and `30d` are API spend.
 
 After installing Codex hooks, run `/hooks` inside Codex and approve the
-agent-tooling hooks. After installing the opencode plugin, restart opencode.
+agent-tools hooks. After installing the opencode plugin, restart opencode.
 
 Claude statusLine defaults to:
 
@@ -113,7 +113,7 @@ Claude statusLine defaults to:
 Here `5h` and `w` are Claude's rolling usage windows; `⟳` is the reset countdown.
 
 To choose what appears, edit `statusline.fields` in
-`~/.agent-tooling/config.jsonc`.
+`~/.agent-tools/config.jsonc`.
 The installer may add new default keys on update; it preserves top-of-file
 comments and existing values.
 

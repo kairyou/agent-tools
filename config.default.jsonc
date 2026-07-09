@@ -1,4 +1,4 @@
-// agent-tooling config.
+// agent-tools config.
 // statusline.fields controls both visibility and order.
 // Remove a field to hide it; move a field to reorder it.
 // Available statusline fields: branch, model, fiveHour, week, context, directory.

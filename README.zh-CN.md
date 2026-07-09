@@ -71,7 +71,7 @@ npx -y github:kairyou/agent-tools guard usage -a codex --dry-run
 npx -y github:kairyou/agent-tools guard usage -a codex --uninstall
 ```
 
-安装器会把运行时脚本复制到 `~/.agent-tooling/`，然后让各 agent 配置指向这里。
+安装器会把运行时脚本复制到 `~/.agent-tools/`，然后让各 agent 配置指向这里。
 
 已接线能力：
 
@@ -97,7 +97,7 @@ warning: API | balance $362 | today $61.7 | 30d $566
 字段含义：`D/W/M` 是日/周/月套餐消耗与上限，`Exp` 是套餐到期日，
 `balance` 是钱包余额，`today` / `30d` 是今日与近 30 天 API 消耗。
 
-安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tooling hooks。安装
+安装 Codex hook 后，需要在 Codex 里运行 `/hooks` 并批准 agent-tools hooks。安装
 opencode plugin 后，需要重启 opencode。
 
 Claude statusLine 默认显示：
@@ -108,7 +108,7 @@ Claude statusLine 默认显示：
 
 其中 `5h` / `w` 是 Claude 的滚动用量窗口，`⟳` 后面是重置倒计时。
 
-如需控制显示项，直接修改 `~/.agent-tooling/config.jsonc` 里的 `statusline.fields`。
+如需控制显示项，直接修改 `~/.agent-tools/config.jsonc` 里的 `statusline.fields`。
 安装器更新时可能会补充新的默认键；文件顶部注释和已有值会保留。
 
 ## 说明

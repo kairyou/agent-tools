@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code statusLine script (agent-tooling).
+// Claude Code statusLine script (agent-tools).
 // Reads session JSON from stdin and prints one compact status line.
 //
 // Default:
@@ -7,8 +7,8 @@
 //
 // Customize with either:
 //   node statusline.mjs --fields branch,model,fiveHour,week
-//   AGENT_TOOLING_STATUSLINE_FIELDS=branch,model,context
-//   ~/.agent-tooling/config.jsonc
+//   AGENT_TOOLS_STATUSLINE_FIELDS=branch,model,context
+//   ~/.agent-tools/config.jsonc
 
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
@@ -16,11 +16,11 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const AGENT_TOOLING_HOME = process.env.AGENT_TOOLING_HOME || join(SCRIPT_DIR, "..", "..");
-const DEFAULT_CONFIG_FILE = join(AGENT_TOOLING_HOME, "config.jsonc");
-const SNAPSHOT_FILE = join(AGENT_TOOLING_HOME, "cache", "usage-snapshot.json");
-const REFRESH_STATE_FILE = join(AGENT_TOOLING_HOME, "cache", "usage-refresh-state.json");
-const USAGE_RUNTIME = join(AGENT_TOOLING_HOME, "lib", "usage.mjs");
+const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(SCRIPT_DIR, "..", "..");
+const DEFAULT_CONFIG_FILE = join(AGENT_TOOLS_HOME, "config.jsonc");
+const SNAPSHOT_FILE = join(AGENT_TOOLS_HOME, "cache", "usage-snapshot.json");
+const REFRESH_STATE_FILE = join(AGENT_TOOLS_HOME, "cache", "usage-refresh-state.json");
+const USAGE_RUNTIME = join(AGENT_TOOLS_HOME, "lib", "usage.mjs");
 const DEFAULT_SNAPSHOT_TTL_MS = 60_000;
 const DEFAULT_REFRESH_COOLDOWN_MS = 30_000;
 const DEFAULT_FAILURE_BACKOFF_MS = 120_000;
@@ -132,10 +132,10 @@ function normalizeField(field) {
 }
 
 function mergeConfig(cli) {
-  const rootConfig = readJsonFile(process.env.AGENT_TOOLING_CONFIG || DEFAULT_CONFIG_FILE);
+  const rootConfig = readJsonFile(process.env.AGENT_TOOLS_CONFIG || DEFAULT_CONFIG_FILE);
   const fileConfig = rootConfig.statusline || {};
-  const envFields = process.env.AGENT_TOOLING_STATUSLINE_FIELDS;
-  const envSeparator = process.env.AGENT_TOOLING_STATUSLINE_SEPARATOR;
+  const envFields = process.env.AGENT_TOOLS_STATUSLINE_FIELDS;
+  const envSeparator = process.env.AGENT_TOOLS_STATUSLINE_SEPARATOR;
 
   const config = {
     ...DEFAULT_CONFIG,
@@ -336,14 +336,14 @@ function writeRefreshAttempt(baseUrl) {
 }
 
 function shouldRefreshUsage(baseUrl, snapshot) {
-  if (process.env.AGENT_TOOLING_USAGE_REFRESH === "0") return false;
+  if (process.env.AGENT_TOOLS_USAGE_REFRESH === "0") return false;
   if (!baseUrl || isOfficialBaseUrl(baseUrl)) return false;
   if (!hasClaudeUsageToken()) return false;
   if (!fs.existsSync(USAGE_RUNTIME)) return false;
 
-  const ttlMs = numberFromEnv("AGENT_TOOLING_USAGE_SNAPSHOT_TTL_MS", DEFAULT_SNAPSHOT_TTL_MS);
-  const cooldownMs = numberFromEnv("AGENT_TOOLING_USAGE_REFRESH_COOLDOWN_MS", DEFAULT_REFRESH_COOLDOWN_MS);
-  const failureBackoffMs = numberFromEnv("AGENT_TOOLING_USAGE_FAILURE_BACKOFF_MS", DEFAULT_FAILURE_BACKOFF_MS);
+  const ttlMs = numberFromEnv("AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS", DEFAULT_SNAPSHOT_TTL_MS);
+  const cooldownMs = numberFromEnv("AGENT_TOOLS_USAGE_REFRESH_COOLDOWN_MS", DEFAULT_REFRESH_COOLDOWN_MS);
+  const failureBackoffMs = numberFromEnv("AGENT_TOOLS_USAGE_FAILURE_BACKOFF_MS", DEFAULT_FAILURE_BACKOFF_MS);
   const state = refreshStateForBaseUrl(baseUrl);
 
   if (ageMs(state.lastAttemptAt) < cooldownMs) return false;

@@ -29,10 +29,10 @@ function runInstallRaw(args, env) {
 }
 
 test("installer wires and unwires Codex usage without removing guard", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-install-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
   const runtime = join(temp, "runtime");
   const hooksFile = join(temp, "hooks.json");
-  const env = { AGENT_TOOLING_HOME: runtime };
+  const env = { AGENT_TOOLS_HOME: runtime };
 
   runInstall(["guard", "usage", "-a", "codex", "--codex-hooks", hooksFile], env);
   const installed = JSON.parse(readFileSync(hooksFile, "utf8"));
@@ -52,9 +52,9 @@ test("installer wires and unwires Codex usage without removing guard", () => {
 });
 
 test("installer rejects Claude usage as a standalone capability", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-install-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
   const result = runInstallRaw(["usage", "-a", "claude", "--dry-run"], {
-    AGENT_TOOLING_HOME: join(temp, "runtime"),
+    AGENT_TOOLS_HOME: join(temp, "runtime"),
   });
 
   assert.equal(result.status, 2);

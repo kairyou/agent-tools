@@ -10,7 +10,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STATUSLINE_SCRIPT = join(ROOT, "statusline", "claude", "statusline.mjs");
 
 test("Claude statusline renders configured fields in configured order", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-statusline-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));
   const projectDir = join(temp, "project");
   mkdirSync(projectDir, { recursive: true });
   const configFile = join(temp, "config.jsonc");
@@ -39,9 +39,9 @@ test("Claude statusline renders configured fields in configured order", () => {
     input: JSON.stringify(input),
     env: {
       ...process.env,
-      AGENT_TOOLING_HOME: temp,
-      AGENT_TOOLING_CONFIG: configFile,
-      AGENT_TOOLING_USAGE_REFRESH: "0",
+      AGENT_TOOLS_HOME: temp,
+      AGENT_TOOLS_CONFIG: configFile,
+      AGENT_TOOLS_USAGE_REFRESH: "0",
       ANTHROPIC_BASE_URL: "",
       PROVIDER_USAGE_BASE_URL: "",
     },
@@ -54,7 +54,7 @@ test("Claude statusline renders configured fields in configured order", () => {
 });
 
 test("Claude statusline keeps empty official rate limit placeholders", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-statusline-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));
   const configFile = join(temp, "config.jsonc");
   writeFileSync(configFile, JSON.stringify({
     statusline: {
@@ -66,10 +66,10 @@ test("Claude statusline keeps empty official rate limit placeholders", () => {
     input: JSON.stringify({ model: { display_name: "Claude Sonnet 4.5" } }),
     env: {
       ...process.env,
-      AGENT_TOOLING_CONFIG: configFile,
+      AGENT_TOOLS_CONFIG: configFile,
       ANTHROPIC_BASE_URL: "",
       PROVIDER_USAGE_BASE_URL: "",
-      AGENT_TOOLING_USAGE_REFRESH: "0",
+      AGENT_TOOLS_USAGE_REFRESH: "0",
     },
     encoding: "utf8",
   });
@@ -80,7 +80,7 @@ test("Claude statusline keeps empty official rate limit placeholders", () => {
 });
 
 test("Claude statusline hides empty rate limit placeholders for relay base URLs", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-statusline-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));
   const configFile = join(temp, "config.jsonc");
   writeFileSync(configFile, JSON.stringify({
     statusline: {
@@ -92,10 +92,10 @@ test("Claude statusline hides empty rate limit placeholders for relay base URLs"
     input: JSON.stringify({ model: { display_name: "Claude Sonnet 4.5" } }),
     env: {
       ...process.env,
-      AGENT_TOOLING_CONFIG: configFile,
+      AGENT_TOOLS_CONFIG: configFile,
       ANTHROPIC_BASE_URL: "https://relay.example.com/v1",
       PROVIDER_USAGE_BASE_URL: "",
-      AGENT_TOOLING_USAGE_REFRESH: "0",
+      AGENT_TOOLS_USAGE_REFRESH: "0",
     },
     encoding: "utf8",
   });
@@ -106,7 +106,7 @@ test("Claude statusline hides empty rate limit placeholders for relay base URLs"
 });
 
 test("Claude statusline appends relay usage snapshot", () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-statusline-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));
   const agentHome = join(temp, "agent");
   const cacheDir = join(agentHome, "cache");
   const configFile = join(temp, "config.jsonc");
@@ -132,11 +132,11 @@ test("Claude statusline appends relay usage snapshot", () => {
     input: JSON.stringify({ model: { display_name: "Claude Sonnet 4.5" } }),
     env: {
       ...process.env,
-      AGENT_TOOLING_HOME: agentHome,
-      AGENT_TOOLING_CONFIG: configFile,
+      AGENT_TOOLS_HOME: agentHome,
+      AGENT_TOOLS_CONFIG: configFile,
       ANTHROPIC_BASE_URL: "https://relay.example.com/v1",
       PROVIDER_USAGE_BASE_URL: "",
-      AGENT_TOOLING_USAGE_REFRESH: "0",
+      AGENT_TOOLS_USAGE_REFRESH: "0",
     },
     encoding: "utf8",
   });

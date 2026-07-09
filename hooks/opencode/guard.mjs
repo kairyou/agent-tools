@@ -1,4 +1,4 @@
-// opencode plugin: blocks catastrophic shell commands (agent-tooling guard).
+// opencode plugin: blocks catastrophic shell commands (agent-tools guard).
 //
 // This is opencode's equivalent of the Claude/Codex PreToolUse guard. opencode
 // has no declarative hook config — extensions are JS/TS plugins — so the shared
@@ -16,12 +16,12 @@
 
 import { checkCommand } from "../common/guard-rules.mjs";
 
-export const AgentToolingGuard = async () => ({
+export const AgentToolsGuard = async () => ({
   "tool.execute.before": async (input, output) => {
     if (input?.tool !== "bash") return;
     const reason = checkCommand(output?.args?.command);
     if (reason) {
-      throw new Error(`Blocked by agent-tooling guard: ${reason}`);
+      throw new Error(`Blocked by agent-tools guard: ${reason}`);
     }
   },
 });

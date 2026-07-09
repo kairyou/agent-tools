@@ -22,7 +22,7 @@ async function withServer(handler, fn) {
 }
 
 async function runProvider({ baseUrl, preset = "auto", config = {}, codexHome, agentHome }) {
-  const temp = codexHome && agentHome ? "" : mkdtempSync(join(tmpdir(), "agent-tooling-provider-"));
+  const temp = codexHome && agentHome ? "" : mkdtempSync(join(tmpdir(), "agent-tools-provider-"));
   codexHome ||= join(temp, "codex");
   agentHome ||= join(temp, "agent");
   mkdirSync(codexHome, { recursive: true });
@@ -40,7 +40,7 @@ async function runProvider({ baseUrl, preset = "auto", config = {}, codexHome, a
       env: {
         ...process.env,
         CODEX_HOME: codexHome,
-        AGENT_TOOLING_HOME: agentHome,
+        AGENT_TOOLS_HOME: agentHome,
         PROVIDER_USAGE_PRESET: preset,
         PROVIDER_USAGE_BASE_URL: "",
         SUB2API_BASE_URL: "",
@@ -134,7 +134,7 @@ test("provider usage fails open when no compatible usage endpoint exists", async
 });
 
 test("provider usage caches the successful route for a service root", async () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-provider-cache-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-cache-"));
   const codexHome = join(temp, "codex");
   const agentHome = join(temp, "agent");
   const seen = [];
@@ -167,7 +167,7 @@ test("provider usage caches the successful route for a service root", async () =
 });
 
 test("Codex usage hook wrapper logs failures and exits successfully", async () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-usage-hook-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-usage-hook-"));
   const agentHome = join(temp, "agent");
   const hookDir = join(agentHome, "hooks", "codex");
   mkdirSync(hookDir, { recursive: true });
@@ -178,8 +178,8 @@ test("Codex usage hook wrapper logs failures and exits successfully", async () =
       cwd: ROOT,
       env: {
         ...process.env,
-        AGENT_TOOLING_HOME: agentHome,
-        AGENT_TOOLING_USAGE_HOOK_LOG_BYTES: "1024",
+        AGENT_TOOLS_HOME: agentHome,
+        AGENT_TOOLS_USAGE_HOOK_LOG_BYTES: "1024",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -208,7 +208,7 @@ test("Codex usage hook wrapper logs failures and exits successfully", async () =
 });
 
 test("Codex usage hook wrapper caps failure log size", async () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tooling-usage-hook-log-"));
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-usage-hook-log-"));
   const agentHome = join(temp, "agent");
   const hookDir = join(agentHome, "hooks", "codex");
   const logDir = join(agentHome, "logs");
@@ -223,8 +223,8 @@ test("Codex usage hook wrapper caps failure log size", async () => {
       cwd: ROOT,
       env: {
         ...process.env,
-        AGENT_TOOLING_HOME: agentHome,
-        AGENT_TOOLING_USAGE_HOOK_LOG_BYTES: "1024",
+        AGENT_TOOLS_HOME: agentHome,
+        AGENT_TOOLS_USAGE_HOOK_LOG_BYTES: "1024",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

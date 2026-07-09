@@ -36,7 +36,7 @@ test("guard command emits a Codex/Claude deny payload when blocked", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.hookSpecificOutput.hookEventName, "PreToolUse");
   assert.equal(payload.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(payload.hookSpecificOutput.permissionDecisionReason, /Blocked by agent-tooling guard/);
+  assert.match(payload.hookSpecificOutput.permissionDecisionReason, /Blocked by agent-tools guard/);
 });
 
 test("guard command fails open for malformed input", () => {
