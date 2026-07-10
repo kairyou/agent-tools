@@ -136,6 +136,14 @@ balance $244 | today $45.8 | 30d $604
 Balance, quota, and plan usage queries support compatible Sub2API-like,
 NewAPI/OneAPI/OneHub/DoneHub/Veloera/AnyRouter-like, and OpenRouter gateways.
 
+## FAQ
+
+### Why does a global install report `Failed to install 1`?
+
+`PromptScript does not support global skill installation` means that the
+PromptScript agent does not support global installation. It does not affect
+other agents and can be ignored. See [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
+
 ## Notes
 
 - `skills/` contains reusable `SKILL.md` capabilities.

@@ -130,6 +130,13 @@ balance $244 | today $45.8 | 30d $604
 余额, 额度和套餐用量查询支持兼容 Sub2API-like,
 NewAPI/OneAPI/OneHub/DoneHub/Veloera/AnyRouter-like 与 OpenRouter 的网关.
 
+## FAQ
+
+### 全局安装为什么显示 `Failed to install 1`？
+
+`PromptScript does not support global skill installation` 表示 PromptScript Agent 不支持全局
+安装，不影响其他 Agent，可忽略。参见 [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352)。
+
 ## 说明
 
 - `skills/` 放可复用的 `SKILL.md` 能力。项目可以只安装自己需要的 skills。
