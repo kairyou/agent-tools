@@ -121,8 +121,15 @@ npx -y github:kairyou/agent-tools usage -a opencode --uninstall
 
 The installer adds global server and TUI plugins. After the active session
 becomes idle, the server plugin refreshes usage and shows it as a toast. The TUI
-plugin also registers `/usage` for the latest cached value. Restart opencode
+plugin also registers `/at-usage` for the latest cached value. Restart opencode
 after installing or updating the plugins.
+
+Toast example:
+
+```text
+Provider usage
+balance $244 | today $45.8 | 30d $604
+```
 
 ### Supported gateways
 

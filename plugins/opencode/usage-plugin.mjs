@@ -2,6 +2,10 @@ import { queryProviderUsage } from "../../lib/usage.mjs";
 
 const DEFAULT_REFRESH_MS = 60_000;
 
+function toastMessage(text) {
+  return text.replace(/^API \| /, "");
+}
+
 function firstString(value, keys) {
   for (const key of keys) {
     if (typeof value?.[key] === "string" && value[key].trim()) return value[key].trim();
@@ -45,7 +49,7 @@ export const AgentToolsUsage = async ({ client }, options = {}) => {
       await client.tui.showToast({
         body: {
           title: "Provider usage",
-          message: text,
+          message: toastMessage(text),
           variant: "info",
           duration: 8000,
         },

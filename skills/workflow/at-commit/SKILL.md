@@ -14,8 +14,9 @@ References (background only; rules in this file are authoritative):
 ## Workflow
 
 1. Run `git diff --staged` to inspect staged changes. If it is empty, tell the user to run `git add` first and stop.
-2. Generate a message using the rules below and show it for confirmation. Do not commit immediately. When useful, provide concrete candidate messages instead of only asking a question.
-3. Run `git commit -m` only after the user explicitly confirms, for example with "commit" or "ok". Do not run `git push` unless the user explicitly asks.
+2. Determine the description language using the Language Policy below.
+3. Generate a message using the rules below and show it for confirmation. Do not commit immediately. When useful, provide concrete candidate messages instead of only asking a question.
+4. Run `git commit -m` only after the user explicitly confirms, for example with "commit" or "ok". Do not run `git push` unless the user explicitly asks.
 
 ## Language Policy
 
@@ -24,11 +25,11 @@ Use this priority order for the human-readable description after `type(scope):`:
 1. Use the language explicitly requested by the user in this turn.
 2. Otherwise use the repository preference in `.agent-tools/config.jsonc`, if it defines `at-commit.language`.
 3. Otherwise use the global preference in `~/.agent-tools/config.jsonc`, if it defines `at-commit.language`.
-4. Otherwise use the user's prompt language when it is clear and suitable for a commit subject.
+4. Otherwise use the language of the user's actual invocation text when it contains a clear, independent natural-language request. Ignore injected skill instructions, quoted or pasted content, code blocks, diffs, and tool output.
 5. Otherwise match the dominant language in recent repository commit subjects.
 6. If no dominant language is clear, default to English.
 
-Stop at the first source that clearly determines a language. Inspect recent commit subjects only when request, config, and prompt language do not determine one; use at most the latest 20 subjects.
+Apply this order literally and stop at the first match. Check items 2 and 3 before item 4. A bare slash command or skill invocation has no language; continue to item 5. Inspect at most the latest 20 subjects.
 
 Keep Conventional Commits syntax tokens untranslated: `type`, optional `scope`, `!`, and `BREAKING CHANGE`. Keep identifiers, file names, package names, commands, API names, and scopes in their original language.
 

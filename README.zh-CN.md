@@ -115,8 +115,15 @@ npx -y github:kairyou/agent-tools usage -a opencode --uninstall
 ```
 
 安装器会添加全局 server plugin 和 TUI plugin. 当前 session 进入 idle 后, server
-plugin 会刷新 usage 并通过 toast 显示; TUI plugin 还会注册 `/usage`, 用于查看最新
+plugin 会刷新 usage 并通过 toast 显示; TUI plugin 还会注册 `/at-usage`, 用于查看最新
 缓存值. 安装或更新 plugin 后需要重启 opencode.
+
+显示效果示例:
+
+```text
+Provider usage
+balance $244 | today $45.8 | 30d $604
+```
 
 ### 支持的网关
 

@@ -71,7 +71,7 @@ test("opencode usage plugins query the resolved provider and expose the shared s
         toast,
         new Promise((_, reject) => setTimeout(() => reject(new Error("usage toast timed out")), 3000)),
       ]);
-      assert.equal(shown.message, "API | balance $27.5");
+      assert.equal(shown.message, "balance $27.5");
 
       const snapshotFile = join(temp, "cache", "usage-snapshot.json");
       const snapshotText = readFileSync(snapshotFile, "utf8");
@@ -85,9 +85,9 @@ test("opencode usage plugins query the resolved provider and expose the shared s
         ui: { toast: (value) => { tuiToast = value; } },
       });
 
-      assert.equal(layer.commands[0].slashName, "usage");
+      assert.equal(layer.commands[0].slashName, "at-usage");
       layer.commands[0].run();
-      assert.equal(tuiToast.message, "API | balance $27.5");
+      assert.equal(tuiToast.message, "balance $27.5");
     });
   } finally {
     if (previousHome === undefined) delete process.env.AGENT_TOOLS_HOME;

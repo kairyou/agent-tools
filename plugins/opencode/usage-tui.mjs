@@ -5,6 +5,10 @@ import { join } from "node:path";
 const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(homedir(), ".agent-tools");
 const SNAPSHOT_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-snapshot.json");
 
+function toastMessage(text) {
+  return text.replace(/^API \| /, "");
+}
+
 function latestUsage() {
   try {
     const data = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8"));
@@ -24,12 +28,12 @@ const tui = async (api) => {
         title: "Provider usage",
         category: "Agent Tools",
         namespace: "palette",
-        slashName: "usage",
+        slashName: "at-usage",
         run() {
           const message = latestUsage();
           api.ui.toast({
             title: "Provider usage",
-            message: message || "Provider usage is not available yet",
+            message: message ? toastMessage(message) : "Provider usage is not available yet",
             variant: message ? "info" : "warning",
             duration: 8000,
           });
