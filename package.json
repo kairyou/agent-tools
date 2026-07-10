@@ -2,8 +2,11 @@
   "name": "agent-tools",
   "version": "0.1.0",
   "private": true,
-  "description": "Skills for Codex, Claude Code, and opencode, plus runtime integrations for Codex and Claude Code.",
+  "description": "Skills and runtime integrations for Codex, Claude Code, and opencode.",
   "license": "MIT",
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
+  },
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   },

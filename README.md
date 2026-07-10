@@ -1,6 +1,6 @@
 # Agent Tools
 
-Reusable skills for Codex, Claude Code, and opencode, plus runtime integrations for Codex and Claude Code. This repository keeps each capability in predictable locations so projects can opt into only what they need.
+Reusable skills and runtime integrations for Codex, Claude Code, and opencode. This repository keeps each capability in predictable locations so projects can opt into only what they need.
 
 [中文](README.zh-CN.md)
 
@@ -11,6 +11,7 @@ agent-tools/
 ├── .claude-plugin/    # Claude Code/plugin ecosystem manifest.
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── hooks/             # Shared and agent-specific hook integrations.
+├── plugins/           # Runtime plugins loaded by supported agents.
 ├── scripts/           # Install, sync, validation, and maintenance scripts.
 ├── skills/            # Reusable Agent Skills for CLI discovery and plugin manifests.
 │   └── workflow/      # Workflow-oriented skills.
@@ -40,26 +41,47 @@ Install skills globally:
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
-```
-
-Project-level install:
-
-```bash
-# Prefer --copy when installed files may be committed to Git.
-npx -y skills@latest add kairyou/agent-tools --skill at-commit --copy -y
+npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
+npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
 ```
 
 Pass multiple skills after `--skill`, for example `--skill at-commit at-review at-simplify`.
 
-## Installing statusline & usage
+## Runtime integrations
 
-Install runtime capabilities with the repo installer:
+### Claude Code
+
+#### Statusline
 
 ```bash
-# Claude statusLine
+# Install or update
 npx -y github:kairyou/agent-tools statusline -a claude
 
-# Codex API usage
+# Preview or uninstall
+npx -y github:kairyou/agent-tools statusline -a claude --dry-run
+npx -y github:kairyou/agent-tools statusline -a claude --uninstall
+```
+
+The installer writes `statusLine` to `~/.claude/settings.json`. The default
+output is:
+
+```text
+⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+```
+
+Here `5h` and `w` are Claude's rolling usage windows; `⟳` is the reset countdown.
+When a compatible API relay is active, the statusline also appends provider usage.
+
+To choose what appears, edit `statusline.fields` in
+`~/.agent-tools/config.jsonc`. The installer may add new default keys on update;
+it preserves top-of-file comments and existing values.
+
+### Codex
+
+#### Provider usage hook
+
+```bash
+# Install or update
 npx -y github:kairyou/agent-tools usage -a codex
 
 # Preview or uninstall
@@ -67,18 +89,9 @@ npx -y github:kairyou/agent-tools usage -a codex --dry-run
 npx -y github:kairyou/agent-tools usage -a codex --uninstall
 ```
 
-The installer copies runtime scripts into `~/.agent-tools/` and points agent
-configs there.
-
-Installed capabilities:
-
-- **Claude** — `statusLine`, written to `~/.claude/settings.json`.
-- **Codex** — the `usage` hook, written to `~/.codex/hooks.json`.
-
-The `usage` runtime shows the active API provider's balance, quota, or plan
-usage for compatible Sub2API-like, NewAPI/OneAPI/OneHub/DoneHub/Veloera/
-AnyRouter-like, and OpenRouter gateways. Codex displays it through a hook;
-Claude statusLine appends it automatically when a compatible relay is active.
+The installer adds the hook to `UserPromptSubmit` and `Stop` in
+`~/.codex/hooks.json`. After installation, run `/hooks` inside Codex and approve
+the agent-tools usage hooks.
 
 Output examples:
 
@@ -93,26 +106,34 @@ warning: API | balance $362 | today $61.7 | 30d $566
 Fields: `D/W/M` are daily/weekly/monthly spend against plan limits; `Exp` is
 the plan expiry; `balance` is wallet credit; `today` and `30d` are API spend.
 
-After installing Codex hooks, run `/hooks` inside Codex and approve the
-agent-tools usage hooks.
+### OpenCode
 
-Claude statusLine defaults to:
+#### Provider usage plugin
 
-```text
-⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+```bash
+# Install or update
+npx -y github:kairyou/agent-tools usage -a opencode
+
+# Preview or uninstall
+npx -y github:kairyou/agent-tools usage -a opencode --dry-run
+npx -y github:kairyou/agent-tools usage -a opencode --uninstall
 ```
 
-Here `5h` and `w` are Claude's rolling usage windows; `⟳` is the reset countdown.
+The installer adds global server and TUI plugins. After the active session
+becomes idle, the server plugin refreshes usage and shows it as a toast. The TUI
+plugin also registers `/usage` for the latest cached value. Restart opencode
+after installing or updating the plugins.
 
-To choose what appears, edit `statusline.fields` in
-`~/.agent-tools/config.jsonc`.
-The installer may add new default keys on update; it preserves top-of-file
-comments and existing values.
+### Supported gateways
+
+Balance, quota, and plan usage queries support compatible Sub2API-like,
+NewAPI/OneAPI/OneHub/DoneHub/Veloera/AnyRouter-like, and OpenRouter gateways.
 
 ## Notes
 
 - `skills/` contains reusable `SKILL.md` capabilities.
 - `hooks/` keeps stable ownership directories for shared and agent-specific integrations.
+- `plugins/` contains runtime plugin implementations such as opencode usage.
 - `statusline/claude/` contains the command-backed Claude statusLine script.
 - `lib/` contains shared implementation such as API usage query logic.
 - The installer marks and removes only the config entries it owns.

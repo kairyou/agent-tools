@@ -4,11 +4,12 @@
 //
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
-//   usage       Codex hook showing active API provider quota/balance.
+//   usage       Active API provider quota/balance (codex + opencode).
 //
 // Targets:
-//   claude -> ~/.claude/settings.json (statusLine key)
-//   codex  -> ~/.codex/hooks.json     (standalone hooks file)
+//   claude   -> ~/.claude/settings.json (statusLine key)
+//   codex    -> ~/.codex/hooks.json (standalone hooks file)
+//   opencode -> ~/.config/opencode/ (server + TUI plugins)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -19,10 +20,11 @@
 //   agent-tools <capabilities> [options]
 //
 // Options:
-//   -a, --agent <names>       Target agents: claude | codex.
+//   -a, --agent <names>       Target agents: claude | codex | opencode.
 //                             Default: claude.
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
+//   --opencode-config-dir <p> Override the opencode config dir (for testing).
 //   --uninstall               Remove what this installer added, restoring backups.
 //   --dry-run                 Print planned changes without writing anything.
 //   -h, --help                Show this help.
@@ -30,7 +32,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { applyEdits, modify, parse as parseJsonc } from "jsonc-parser";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_ROOT =
@@ -42,18 +45,23 @@ const SOURCE = {
   usageScript: path.join(REPO_ROOT, "lib", "usage.mjs"),
   config: path.join(REPO_ROOT, "config.default.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "statusline", "claude", "statusline.mjs"),
+  opencodeUsagePlugin: path.join(REPO_ROOT, "plugins", "opencode", "usage-plugin.mjs"),
+  opencodeUsageTui: path.join(REPO_ROOT, "plugins", "opencode", "usage-tui.mjs"),
 };
 const RUNTIME = {
   codexUsageHook: path.join(INSTALL_ROOT, "hooks", "codex", "usage-hook.mjs"),
   usageScript: path.join(INSTALL_ROOT, "lib", "usage.mjs"),
   config: path.join(INSTALL_ROOT, "config.jsonc"),
   claudeStatusline: path.join(INSTALL_ROOT, "statusline", "claude", "statusline.mjs"),
+  opencodeUsagePlugin: path.join(INSTALL_ROOT, "plugins", "opencode", "usage-plugin.mjs"),
+  opencodeUsageTui: path.join(INSTALL_ROOT, "plugins", "opencode", "usage-tui.mjs"),
 };
 const ALL_CAPS = ["statusline", "usage"];
-const ALL_AGENTS = ["claude", "codex"];
+const ALL_AGENTS = ["claude", "codex", "opencode"];
 const AGENT_CAPS = {
   claude: ["statusline"],
   codex: ["usage"],
+  opencode: ["usage"],
 };
 
 function fwd(p) {
@@ -140,6 +148,39 @@ function writeText(file, text, dryRun) {
   console.log(`  wrote ${file}`);
 }
 
+function isOpenCodeUsageTuiEntry(entry) {
+  const spec = Array.isArray(entry) ? entry[0] : entry;
+  return (
+    typeof spec === "string" &&
+    /\/plugins\/opencode\/usage-tui\.mjs$/i.test(spec.replace(/\\/g, "/"))
+  );
+}
+
+function updateOpenCodeTuiConfig(file, { remove, dryRun }) {
+  const exists = fs.existsSync(file);
+  const currentText = exists ? fs.readFileSync(file, "utf8") : "{}\n";
+  const errors = [];
+  const current = parseJsonc(currentText, errors, { allowTrailingComma: true }) || {};
+  if (errors.length > 0 || typeof current !== "object" || Array.isArray(current)) {
+    throw new Error(`Cannot parse ${file} as JSONC`);
+  }
+
+  const plugins = Array.isArray(current.plugin) ? current.plugin : [];
+  const next = plugins.filter((entry) => !isOpenCodeUsageTuiEntry(entry));
+  if (!remove) next.push(pathToFileURL(RUNTIME.opencodeUsageTui).href);
+  if (JSON.stringify(plugins) === JSON.stringify(next)) {
+    console.log(`  kept existing ${file}`);
+    return;
+  }
+
+  const eol = currentText.includes("\r\n") ? "\r\n" : "\n";
+  const edits = modify(currentText, ["plugin"], next.length > 0 ? next : undefined, {
+    formattingOptions: { insertSpaces: true, tabSize: 2, eol },
+  });
+  const updated = applyEdits(currentText, edits).replace(/\s*$/, "") + eol;
+  writeText(file, updated, dryRun);
+}
+
 function mergeJsoncFile(src, dest, dryRun) {
   const defaults = readJsonc(src);
   const defaultHeader = headerComments(fs.readFileSync(src, "utf8"));
@@ -184,7 +225,13 @@ function installRuntimeAssets(opts) {
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (wants(opts, "usage")) {
-    addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
+    if (opts.agents.includes("codex")) {
+      addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
+    }
+    if (opts.agents.includes("opencode")) {
+      addFile(SOURCE.opencodeUsagePlugin, RUNTIME.opencodeUsagePlugin);
+      addFile(SOURCE.opencodeUsageTui, RUNTIME.opencodeUsageTui);
+    }
     addFile(SOURCE.usageScript, RUNTIME.usageScript);
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
@@ -199,6 +246,7 @@ function parseArgs(argv) {
     capabilities: [],
     settings: null,
     codexHooks: null,
+    opencodeConfigDir: null,
     uninstall: false,
     dryRun: false,
     help: false,
@@ -228,6 +276,7 @@ function parseArgs(argv) {
       }
       case "--settings": opts.settings = argv[++i]; break;
       case "--codex-hooks": opts.codexHooks = argv[++i]; break;
+      case "--opencode-config-dir": opts.opencodeConfigDir = argv[++i]; break;
       case "--uninstall": opts.uninstall = true; break;
       case "--dry-run": opts.dryRun = true; break;
       case "-h":
@@ -304,11 +353,11 @@ function writeJson(file, data, dryRun) {
 
 function removeFile(file, dryRun) {
   if (dryRun) {
-    console.log(`  [dry-run] would remove now-empty ${file}`);
+    console.log(`  [dry-run] would remove ${file}`);
     return;
   }
   fs.rmSync(file, { force: true });
-  console.log(`  removed now-empty ${file}`);
+  console.log(`  removed ${file}`);
 }
 
 function usageEntry() {
@@ -429,7 +478,49 @@ function runCodex(opts) {
   }
 }
 
-const AGENTS = { claude: runClaude, codex: runCodex };
+// ---- opencode: a server plugin captures the resolved provider and refreshes
+// usage after a session goes idle. A TUI plugin displays the shared snapshot. ----
+
+const OPENCODE_STUB_NAME = "agent-tools-usage.js";
+
+function opencodeConfigDir(opts) {
+  return (
+    opts.opencodeConfigDir ||
+    process.env.OPENCODE_CONFIG_DIR ||
+    path.join(os.homedir(), ".config", "opencode")
+  );
+}
+
+function runOpencode(opts) {
+  if (!wants(opts, "usage")) {
+    console.log("opencode: nothing to do (supports: usage).");
+    return;
+  }
+
+  const configDir = opencodeConfigDir(opts);
+  const stub = path.join(configDir, "plugins", OPENCODE_STUB_NAME);
+  const tuiConfig = path.join(configDir, "tui.json");
+  console.log(`opencode (global): ${configDir}`);
+
+  if (opts.uninstall) {
+    if (fs.existsSync(stub)) removeFile(stub, opts.dryRun);
+    else console.log("  no agent-tools server plugin found; nothing to remove.");
+    updateOpenCodeTuiConfig(tuiConfig, { remove: true, dryRun: opts.dryRun });
+    console.log("  - usage plugin");
+    return;
+  }
+
+  const target = pathToFileURL(RUNTIME.opencodeUsagePlugin).href;
+  const contents =
+    "// Generated by agent-tools installer; do not edit.\n" +
+    `export { AgentToolsUsage } from ${JSON.stringify(target)};\n`;
+  writeText(stub, contents, opts.dryRun);
+  updateOpenCodeTuiConfig(tuiConfig, { remove: false, dryRun: opts.dryRun });
+  console.log("  + usage plugin (session idle + TUI)");
+  if (!opts.dryRun) console.log("  NOTE: restart opencode to load the agent-tools usage plugin.");
+}
+
+const AGENTS = { claude: runClaude, codex: runCodex, opencode: runOpencode };
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));

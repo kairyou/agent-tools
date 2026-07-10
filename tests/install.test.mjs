@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { parse as parseJsonc } from "jsonc-parser";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_SCRIPT = join(ROOT, "scripts", "install.mjs");
@@ -67,4 +68,44 @@ test("installer rejects Claude usage as a standalone capability", () => {
   assert.match(result.stderr, /Unsupported capability\/agent combination: usage -a claude/);
   assert.match(result.stderr, /statusline -a claude/);
   assert.equal(result.stdout, "");
+});
+
+test("installer wires and unwires opencode usage plugins while preserving TUI config", () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
+  const runtime = join(temp, "runtime");
+  const configDir = join(temp, "opencode");
+  const tuiFile = join(configDir, "tui.json");
+  const env = { AGENT_TOOLS_HOME: runtime };
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(tuiFile, '// keep this comment\n{\n  "theme": "system",\n  "plugin": ["other-plugin"]\n}\n');
+
+  runInstall(["usage", "-a", "opencode", "--opencode-config-dir", configDir], env);
+
+  const stub = join(configDir, "plugins", "agent-tools-usage.js");
+  const installedText = readFileSync(tuiFile, "utf8");
+  const installed = parseJsonc(installedText);
+  assert.equal(existsSync(stub), true);
+  assert.match(readFileSync(stub, "utf8"), /plugins\/opencode\/usage-plugin\.mjs/);
+  assert.equal(existsSync(join(runtime, "plugins", "opencode", "usage-plugin.mjs")), true);
+  assert.equal(existsSync(join(runtime, "plugins", "opencode", "usage-tui.mjs")), true);
+  assert.match(installedText, /keep this comment/);
+  assert.equal(installed.theme, "system");
+  assert.equal(installed.plugin[0], "other-plugin");
+  assert.match(installed.plugin[1], /plugins\/opencode\/usage-tui\.mjs$/);
+
+  runInstall([
+    "usage",
+    "-a",
+    "opencode",
+    "--opencode-config-dir",
+    configDir,
+    "--uninstall",
+  ], env);
+
+  const afterText = readFileSync(tuiFile, "utf8");
+  const after = parseJsonc(afterText);
+  assert.equal(existsSync(stub), false);
+  assert.match(afterText, /keep this comment/);
+  assert.deepEqual(after.plugin, ["other-plugin"]);
+  assert.equal(after.theme, "system");
 });

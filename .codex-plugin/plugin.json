@@ -1,7 +1,7 @@
 {
   "name": "agent-tools",
   "version": "0.1.0",
-  "description": "Skills for Codex, Claude Code, and opencode, plus runtime integrations for Codex and Claude Code",
+  "description": "Skills and runtime integrations for Codex, Claude Code, and opencode",
   "license": "MIT",
   "skills": "./skills/"
 }
