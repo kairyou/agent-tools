@@ -1,11 +1,26 @@
 {
-  "name": "agent-tools",
+  "name": "@kairyou/agent-tools",
   "version": "0.1.0",
-  "private": true,
   "description": "Skills and runtime integrations for Codex, Claude Code, and opencode.",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "config.default.jsonc",
+    "hooks/",
+    "lib/",
+    "plugins/",
+    "scripts/",
+    "skills/",
+    "statusline/"
+  ],
   "dependencies": {
-    "jsonc-parser": "^3.3.1"
+    "jsonc-parser": "3.3.1"
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs"
