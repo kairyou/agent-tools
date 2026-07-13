@@ -147,7 +147,7 @@ npx -y github:kairyou/agent-tools usage -a codex
 
 ## FAQ
 
-### Why does a global install report `Failed to install 1`?
+### Why does global installation fail for PromptScript?
 
 `PromptScript does not support global skill installation` means that the
 PromptScript agent does not support global installation. It does not affect

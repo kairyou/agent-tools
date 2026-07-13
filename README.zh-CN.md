@@ -140,7 +140,7 @@ npx -y github:kairyou/agent-tools usage -a codex
 
 ## FAQ
 
-### 全局安装为什么显示 `Failed to install 1`？
+### 为什么全局安装提示 PromptScript 不支持？
 
 `PromptScript does not support global skill installation` 表示 PromptScript Agent 不支持全局
 安装，不影响其他 Agent，可忽略。参见 [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352)。
