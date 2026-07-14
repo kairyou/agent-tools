@@ -12,10 +12,12 @@ agent-tools/
 ├── plugins/           # 由各 agent 加载的 runtime plugins.
 ├── scripts/           # 安装、同步、校验和仓库维护脚本。
 ├── skills/            # 可复用 Agent Skills，供 CLI 扫描和 plugin manifest 声明。
-│   └── workflow/      # 工作流类 skills。
-│       ├── at-commit/   # 生成 Conventional Commits message.
-│       ├── at-review/   # 审查改动中的 bug 与回归风险.
-│       └── at-simplify/ # 减少改动中的冗余和复杂度.
+│   ├── workflow/      # 工作流类 skills。
+│   │   ├── at-commit/   # 生成 Conventional Commits message.
+│   │   ├── at-review/   # 审查改动中的 bug 与回归风险.
+│   │   └── at-simplify/ # 减少改动中的冗余和复杂度.
+│   └── integrations/  # 对接外部系统的 skills。
+│       └── zentao/      # 禅道 bug/task 修复工作流.
 ├── statusline/        # Statusline 配置片段/模板，按 agent 分组。
 │   └── claude/        # Claude command-backed statusLine 脚本和示例配置。
 └── lib/               # hooks、statusline、installer 复用的共享实现。
@@ -23,9 +25,36 @@ agent-tools/
 
 ## 当前 Skills
 
-- `at-commit`: 根据暂存区改动生成 Conventional Commits message, 并在提交前等待用户确认.
-- `at-review`: 审查改动中的正确性 bug, 回归风险, 约定违规和高价值清理项.
-- `at-simplify`: 重构改动, 减少冗余, 降低复杂度, 提升代码质量.
+### at-commit
+
+根据暂存区改动生成 Conventional Commits message, 并在提交前等待用户确认.
+
+- 用法: `/at-commit [<语言>]` — 指定 commit description 的语言(Conventional Commits 语法部分保持英文)
+
+### at-review
+
+审查改动中的正确性 bug, 回归风险, 约定违规和高价值清理项.
+
+- 用法: `/at-review [--fix] [<pr|分支|路径>]` — 输出审查结果; 加 `--fix` 则同时应用修复
+
+### at-simplify
+
+重构改动, 减少冗余, 降低复杂度, 提升代码质量.
+
+- 用法: `/at-simplify [<pr|分支|路径>]`
+
+### zentao
+
+读取禅道 bug/task 并端到端处理: 修复, 验证, 暂存; 提交和回写状态前均需确认.
+
+用法:
+
+- `/zentao bugs` — 列出指派给你(配置的账号)的 bug, 挑一个或多个(多个 = 批量模式)
+- `/zentao tasks` — 同上, 任务清单
+- `/zentao bug <id>` — 直接处理指定 bug
+- `/zentao task <id>` — 直接处理指定 task
+
+配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
 
 ## 使用方式
 
@@ -41,6 +70,7 @@ npx -y skills@latest add kairyou/agent-tools --list
 npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
+npx -y skills@latest add kairyou/agent-tools --skill zentao -g -y
 ```
 
 多个 skill 可以跟在 `--skill` 后面，例如 `--skill at-commit at-review at-simplify`。

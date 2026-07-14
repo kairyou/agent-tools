@@ -1,6 +1,7 @@
 ---
 name: at-simplify
 description: "Refactor changed code to reduce duplication, complexity, and wasted work. Use for diffs, commit ranges, PRs, paths, staged changes, or working-tree changes."
+argument-hint: "[<pr|branch|path>]"
 ---
 
 # Simplify

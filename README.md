@@ -14,10 +14,12 @@ agent-tools/
 ├── plugins/           # Runtime plugins loaded by supported agents.
 ├── scripts/           # Install, sync, validation, and maintenance scripts.
 ├── skills/            # Reusable Agent Skills for CLI discovery and plugin manifests.
-│   └── workflow/      # Workflow-oriented skills.
-│       ├── at-commit/   # Conventional Commit message skill.
-│       ├── at-review/   # Review changes for bugs and regressions.
-│       └── at-simplify/ # Reduce complexity and duplication in changes.
+│   ├── workflow/      # Workflow-oriented skills.
+│   │   ├── at-commit/   # Conventional Commit message skill.
+│   │   ├── at-review/   # Review changes for bugs and regressions.
+│   │   └── at-simplify/ # Reduce complexity and duplication in changes.
+│   └── integrations/  # Skills that integrate external systems.
+│       └── zentao/      # ZenTao bug/task fixing workflow.
 ├── statusline/        # Statusline scripts/templates, grouped by agent.
 │   └── claude/        # Claude command-backed statusLine script + example config.
 └── lib/               # Shared implementation used by hooks, statuslines, and installers.
@@ -25,9 +27,36 @@ agent-tools/
 
 ## Current Skills
 
-- `at-commit`: Generate a Conventional Commits message from staged changes and wait for user confirmation before committing.
-- `at-review`: Review changes for correctness bugs, regressions, convention violations, and high-value cleanup findings.
-- `at-simplify`: Refactor changes to reduce duplication, lower complexity, and improve code quality.
+### at-commit
+
+Generate a Conventional Commits message from staged changes and wait for user confirmation before committing.
+
+- Usage: `/at-commit [<language>]` — language for the commit description (Conventional Commits tokens stay in English)
+
+### at-review
+
+Review changes for correctness bugs, regressions, convention violations, and high-value cleanup findings.
+
+- Usage: `/at-review [--fix] [<pr|branch|path>]` — reports findings; `--fix` also applies them
+
+### at-simplify
+
+Refactor changes to reduce duplication, lower complexity, and improve code quality.
+
+- Usage: `/at-simplify [<pr|branch|path>]`
+
+### zentao
+
+Work ZenTao (禅道) bugs/tasks end to end: fix, verify, stage; asks before committing and before writing status back.
+
+Usage:
+
+- `/zentao bugs` — list bugs assigned to you (the configured account); pick one or several (several = batch mode)
+- `/zentao tasks` — same, for tasks
+- `/zentao bug <id>` — work a specific bug
+- `/zentao task <id>` — work a specific task
+
+Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
 
 ## Usage
 
@@ -43,6 +72,7 @@ Install skills globally:
 npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
+npx -y skills@latest add kairyou/agent-tools --skill zentao -g -y
 ```
 
 Pass multiple skills after `--skill`, for example `--skill at-commit at-review at-simplify`.

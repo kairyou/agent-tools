@@ -1,6 +1,7 @@
 ---
 name: at-review
 description: "Review code changes for bugs, regressions, convention violations, and high-value cleanup opportunities. Use for diffs, commit ranges, PRs, paths, staged changes, or working-tree changes."
+argument-hint: "[--fix] [<pr|branch|path>]"
 ---
 
 # Code Review
@@ -82,8 +83,12 @@ Return findings as a JSON array of at most 10 objects:
 
 Ranked most-severe first. If more than 10 survive, keep the 10 most severe. If nothing survives verification, return `[]`.
 
-## Applying fixes
+## Applying fixes (--fix)
 
-If the user asked to fix, apply the findings to the working tree instead of stopping at the report: fix each one directly — correctness bugs and reuse/simplification/efficiency cleanups alike. Skip any finding whose fix would change intended behavior, require changes well outside the reviewed diff, or that you judge to be a false positive — note the skip rather than arguing with it. Finish with a brief summary of what was fixed and what was skipped.
-
-If the user did NOT ask to fix, stop at the report.
+The `--fix` flag was passed. After producing the findings list, apply the
+findings to the working tree instead of stopping at the report: fix each one
+directly — correctness bugs and reuse/simplification/efficiency cleanups alike.
+Skip any finding whose fix would change intended behavior, require changes well
+outside the reviewed diff, or that you judge to be a false positive — note the
+skip rather than arguing with it. Finish with a brief summary of what was fixed
+and what was skipped.

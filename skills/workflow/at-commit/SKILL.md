@@ -1,6 +1,7 @@
 ---
 name: at-commit
 description: "Generate a Conventional Commits message from staged changes and wait for confirmation before committing. Use when the user asks to commit or generate a commit message."
+argument-hint: "[<language>]"
 ---
 
 # Commit Message Generator
