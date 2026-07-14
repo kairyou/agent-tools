@@ -104,26 +104,26 @@ Do NOT browse via products/projects — always start from the my-work lists or a
 5. **Verify** — proportionate to the change: run the narrowest check that exercises it (the affected tests, a targeted build/typecheck of the touched module — not a full build for a one-line fix). If the bug is reproducible from code, reproduce it before the fix and confirm it is gone after. Use the project's verify skill if one exists. For changes machines can't judge (UI/visual/interaction), say so honestly — state what WAS checked (compiles, tests pass) and that the visual result needs the user's eyes; the user verifies via the "not yet" path at the commit step. Never present an unverifiable change as verified. A failed check must not proceed to the next step.
 6. **git add** — stage only the files changed for THIS item, listing them explicitly (never `git add -A`).
 7. **Ask whether to commit** (never commit automatically):
-   - Commit — generate a Conventional Commits message and show it first. Type by the nature of the change (`fix:` for bugs; `feat:`/`refactor:`/etc. as appropriate for tasks), following the same conventions as the at-commit skill (including its language policy) if it is installed. Reference the ZenTao item as a `bug#<id>` / `task#<id>` token right after the type, e.g. `fix: bug#30887 <short description of the fix>` — IDs line up in `git log --oneline` for easy scanning, and ZenTao's repo integration parses these tokens to auto-link commits.
-   - Description: informed by the bug/task title but REWRITTEN, never copied verbatim — titles are often verbose, vague, or describe symptoms. State what the change does (the fix), grounded in the actual diff; keep the title's domain wording where it helps recognition. If the title and the actual change diverge, the diff wins.
-   - Not yet — keep the changes staged and continue
-   - Needs adjustment — take the user's feedback and return to step 4
+   - 1) Commit — generate and show a Conventional Commits message, following all at-commit conventions (language policy, ≤74-char single-line title). Right after `type(scope):`, add the ZenTao link token — `bug#<id>` or `task#<id>` — e.g. `fix(<scope>): bug#30887 <desc>` (scope optional). Rewrite the description from the diff rather than copying the title, keeping the title's domain terms.
+   - 2) Not yet — keep the changes staged and continue
+   - 3) Needs adjustment — take the feedback and return to step 4
 8. **Ask whether to update ZenTao** (never change status automatically). First DRAFT the write-back, then show it in the confirmation question:
    - **Resolution** — pick the value that matches what actually happened (ZenTao's enum): `fixed` 已解决 (default after a code fix), `notrepro` 无法重现, `duplicate` 重复Bug (needs the duplicate bug id), `bydesign` 设计如此, `external` 外部原因, `postponed` 延期处理, `willnotfix` 不予解决. If investigation showed the bug needs no code fix, propose the fitting non-`fixed` resolution instead.
-   - **Comment** — draft from the actual work, e.g.: root cause in one sentence, what was changed (files/summary), and the commit hash if committed. Keep it in the language used by existing comments in that ZenTao.
-   - Options to present: submit as drafted / edit resolution or comment first / only add the comment without changing status / skip.
+   - **Comment** — one sentence: root cause + change summary, plus the commit hash. Don't list files or expand into narrative.
+   - Options (reply with a number): 1) Submit  2) Edit first  3) Comment only (no status change).
    - **For tasks**, default to adding a comment only (drafted the same way). Offer "finish" ONLY for simple tasks completable in one sitting — it asks the user for hours (`currentConsumed`) and submits once. For multi-day tasks or teams that log per-day workhours, do NOT attempt finish via API; post the comment and point the user to the web UI's 记录工时/完成 forms, which handle per-day entries properly.
 
 ## Batch mode
 
 - Strictly sequential — one item at a time, each with its own stage/commit. Never mix changes from different bugs.
 - Continue to the next item ONLY after the current item's changes are committed. If the user chose "not yet" at the commit step, do not start the next item — its `git add`/commit would sweep up the still-staged changes (and same-file edits can't be untangled later). Instead ask: commit now / stash this item's changes and continue / stop the batch here.
-- After each item, ask: continue to the next / skip the next / stop (summarize progress so far).
+- After each item, ask: continue to the next / stop (summarize progress so far). The user can also name a specific pending item to skip.
 - Before starting, show the pending list and let the user confirm the order.
 
 ## Hard rules
 
 - Never commit and never change ZenTao status without asking first.
+- The commit subject MUST carry the `bug#<id>` / `task#<id>` token right after `type(scope):` — ZenTao's repo integration parses it to auto-link the commit, and it keeps IDs aligned in `git log --oneline`.
 - Confirmations may use a multiple-choice prompt if the agent has one (e.g. Claude Code's AskUserQuestion), but ONLY for enumerable decisions (commit? write back? which resolution?). Free-form values — URL, account, hours — are collected by asking in plain chat and waiting for the reply.
 - Never echo the password or token in full, and never write them anywhere except the `zentao` block of the user's global config (the password there is filled in by the user, not by you).
 - On API failures, report the HTTP status and response body verbatim; do not guess and continue.
