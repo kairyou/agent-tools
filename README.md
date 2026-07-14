@@ -25,7 +25,17 @@ agent-tools/
 └── lib/               # Shared implementation used by hooks, statuslines, and installers.
 ```
 
-## Current Skills
+## Skills
+
+### Install
+
+```bash
+# List available skills
+npx -y skills@latest add kairyou/agent-tools --list
+
+# Install globally (pass one or more names after --skill)
+npx -y skills@latest add kairyou/agent-tools --skill at-commit at-review at-simplify zentao -g -y
+```
 
 ### at-commit
 
@@ -57,25 +67,6 @@ Usage:
 - `/zentao task <id>` — work a specific task
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
-
-## Usage
-
-List available skills:
-
-```bash
-npx -y skills@latest add kairyou/agent-tools --list
-```
-
-Install skills globally:
-
-```bash
-npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
-npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
-npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
-npx -y skills@latest add kairyou/agent-tools --skill zentao -g -y
-```
-
-Pass multiple skills after `--skill`, for example `--skill at-commit at-review at-simplify`.
 
 ## Runtime integrations
 

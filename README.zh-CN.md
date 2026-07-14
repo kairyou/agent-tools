@@ -23,7 +23,17 @@ agent-tools/
 └── lib/               # hooks、statusline、installer 复用的共享实现。
 ```
 
-## 当前 Skills
+## Skills
+
+### 安装
+
+```bash
+# 查看可用 skills
+npx -y skills@latest add kairyou/agent-tools --list
+
+# 全局安装(--skill 后面可以跟一个或多个名字)
+npx -y skills@latest add kairyou/agent-tools --skill at-commit at-review at-simplify zentao -g -y
+```
 
 ### at-commit
 
@@ -55,25 +65,6 @@ agent-tools/
 - `/zentao task <id>` — 直接处理指定 task
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
-
-## 使用方式
-
-查看可用 skills：
-
-```bash
-npx -y skills@latest add kairyou/agent-tools --list
-```
-
-全局安装 skill：
-
-```bash
-npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
-npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
-npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
-npx -y skills@latest add kairyou/agent-tools --skill zentao -g -y
-```
-
-多个 skill 可以跟在 `--skill` 后面，例如 `--skill at-commit at-review at-simplify`。
 
 ## Runtime integrations
 
