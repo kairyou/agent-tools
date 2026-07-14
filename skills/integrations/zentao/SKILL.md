@@ -1,7 +1,7 @@
 ---
 name: zentao
 description: "Work ZenTao bugs/tasks end to end: fetch details, confirm understanding, fix, verify, stage with git add, then ask before committing and before writing status back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs or tasks."
-argument-hint: "bug <id> | task <id> | bugs | tasks"
+argument-hint: "bug <id> | task <id> | bugs | tasks | export bug|task <id>"
 ---
 
 # ZenTao Bug/Task Workflow
@@ -55,6 +55,7 @@ If env `ZENTAO_TOKEN` is set, use it directly and skip the exchange (re-exchange
 - `/zentao task <id>` — handle a single task
 - `/zentao bugs` — list bugs assigned to the configured account; the user picks one or several (multiple = batch mode)
 - `/zentao tasks` — same for tasks
+- `/zentao export bug <id>` (or `export task <id>`) — export to a self-contained Markdown bundle for handoff; does NOT fix or write back (see Export mode)
 
 ## API endpoints (verified on ZenTao open source 18.12)
 
@@ -70,6 +71,11 @@ All requests send the `Token: <token>` header — it works for both endpoint fam
 
 - `GET /api.php/v1/bugs/{id}` — bug details (title, steps, severity, module)
 - `GET /api.php/v1/tasks/{id}` — task details
+
+**Attachments / inline images** (legacy, same Token header; binary — save with `curl -o`, never read as text):
+
+- `GET /file-read-{fileID}.{ext}` — view/inline. Observed on 18.12: bug screenshots are embedded in the `steps` HTML as `<img src=".../file-read-{id}.png">` while the `files` list is empty — so scan `steps`, don't rely on `files`.
+- `GET /file-download-{fileID}.html` — download an attachment (when `files` is populated).
 
 **Resolving a bug** (the REST `PUT /bugs/{id}` does NOT perform a real resolve — do not use it for status changes; use the legacy action, which mirrors the web form and triggers the full workflow):
 
@@ -97,7 +103,7 @@ Do NOT browse via products/projects — always start from the my-work lists or a
 
 ## Per-item workflow (follow strictly, in order)
 
-1. **Fetch details** — pull title, reproduction steps, severity, and module via the API.
+1. **Fetch details** — pull title, reproduction steps, severity, and module via the API. Images are usually inline in the `steps` HTML (`<img src=".../file-read-{id}.png">`; the `files` list is often empty) — download each with the Token header to a temp file and Read it now, so the screenshot informs the fix.
 2. **Restate and confirm** — restate the problem and the intended fix in your own words. If the description is unclear or ambiguous, ask the user before touching code.
 3. **Locate the code** — search the current project for the relevant code and explain how it was identified.
 4. **Fix** — change only what this bug/task requires; no unrelated cleanups.
@@ -112,6 +118,17 @@ Do NOT browse via products/projects — always start from the my-work lists or a
    - **Comment** — one sentence: root cause + change summary, plus the commit hash. Don't list files or expand into narrative.
    - Options (reply with a number): 1) Submit  2) Edit first  3) Comment only (no status change).
    - **For tasks**, default to adding a comment only (drafted the same way). Offer "finish" ONLY for simple tasks completable in one sitting — it asks the user for hours (`currentConsumed`) and submits once. For multi-day tasks or teams that log per-day workhours, do NOT attempt finish via API; post the comment and point the user to the web UI's 记录工时/完成 forms, which handle per-day entries properly.
+
+## Export mode (`export bug <id>` / `export task <id>`)
+
+Produce a self-contained handoff for someone (or another agent) WITHOUT ZenTao access. Read-only: do NOT fix, commit, or write status back.
+
+1. Fetch details as in step 1, including downloading every inline/attached image — they are token-gated, so the recipient cannot fetch them; the export must carry them.
+2. Ask the user where to save (a free-form value — ask in plain chat, never via a multiple-choice prompt); default to the Desktop, never the code repo (an export artifact doesn't belong in project source).
+3. Write the Markdown: a header (id, title, status, severity/pri, module/product, opened/assigned), the `steps` converted from HTML to Markdown, and comments/history when useful. Strip anything auth-bound — never include the token, credentials, or login-gated URLs.
+4. Layout by content:
+   - No images → a single file `<dest>/zentao-<bug|task>-<id>.md`.
+   - With images → a folder `<dest>/zentao-<bug|task>-<id>/` holding that `.md` plus the downloaded images; rewrite each `<img src=".../file-read-...">` to a relative `![](./file-read-<id>.png)` link. Keep images as real files (never base64) so another agent can Read/see them and every viewer renders them; to hand the folder over as one item, zip it.
 
 ## Batch mode
 
