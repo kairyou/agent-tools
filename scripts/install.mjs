@@ -5,11 +5,19 @@
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
 //   usage       Active API provider quota/balance (codex + opencode).
+//   vision      inspect_image MCP server + at-vision skill (all agents).
+//
+// Standalone commands (dispatched before capability parsing):
+//   inspect-image <path|url> --question "..."   Human diagnostic for vision.
+//   mcp-vision                                  Run the vision MCP stdio server.
 //
 // Targets:
 //   claude   -> ~/.claude/settings.json (statusLine key)
+//               ~/.claude.json (vision MCP) + ~/.claude/skills (at-vision)
 //   codex    -> ~/.codex/hooks.json (standalone hooks file)
-//   opencode -> ~/.config/opencode/ (server + TUI plugins)
+//               ~/.codex/config.toml (vision MCP) + ~/.agents/skills (at-vision)
+//   opencode -> ~/.config/opencode/ (server + TUI plugins,
+//               vision MCP in opencode.json + skills/at-vision)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -25,10 +33,15 @@
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
 //   --opencode-config-dir <p> Override the opencode config dir (for testing).
+//   --claude-json <path>      Override ~/.claude.json for vision MCP (for testing).
+//   --claude-skills-dir <p>   Override ~/.claude/skills (for testing).
+//   --codex-config <path>     Override ~/.codex/config.toml (for testing).
+//   --codex-skills-dir <p>    Override ~/.agents/skills (for testing).
 //   --uninstall               Remove what this installer added, restoring backups.
 //   --dry-run                 Print planned changes without writing anything.
 //   -h, --help                Show this help.
 
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -56,13 +69,20 @@ const RUNTIME = {
   opencodeUsagePlugin: path.join(INSTALL_ROOT, "plugins", "opencode", "usage-plugin.mjs"),
   opencodeUsageTui: path.join(INSTALL_ROOT, "plugins", "opencode", "usage-tui.mjs"),
 };
-const ALL_CAPS = ["statusline", "usage"];
+const ALL_CAPS = ["statusline", "usage", "vision"];
 const ALL_AGENTS = ["claude", "codex", "opencode"];
 const AGENT_CAPS = {
-  claude: ["statusline"],
-  codex: ["usage"],
-  opencode: ["usage"],
+  claude: ["statusline", "vision"],
+  codex: ["usage", "vision"],
+  opencode: ["usage", "vision"],
 };
+const VISION_MCP_NAME = "agent-tools-vision";
+const VISION_SKILL_NAME = "at-vision";
+// The at-vision skill ships inside the vision feature dir (plugins/vision),
+// not skills/: it is unusable without the MCP server, so it must not surface
+// as an independently installable skill.
+const VISION_SKILL_SRC = path.join(REPO_ROOT, "plugins", "vision", "skills", VISION_SKILL_NAME);
+const VISION_MCP_SERVER = path.join(REPO_ROOT, "plugins", "vision", "mcp-server.mjs");
 
 function fwd(p) {
   return p.replace(/\\/g, "/");
@@ -247,6 +267,10 @@ function parseArgs(argv) {
     settings: null,
     codexHooks: null,
     opencodeConfigDir: null,
+    claudeJson: null,
+    claudeSkillsDir: null,
+    codexConfig: null,
+    codexSkillsDir: null,
     uninstall: false,
     dryRun: false,
     help: false,
@@ -277,6 +301,10 @@ function parseArgs(argv) {
       case "--settings": opts.settings = argv[++i]; break;
       case "--codex-hooks": opts.codexHooks = argv[++i]; break;
       case "--opencode-config-dir": opts.opencodeConfigDir = argv[++i]; break;
+      case "--claude-json": opts.claudeJson = argv[++i]; break;
+      case "--claude-skills-dir": opts.claudeSkillsDir = argv[++i]; break;
+      case "--codex-config": opts.codexConfig = argv[++i]; break;
+      case "--codex-skills-dir": opts.codexSkillsDir = argv[++i]; break;
       case "--uninstall": opts.uninstall = true; break;
       case "--dry-run": opts.dryRun = true; break;
       case "-h":
@@ -403,9 +431,226 @@ function applyProviderUsage(cfg, { remove }) {
   if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
 }
 
+// ---- Vision capability helpers. ----
+
+const VISION_RUNTIME_DIR = path.join(INSTALL_ROOT, "vision-runtime");
+const VISION_RUNTIME_SERVER = path.join(VISION_RUNTIME_DIR, "plugins", "vision", "mcp-server.mjs");
+const VISION_RUNTIME_CLI = path.join(VISION_RUNTIME_DIR, "lib", "vision", "cli.mjs");
+const VISION_SKILL_MARKER = ".agent-tools-managed.json";
+const VISION_SKILL_MARKER_DATA = Object.freeze({
+  owner: "@kairyou/agent-tools",
+  capability: "vision",
+  artifact: "skill",
+});
+// The MCP server needs its npm dependencies at spawn time, so install copies
+// the runtime into ~/.agent-tools/vision-runtime and installs deps there once;
+// hosts then launch plain `node <path>` — offline, fast, version fixed at
+// install time (update = re-run the install command).
+function visionMcpCommand() {
+  return { command: "node", args: [fwd(VISION_RUNTIME_SERVER)] };
+}
+
+function installVisionRuntime(opts) {
+  if (opts.uninstall) return;
+  console.log(`vision runtime: ${VISION_RUNTIME_DIR}`);
+  const repoPkg = readJson(path.join(REPO_ROOT, "package.json"));
+  const deps = {};
+  for (const name of ["@modelcontextprotocol/sdk", "zod", "jsonc-parser"]) {
+    if (repoPkg.dependencies?.[name]) deps[name] = repoPkg.dependencies[name];
+  }
+  const runtimePkg = {
+    name: "agent-tools-vision-runtime",
+    private: true,
+    description: "Installed by @kairyou/agent-tools (vision capability); do not edit.",
+    dependencies: deps,
+  };
+  if (opts.dryRun) {
+    console.log(`  [dry-run] would copy lib/vision + plugins/vision -> ${VISION_RUNTIME_DIR}`);
+    console.log(`  [dry-run] would npm-install ${Object.keys(deps).join(", ")}`);
+    return;
+  }
+  fs.mkdirSync(VISION_RUNTIME_DIR, { recursive: true });
+  // These directories are wholly installer-owned. Replace them rather than
+  // overlaying so files removed by an update do not survive indefinitely.
+  fs.rmSync(path.join(VISION_RUNTIME_DIR, "lib", "vision"), { recursive: true, force: true });
+  fs.rmSync(path.join(VISION_RUNTIME_DIR, "plugins", "vision"), { recursive: true, force: true });
+  fs.cpSync(path.join(REPO_ROOT, "lib", "vision"), path.join(VISION_RUNTIME_DIR, "lib", "vision"), {
+    recursive: true,
+  });
+  fs.cpSync(path.join(REPO_ROOT, "plugins", "vision"), path.join(VISION_RUNTIME_DIR, "plugins", "vision"), {
+    recursive: true,
+  });
+  writeText(
+    path.join(VISION_RUNTIME_DIR, "package.json"),
+    JSON.stringify(runtimePkg, null, 2) + "\n",
+    false
+  );
+  if (process.env.AGENT_TOOLS_VISION_SKIP_DEPS === "1") return; // tests
+  // Fixed argument string (no user input); shell:true is required to run
+  // npm.cmd on Windows.
+  const npm = spawnSync("npm install --omit=dev --no-audit --no-fund --loglevel=error", {
+    cwd: VISION_RUNTIME_DIR,
+    stdio: "inherit",
+    shell: true,
+  });
+  if (npm.status !== 0) {
+    console.error("  npm install for the vision runtime failed; see output above.");
+    process.exit(1);
+  }
+  console.log("  installed vision runtime dependencies");
+}
+
+function isManagedVisionSkillDir(dest) {
+  const marker = path.join(dest, VISION_SKILL_MARKER);
+  if (!fs.existsSync(marker)) return false;
+  try {
+    const value = JSON.parse(fs.readFileSync(marker, "utf8"));
+    return Object.entries(VISION_SKILL_MARKER_DATA).every(([key, expected]) => value?.[key] === expected);
+  } catch {
+    return false;
+  }
+}
+
+function isLegacyManagedVisionSkillDir(dest) {
+  try {
+    const entries = fs.readdirSync(dest);
+    if (entries.length !== 1 || entries[0] !== "SKILL.md") return false;
+    const skill = fs.readFileSync(path.join(dest, "SKILL.md"), "utf8");
+    return (
+      /^---\s*[\s\S]*?^name:\s*at-vision\s*$/m.test(skill) &&
+      skill.includes("# Visual Reasoning Policy") &&
+      skill.includes("`inspect_image` MCP tool (server `agent-tools-vision`)")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function installSkillDir(skillsRoot, { remove, dryRun }) {
+  const dest = path.join(skillsRoot, VISION_SKILL_NAME);
+  if (remove) {
+    if (!fs.existsSync(dest)) return;
+    if (!isManagedVisionSkillDir(dest)) {
+      console.log(`  kept unmanaged ${dest}`);
+      return;
+    }
+    if (dryRun) {
+      console.log(`  [dry-run] would remove ${dest}`);
+      return;
+    }
+    fs.rmSync(dest, { recursive: true, force: true });
+    console.log(`  removed ${dest}`);
+    return;
+  }
+  if (fs.existsSync(dest) && !isManagedVisionSkillDir(dest)) {
+    if (isLegacyManagedVisionSkillDir(dest)) {
+      console.log(`  adopting legacy managed skill ${dest}`);
+    } else {
+      console.error(
+        `  Refusing to overwrite existing unowned skill directory ${dest}. ` +
+          `Move or remove it, then re-run the install.`
+      );
+      process.exit(1);
+    }
+  }
+  if (dryRun) {
+    console.log(`  [dry-run] would copy ${VISION_SKILL_SRC} -> ${dest}`);
+    return;
+  }
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(VISION_SKILL_SRC, dest, { recursive: true });
+  const skillFile = path.join(dest, "SKILL.md");
+  const skill = fs.readFileSync(skillFile, "utf8");
+  const token = "{{VISION_CLI_PATH}}";
+  if (!skill.includes(token)) {
+    fs.rmSync(dest, { recursive: true, force: true });
+    throw new Error(`Vision skill template is missing ${token}`);
+  }
+  fs.writeFileSync(skillFile, skill.replaceAll(token, fwd(VISION_RUNTIME_CLI)));
+  fs.writeFileSync(
+    path.join(dest, VISION_SKILL_MARKER),
+    JSON.stringify(VISION_SKILL_MARKER_DATA, null, 2) + "\n"
+  );
+  console.log(`  wrote ${dest}`);
+}
+
+const CODEX_VISION_BEGIN = "# >>> agent-tools vision >>>";
+const CODEX_VISION_END = "# <<< agent-tools vision <<<";
+
+// Codex config.toml is user-owned free-form TOML; we manage exactly one
+// marker-delimited block so install/update/uninstall never touch other keys.
+function updateCodexVisionBlock(file, { remove, dryRun, mcp }) {
+  const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blockRe = new RegExp(
+    `\\r?\\n?${escape(CODEX_VISION_BEGIN)}[\\s\\S]*?${escape(CODEX_VISION_END)}\\r?\\n?`
+  );
+  let next = current.replace(blockRe, "\n").replace(/^\n+/, "");
+  if (!remove) {
+    // A same-named table outside our marker block would make the appended
+    // TOML a duplicate declaration and break the ENTIRE config.toml parse.
+    const manualRe = new RegExp(`^\\s*\\[mcp_servers\\.["']?${escape(VISION_MCP_NAME)}["']?\\]`, "m");
+    if (manualRe.test(next)) {
+      console.error(
+        `  Found an existing [mcp_servers.${VISION_MCP_NAME}] entry in ${file} that was not ` +
+          "written by this installer. Remove or rename that entry, then re-run the install."
+      );
+      process.exit(1);
+    }
+    const args = mcp.args.map((a) => JSON.stringify(a)).join(", ");
+    const block = [
+      CODEX_VISION_BEGIN,
+      `[mcp_servers.${VISION_MCP_NAME}]`,
+      `command = ${JSON.stringify(mcp.command)}`,
+      `args = [${args}]`,
+      CODEX_VISION_END,
+      "",
+    ].join("\n");
+    next = next.trim() === "" ? block : next.replace(/\s*$/, "\n\n") + block;
+  }
+  if (next === current) {
+    console.log(`  kept existing ${file}`);
+    return;
+  }
+  if (remove && next.trim() === "" && fs.existsSync(file) && current.trim() !== "") {
+    // The file only ever contained our block; leave an empty file rather than
+    // deleting config.toml, which Codex may expect to exist.
+    writeText(file, "", dryRun);
+    return;
+  }
+  writeText(file, next, dryRun);
+}
+
 // ---- Claude: statusLine backed up in _agentTools. ----
 
+function runClaudeVision(opts) {
+  const claudeJson = opts.claudeJson || path.join(os.homedir(), ".claude.json");
+  const skillsDir = opts.claudeSkillsDir || path.join(os.homedir(), ".claude", "skills");
+  console.log(`claude vision: ${claudeJson}`);
+  const cfg = readJson(claudeJson);
+  if (opts.uninstall) {
+    if (cfg.mcpServers && cfg.mcpServers[VISION_MCP_NAME]) {
+      delete cfg.mcpServers[VISION_MCP_NAME];
+      if (Object.keys(cfg.mcpServers).length === 0) delete cfg.mcpServers;
+      writeJson(claudeJson, cfg, opts.dryRun);
+    } else {
+      console.log(`  no ${VISION_MCP_NAME} MCP entry found; nothing to remove.`);
+    }
+    installSkillDir(skillsDir, { remove: true, dryRun: opts.dryRun });
+    console.log("  - vision");
+    return;
+  }
+  const mcp = visionMcpCommand();
+  cfg.mcpServers = cfg.mcpServers || {};
+  cfg.mcpServers[VISION_MCP_NAME] = { type: "stdio", command: mcp.command, args: mcp.args };
+  writeJson(claudeJson, cfg, opts.dryRun);
+  installSkillDir(skillsDir, { remove: false, dryRun: opts.dryRun });
+  console.log("  + vision (inspect_image MCP + at-vision skill)");
+}
+
 function runClaude(opts) {
+  if (wants(opts, "vision")) runClaudeVision(opts);
+  if (!wants(opts, "statusline")) return;
   const settings = opts.settings || path.join(os.homedir(), ".claude", "settings.json");
   console.log(`claude (global): ${settings}`);
   const cfg = readJson(settings);
@@ -444,9 +689,22 @@ function runClaude(opts) {
 // written (Codex validates hooks.json against a schema); our hook is found by
 // command signature instead. ----
 
+function runCodexVision(opts) {
+  const file = opts.codexConfig || path.join(os.homedir(), ".codex", "config.toml");
+  const skillsDir = opts.codexSkillsDir || path.join(os.homedir(), ".agents", "skills");
+  console.log(`codex vision: ${file}`);
+  updateCodexVisionBlock(file, {
+    remove: opts.uninstall,
+    dryRun: opts.dryRun,
+    mcp: visionMcpCommand(),
+  });
+  installSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
+  console.log(opts.uninstall ? "  - vision" : "  + vision (inspect_image MCP + at-vision skill)");
+}
+
 function runCodex(opts) {
+  if (wants(opts, "vision")) runCodexVision(opts);
   if (!wants(opts, "usage")) {
-    console.log("codex: nothing to do (supports: usage).");
     return;
   }
   const file = opts.codexHooks || path.join(os.homedir(), ".codex", "hooks.json");
@@ -491,9 +749,48 @@ function opencodeConfigDir(opts) {
   );
 }
 
+// opencode.json may be JSONC with user comments — edit only our key in place.
+function updateOpencodeVisionMcp(file, { remove, dryRun, mcp }) {
+  const exists = fs.existsSync(file);
+  const currentText = exists ? fs.readFileSync(file, "utf8") : "{}\n";
+  const errors = [];
+  const current = parseJsonc(currentText, errors, { allowTrailingComma: true }) || {};
+  if (errors.length > 0 || typeof current !== "object" || Array.isArray(current)) {
+    throw new Error(`Cannot parse ${file} as JSONC`);
+  }
+  const existing = current.mcp && current.mcp[VISION_MCP_NAME];
+  const desired = remove
+    ? undefined
+    : { type: "local", command: [mcp.command, ...mcp.args], enabled: true };
+  if (JSON.stringify(existing) === JSON.stringify(desired)) {
+    console.log(`  kept existing ${file}`);
+    return;
+  }
+  const eol = currentText.includes("\r\n") ? "\r\n" : "\n";
+  const edits = modify(currentText, ["mcp", VISION_MCP_NAME], desired, {
+    formattingOptions: { insertSpaces: true, tabSize: 2, eol },
+  });
+  const updated = applyEdits(currentText, edits).replace(/\s*$/, "") + eol;
+  writeText(file, updated, dryRun);
+}
+
+function runOpencodeVision(opts) {
+  const configDir = opencodeConfigDir(opts);
+  const file = path.join(configDir, "opencode.json");
+  const skillsDir = path.join(configDir, "skills");
+  console.log(`opencode vision: ${file}`);
+  updateOpencodeVisionMcp(file, {
+    remove: opts.uninstall,
+    dryRun: opts.dryRun,
+    mcp: visionMcpCommand(),
+  });
+  installSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
+  console.log(opts.uninstall ? "  - vision" : "  + vision (inspect_image MCP + at-vision skill)");
+}
+
 function runOpencode(opts) {
+  if (wants(opts, "vision")) runOpencodeVision(opts);
   if (!wants(opts, "usage")) {
-    console.log("opencode: nothing to do (supports: usage).");
     return;
   }
 
@@ -538,6 +835,7 @@ function main() {
   }
   validateAgentCapabilities(opts);
   installRuntimeAssets(opts);
+  if (wants(opts, "vision")) installVisionRuntime(opts);
   for (const name of opts.agents) {
     const run = AGENTS[name];
     if (!run) {
@@ -548,4 +846,16 @@ function main() {
   }
 }
 
-main();
+// Standalone vision commands dispatch before capability parsing so image
+// paths and questions are never mistaken for capabilities.
+const subcommand = process.argv[2];
+if (subcommand === "inspect-image") {
+  const { runInspectImageCli } = await import(
+    pathToFileURL(path.join(REPO_ROOT, "lib", "vision", "cli.mjs")).href
+  );
+  process.exitCode = await runInspectImageCli(process.argv.slice(3));
+} else if (subcommand === "mcp-vision") {
+  await import(pathToFileURL(VISION_MCP_SERVER).href);
+} else {
+  main();
+}

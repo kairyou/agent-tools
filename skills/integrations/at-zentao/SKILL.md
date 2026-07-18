@@ -105,7 +105,7 @@ Do NOT browse via products/projects — always start from the my-work lists or a
 
 ## Per-item workflow (follow strictly, in order)
 
-1. **Fetch details** — pull title, reproduction steps, severity, and module via the API. Images are usually inline in the `steps` HTML (`<img src=".../file-read-{id}.png">`; the `files` list is often empty) — download each with the Token header to a temp file and Read it now, so the screenshot informs the fix.
+1. **Fetch details** — pull title, reproduction steps, severity, and module via the API. Images are usually inline in the `steps` HTML (`<img src=".../file-read-{id}.png">`; the `files` list is often empty) — download each with the Token header to a temp file and Read it now, so the screenshot informs the fix. If you cannot see images, try an image-inspection tool with the downloaded file path — e.g. `inspect_image` (MCP server `agent-tools-vision`) — never the token-gated ZenTao URL; if none is available, work from the text details and note that screenshots were skipped.
 2. **Restate and confirm** — restate the problem and the intended fix in your own words. If the description is unclear or ambiguous, ask the user before touching code.
 3. **Locate the code** — search the current project for the relevant code and explain how it was identified.
 4. **Fix** — change only what this bug/task requires; no unrelated cleanups.

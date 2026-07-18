@@ -12,6 +12,7 @@ agent-tools/
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── hooks/             # Shared and agent-specific hook integrations.
 ├── plugins/           # Runtime plugins loaded by supported agents.
+│   └── vision/        # Cross-model image understanding (inspect_image MCP server + bundled at-vision skill).
 ├── scripts/           # Install, sync, validation, and maintenance scripts.
 ├── skills/            # Reusable Agent Skills for CLI discovery and plugin manifests.
 │   ├── workflow/      # Workflow-oriented skills.
@@ -83,6 +84,55 @@ Usage:
 - `/at-zentao task <id>` — work a specific task
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
+
+## Plugins
+
+### Vision (cross-model image understanding)
+
+Lets a main model that cannot see images ask a multimodal model specific questions about an image (local path or http(s) URL) and reason on from the answers. Typical uses: reading error screenshots, implementing UI from design mockups, locating the glitch in a bug-report screenshot. One installer capability bundling three parts: the `inspect_image` MCP stdio server, the `at-vision` policy skill, and a human diagnostic CLI.
+
+#### Install
+
+```bash
+# One command per agent (or list several)
+npx -y @kairyou/agent-tools@latest vision -a claude
+npx -y @kairyou/agent-tools@latest vision -a codex claude opencode
+
+# Preview or uninstall (uninstall keeps your vision provider config)
+npx -y @kairyou/agent-tools@latest vision -a claude --dry-run
+npx -y @kairyou/agent-tools@latest vision -a claude --uninstall
+```
+
+Install copies the MCP runtime (with its dependencies) into `~/.agent-tools/vision-runtime`, registers it per agent (Claude Code: `~/.claude.json`; Codex: a marker-delimited block in `~/.codex/config.toml`; OpenCode: `opencode.json`), and installs the `at-vision` skill into the agent's global skills directory (Claude Code: `~/.claude/skills`; Codex: `~/.agents/skills`; OpenCode: its config directory's `skills`). No further npm download is needed after install; the configured vision gateway must still be reachable. Re-run the install command to update.
+
+#### Configure
+
+`~/.agent-tools/config.jsonc` is the only config entry point:
+
+```jsonc
+{
+  "vision": {
+    "provider": "openai-compatible",       // or "anthropic-compatible"
+    "baseUrl": "https://gateway.example.com/v1",  // anthropic-compatible: gateway root, /v1/messages is appended
+    "model": "internal-vlm",
+    "apiKey": { "env": "OPENAI_API_KEY" }  // reuse an existing env var, or the key itself
+    // optional: "timeoutMs": 30000, "maxImageBytes": 20971520, "maxOutputTokens": 8192,
+    //           "maxConcurrentRequests": 2, "maxRequestsPerMinute": 30
+  }
+}
+```
+
+`apiKey` takes the key itself, or `{ "env": "VARIABLE_NAME" }` to reuse an existing environment variable; omit it if your gateway needs no key.
+
+#### Use
+
+Pass images as file paths or URLs in your message. The agent prefers the `inspect_image` MCP tool and falls back to the installed local vision CLI when its model gateway cannot invoke MCP namespace tools. Do not paste screenshots directly: with a non-vision main model the paste fails with an API 400 before any tool runs — save the image and give its path instead.
+
+To diagnose the provider setup or test recognition quality manually:
+
+```bash
+npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the navbar background color and height?"
+```
 
 ## Runtime integrations
 

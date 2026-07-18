@@ -10,6 +10,7 @@ agent-tools/
 ├── .codex-plugin/     # Codex plugin manifest。
 ├── hooks/             # 通用 hook 逻辑及各 agent 的适配实现。
 ├── plugins/           # 由各 agent 加载的 runtime plugins.
+│   └── vision/        # 跨模型识图(inspect_image MCP server + 内置 at-vision skill)。
 ├── scripts/           # 安装、同步、校验和仓库维护脚本。
 ├── skills/            # 可复用 Agent Skills，供 CLI 扫描和 plugin manifest 声明。
 │   ├── workflow/      # 工作流类 skills。
@@ -81,6 +82,55 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 - `/at-zentao task <id>` — 直接处理指定 task
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
+
+## Plugins
+
+### Vision(跨模型识图)
+
+让不支持图片的主模型借助多模态模型识图: 针对图片(本地路径或 http(s) URL)提出具体问题, 拿到答案后继续自己的推理. 常见场景: 读取报错截图, 按设计稿还原 UI, 定位测试反馈截图里的界面问题. 一个安装器 capability 包含三部分: `inspect_image` MCP stdio server, `at-vision` 策略 skill, 以及人工诊断 CLI.
+
+#### 安装
+
+```bash
+# 每个 agent 一条命令(也可以一次列多个)
+npx -y @kairyou/agent-tools@latest vision -a claude
+npx -y @kairyou/agent-tools@latest vision -a codex claude opencode
+
+# 预览或卸载(卸载默认保留 vision provider 配置)
+npx -y @kairyou/agent-tools@latest vision -a claude --dry-run
+npx -y @kairyou/agent-tools@latest vision -a claude --uninstall
+```
+
+安装会把 MCP runtime(含依赖)复制到 `~/.agent-tools/vision-runtime`, 为每个 agent 注册(Claude Code: `~/.claude.json`; Codex: `~/.codex/config.toml` 中带标记的独立块; OpenCode: `opencode.json`), 并把 `at-vision` skill 装入对应 agent 的全局 skills 目录(Claude Code: `~/.claude/skills`; Codex: `~/.agents/skills`; OpenCode: 配置目录下的 `skills`). 安装后无需再次从 npm 下载, 但仍需能访问配置的视觉模型网关; 更新 = 重新执行安装命令.
+
+#### 配置
+
+`~/.agent-tools/config.jsonc` 是唯一配置入口:
+
+```jsonc
+{
+  "vision": {
+    "provider": "openai-compatible",       // 或 "anthropic-compatible"
+    "baseUrl": "https://gateway.example.com/v1",  // anthropic-compatible 填网关根地址, 会自动拼 /v1/messages
+    "model": "internal-vlm",
+    "apiKey": { "env": "OPENAI_API_KEY" }  // 引用已有环境变量, 也可以直接填密钥
+    // 可选: "timeoutMs": 30000, "maxImageBytes": 20971520, "maxOutputTokens": 8192,
+    //       "maxConcurrentRequests": 2, "maxRequestsPerMinute": 30
+  }
+}
+```
+
+`apiKey` 可直接填密钥, 或用 `{ "env": "VARIABLE_NAME" }` 引用已有环境变量; 网关不需要密钥时可省略.
+
+#### 使用
+
+在消息里给出图片的文件路径或 URL 即可. Agent 优先调用 MCP 的 `inspect_image`; 模型网关不支持 MCP namespace tools 时, 改用已安装的本地 vision CLI. 不要直接粘贴截图: 主模型不支持图片时, 粘贴会在到达工具前就报 API 400 — 保存成文件再给路径.
+
+人工排查配置或测试识别质量时可用:
+
+```bash
+npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背景色和高度是多少"
+```
 
 ## Runtime integrations
 
