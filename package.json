@@ -7,8 +7,7 @@
     "node": ">=22"
   },
   "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "access": "public"
   },
   "files": [
     "config.default.jsonc",
