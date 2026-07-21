@@ -8,7 +8,6 @@ import {
   AGENT_TOOLS_HOME,
   agentConfig,
   usagePreset,
-  panelUserHeaders,
   newApiQuotaScale,
   providerUsageDays,
   debugLog,
@@ -22,15 +21,12 @@ import {
 } from "./urls.mjs";
 import {
   pickNumber,
-  formatMoney,
   usageRoot,
   hasV1UsageFields,
   formatQuota,
   formatNewApiTokenLine,
+  formatOneApiBillingLine,
   formatOpenRouterLine,
-  formatPanelUserSelfLine,
-  panelQuotaScale,
-  panelQuotaLooksRemaining,
 } from "./format.mjs";
 import { readRouteCache } from "./cache.mjs";
 
@@ -63,13 +59,12 @@ async function fetchV1Usage(context) {
   return usageResult(context, "v1-usage", await formatQuota(context.label, json), json);
 }
 
-// NewAPI / OneAPI family panels: use the current API key as Bearer auth and
-// query token usage from the service root rather than the /v1 OpenAI-compatible
-// path.
+// New API exposes a read-only usage endpoint authenticated by the same relay
+// API key used for model requests.
 async function fetchNewApiTokenUsage(context) {
   const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/usage/token/"), {
     key: context.key,
-    name: "NewAPI token usage",
+    name: "New API token usage",
   });
   const root = usageRoot(json);
   const quota = pickNumber(root, ["quota", "limit", "total_quota", "totalQuota"]);
@@ -96,84 +91,46 @@ async function fetchNewApiTokenUsage(context) {
   return usageResult(context, "newapi-token", await formatNewApiTokenLine(context.label, json), normalized);
 }
 
-// NewAPI / OneAPI / OneHub / DoneHub / Veloera panel session endpoint, based on
-// Metapi's platform handling. This works when PROVIDER_USAGE_API_KEY is a panel
-// access/session token, or when the site accepts the API key for /api/user/self.
-async function fetchPanelUserSelfUsage(context) {
-  const preset = await usagePreset();
-  const kind = preset === "auto" ? "new-api" : preset;
-  const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/user/self"), {
+// One API's legacy OpenAI billing endpoints use the same relay API key as
+// model requests. Subscription reports the total quota; usage reports cents.
+async function fetchOneApiBillingUsage(context) {
+  const base = serviceRoot(context.baseUrl);
+  const subscription = await requestJson(joinUrl(base, "/v1/dashboard/billing/subscription"), {
     key: context.key,
-    name: "panel /api/user/self",
-    headers: await panelUserHeaders(),
+    name: "One API billing subscription",
   });
-  const root = usageRoot(json);
-  if (pickNumber(root, ["quota"]) === undefined && pickNumber(root, ["used_quota", "usedQuota"]) === undefined) {
-    await debugLog({
-      source: "panel /api/user/self",
-      payloadKeys: Object.keys(root || {}).slice(0, 20),
-      success: root?.success,
-      message: root?.message || root?.error?.message || "",
-    });
+  const usage = await requestJson(joinUrl(base, "/v1/dashboard/billing/usage"), {
+    key: context.key,
+    name: "One API billing usage",
+  });
+  const limit = pickNumber(subscription, ["hard_limit_usd", "hardLimitUsd"]);
+  const usageCents = pickNumber(usage, ["total_usage", "totalUsage"]);
+  if (limit === undefined || usageCents === undefined) {
+    throw new Error("One API billing payload has no quota fields");
   }
-  const scale = panelQuotaScale(kind);
-  const quota = pickNumber(root, ["quota"]);
-  const used = pickNumber(root, ["used_quota", "usedQuota"]);
-  const remaining = panelQuotaLooksRemaining(kind)
-    ? quota
-    : (quota === undefined || used === undefined ? quota : Math.max(0, quota - used));
-  const total = panelQuotaLooksRemaining(kind)
-    ? (quota === undefined || used === undefined ? quota : quota + used)
-    : quota;
+  const used = usageCents / 100;
   const normalized = {
     mode: "quota_limited",
     quota: {
-      limit: total === undefined ? undefined : total / scale,
-      used: used === undefined ? undefined : used / scale,
-      remaining: remaining === undefined ? undefined : remaining / scale,
+      limit,
+      used,
+      remaining: Math.max(0, limit - used),
     },
     unit: "USD",
-    source: "panel-user-self",
-    raw: json,
+    source: "oneapi-billing",
+    raw: { subscription, usage },
   };
   return usageResult(
     context,
-    "panel-user-self",
-    await formatPanelUserSelfLine(context.label, json, kind),
-    normalized
-  );
-}
-
-// Sub2API exposes user balance as USD at /api/v1/auth/me. Newer deployments may
-// also expose richer subscription summaries through /v1/usage, so this route is
-// a fallback for deployments where /v1/usage is unavailable.
-async function fetchSub2ApiAuthMeUsage(context) {
-  const json = await requestJson(joinUrl(serviceRoot(context.baseUrl), "/api/v1/auth/me"), {
-    key: context.key,
-    name: "Sub2API auth/me",
-  });
-  const root = usageRoot(json);
-  const balance = pickNumber(root, ["balance"]);
-  if (balance === undefined) throw new Error("Sub2API auth/me payload has no balance field");
-  const normalized = {
-    mode: "unrestricted",
-    planName: root?.username || root?.email || context.label || "Sub2API",
-    balance,
-    unit: "USD",
-    source: "sub2api-auth-me",
-    raw: json,
-  };
-  return usageResult(
-    context,
-    "sub2api-auth-me",
-    `API | balance ${formatMoney(balance)}`,
+    "oneapi-billing",
+    formatOneApiBillingLine(limit, used),
     normalized
   );
 }
 
 // OpenRouter exposes normal API-key usage at /api/v1/key. Some accounts also
 // expose credits at /api/v1/credits; keep this route isolated because
-// OpenRouter's base URL already includes /api/v1, unlike NewAPI/OneAPI.
+// OpenRouter's base URL already includes /api/v1, unlike New API.
 async function fetchOpenRouterUsage(context) {
   const base = cleanBaseUrl(context.baseUrl).includes("/api/v1")
     ? cleanBaseUrl(context.baseUrl)
@@ -201,20 +158,15 @@ const USAGE_ROUTES = {
     path: "/v1/usage",
     run: fetchV1Usage,
   },
-  "sub2api-auth-me": {
-    id: "sub2api-auth-me",
-    path: "/api/v1/auth/me",
-    run: fetchSub2ApiAuthMeUsage,
-  },
   "newapi-token": {
     id: "newapi-token",
     path: "/api/usage/token/",
     run: fetchNewApiTokenUsage,
   },
-  "panel-user-self": {
-    id: "panel-user-self",
-    path: "/api/user/self",
-    run: fetchPanelUserSelfUsage,
+  "oneapi-billing": {
+    id: "oneapi-billing",
+    path: "/v1/dashboard/billing/subscription",
+    run: fetchOneApiBillingUsage,
   },
   "openrouter": {
     id: "openrouter",
@@ -224,7 +176,7 @@ const USAGE_ROUTES = {
 };
 
 // User-authored gateway routes, declared in config.jsonc:
-//   "providerUsage": { "routes": ["custom/anyrouter.mjs"] }
+//   "providerUsage": { "routes": ["custom/my-gateway.mjs"] }
 // Paths resolve against ~/.agent-tools. Each module exports
 // `export async function run(context, helpers)` plus an optional
 // `export const meta = { id }` (id defaults to the file name). Broken modules
@@ -304,25 +256,14 @@ async function routeRegistry() {
   return registry;
 }
 
-// Presets are probe-order aliases over the routes above, not separate
-// protocols (e.g. anyrouter/agentrouter just try the NewAPI panel endpoints
-// and /v1/usage in a different order).
-// They do not provide panel session-cookie authentication; only endpoints that
-// accept the configured Bearer key can succeed.
+// Presets select API-key usage protocols, not hosted gateway brands.
 async function usageRouteIds(context) {
   const preset = await usagePreset();
   const routes = {
-    "sub2api": ["v1-usage", "sub2api-auth-me"],
+    "sub2api": ["v1-usage"],
     "openai-compatible": ["v1-usage"],
-    "new-api": ["newapi-token", "panel-user-self"],
-    "one-api": ["newapi-token", "panel-user-self"],
-    "onehub": ["newapi-token", "panel-user-self"],
-    "one-hub": ["newapi-token", "panel-user-self"],
-    "donehub": ["newapi-token", "panel-user-self"],
-    "done-hub": ["newapi-token", "panel-user-self"],
-    "veloera": ["panel-user-self", "newapi-token"],
-    "anyrouter": ["newapi-token", "panel-user-self", "v1-usage"],
-    "agentrouter": ["newapi-token", "panel-user-self", "v1-usage"],
+    "new-api": ["newapi-token"],
+    "one-api": ["oneapi-billing"],
     "openrouter": ["openrouter"],
   };
   if (routes[preset]) return routes[preset];
@@ -334,7 +275,7 @@ async function usageRouteIds(context) {
   const customIds = (await customRoutes()).map((route) => route.id);
   const builtinIds = hostIncludes(context.baseUrl, "openrouter.ai")
     ? ["openrouter"]
-    : ["v1-usage", "sub2api-auth-me", "newapi-token", "panel-user-self"];
+    : ["v1-usage", "newapi-token", "oneapi-billing"];
   return [...new Set([...customIds, ...builtinIds])];
 }
 

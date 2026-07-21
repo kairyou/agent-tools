@@ -92,9 +92,9 @@ async function runUsageCli(agent, env, entry = USAGE_CLI) {
 
 test("local usage CLI queries Codex and Claude without a package manager", async () => {
   await withServer((req, res) => {
-    if (req.url === "/api/v1/auth/me") {
+    if (req.url === "/v1/usage?days=30") {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ code: 0, data: { balance: 18.75 } }));
+      res.end(JSON.stringify({ balance: 18.75 }));
       return;
     }
     res.statusCode = 404;
@@ -150,45 +150,6 @@ test("local usage CLI rejects unsupported agents without querying", async () => 
   assert.equal(missing.status, 2);
   assert.equal(missing.stdout, "");
   assert.equal(missing.stderr, "Missing --agent <claude|codex>\n");
-});
-
-test("provider usage reads Sub2API balance from /api/v1/auth/me", async () => {
-  await withServer((req, res) => {
-    if (req.url === "/api/v1/auth/me") {
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ code: 0, data: { username: "sub-user", balance: 12.34 } }));
-      return;
-    }
-    res.statusCode = 404;
-    res.end("{}");
-  }, async (base) => {
-    const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "sub2api" });
-    assert.equal(payload.continue, true);
-    assert.equal(payload.systemMessage, "API | balance $12.3");
-  });
-});
-
-test("anyrouter preset parses a New API-shaped panel response", async () => {
-  await withServer((req, res) => {
-    if (req.url === "/api/usage/token/") {
-      res.statusCode = 404;
-      res.end("{}");
-      return;
-    }
-    if (req.url === "/api/user/self") {
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({
-        success: true,
-        data: { username: "any-user", quota: 3_750_000, used_quota: 1_250_000 },
-      }));
-      return;
-    }
-    res.statusCode = 404;
-    res.end("{}");
-  }, async (base) => {
-    const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "anyrouter" });
-    assert.equal(payload.systemMessage, "API | balance $7.5 | used $2.5/$10.0");
-  });
 });
 
 test("custom routes from config.jsonc probe first and are preset-selectable", async () => {
@@ -259,9 +220,9 @@ test("packaged routes under dist/usage/routes load automatically", async () => {
 
 test("a broken custom route is skipped and built-ins still answer", async () => {
   await withServer((req, res) => {
-    if (req.url === "/api/v1/auth/me") {
+    if (req.url === "/api/usage/token/") {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ code: 0, data: { balance: 5 } }));
+      res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
       return;
     }
     res.statusCode = 404;
@@ -275,42 +236,54 @@ test("a broken custom route is skipped and built-ins still answer", async () => 
 
     const payload = await runProvider({
       baseUrl: `${base}/v1`,
-      preset: "sub2api",
+      preset: "new-api",
       config: { routes: ["custom/broken.mjs"] },
       codexHome,
       agentHome,
     });
-    assert.equal(payload.systemMessage, "API | balance $5.0");
+    assert.equal(payload.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
   });
 });
 
-test("provider usage reads Veloera panel balance with Veloera scale", async () => {
+test("provider usage reads One API billing with the relay API key", async () => {
+  const seen = [];
   await withServer((req, res) => {
-    if (req.url === "/api/user/self") {
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({
-        success: true,
-        data: { username: "velo-user", quota: 10_000_000, used_quota: 2_500_000 },
-      }));
+    seen.push({ url: req.url, authorization: req.headers.authorization });
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/v1/dashboard/billing/subscription") {
+      res.end(JSON.stringify({ object: "billing_subscription", hard_limit_usd: 20 }));
+      return;
+    }
+    if (req.url === "/v1/dashboard/billing/usage") {
+      res.end(JSON.stringify({ object: "list", total_usage: 500 }));
       return;
     }
     res.statusCode = 404;
     res.end("{}");
   }, async (base) => {
-    // Preset comes from config.jsonc here (not env), so a config parse failure
-    // would fall back to the wrong quota scale and break the amounts below.
-    const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "", config: { preset: "veloera" } });
-    assert.equal(payload.systemMessage, "API | balance $7.5 | used $2.5/$10.0");
+    const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "one-api" });
+    assert.equal(payload.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.deepEqual(seen, [
+      { url: "/v1/dashboard/billing/subscription", authorization: "Bearer test-key" },
+      { url: "/v1/dashboard/billing/usage", authorization: "Bearer test-key" },
+    ]);
   });
 });
 
 test("provider usage fails open when no compatible usage endpoint exists", async () => {
-  await withServer((_req, res) => {
+  const seen = [];
+  await withServer((req, res) => {
+    seen.push(req.url);
     res.statusCode = 404;
     res.end("{}");
   }, async (base) => {
     const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "auto" });
     assert.deepEqual(payload, { continue: true });
+    assert.deepEqual(seen, [
+      "/v1/usage?days=30",
+      "/api/usage/token/",
+      "/v1/dashboard/billing/subscription",
+    ]);
   });
 });
 
@@ -327,9 +300,9 @@ test("provider usage caches the successful route for a service root", async () =
       res.end(JSON.stringify({ object: "list", data: [] }));
       return;
     }
-    if (req.url === "/api/v1/auth/me") {
+    if (req.url === "/api/usage/token/") {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ code: 0, data: { username: "cached-user", balance: 42 } }));
+      res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
       return;
     }
     res.statusCode = 404;
@@ -337,13 +310,13 @@ test("provider usage caches the successful route for a service root", async () =
   }, async (base) => {
     const first = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
     const second = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
-    assert.equal(first.systemMessage, "API | balance $42.0");
-    assert.equal(second.systemMessage, "API | balance $42.0");
-    assert.deepEqual(seen, ["/v1/usage?days=30", "/api/v1/auth/me", "/api/v1/auth/me"]);
+    assert.equal(first.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(second.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.deepEqual(seen, ["/v1/usage?days=30", "/api/usage/token/", "/api/usage/token/"]);
 
     const cache = JSON.parse(readFileSync(join(agentHome, "cache", "usage-routes.json"), "utf8"));
-    assert.equal(cache.routes[base].route, "sub2api-auth-me");
-    assert.equal(cache.routes[base].path, "/api/v1/auth/me");
+    assert.equal(cache.routes[base].route, "newapi-token");
+    assert.equal(cache.routes[base].path, "/api/usage/token/");
   });
 });
 
@@ -355,22 +328,21 @@ test("hook mode reuses a fresh snapshot instead of re-querying", async () => {
 
   await withServer((req, res) => {
     seen.push(req.url);
-    if (req.url === "/api/v1/auth/me") {
+    if (req.url === "/api/usage/token/") {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ code: 0, data: { balance: 42 } }));
+      res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
       return;
     }
     res.statusCode = 404;
     res.end("{}");
   }, async (base) => {
     const ttl = { env: { AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS: "60000" } };
-    const first = await runProvider({ baseUrl: `${base}/v1`, preset: "sub2api", codexHome, agentHome, ...ttl });
-    const second = await runProvider({ baseUrl: `${base}/v1`, preset: "sub2api", codexHome, agentHome, ...ttl });
-    assert.equal(first.systemMessage, "API | balance $42.0");
-    assert.equal(second.systemMessage, "API | balance $42.0");
-    // The second hook call is served from the snapshot: the first call probes
-    // the preset's two routes, the second adds no network requests at all.
-    assert.deepEqual(seen, ["/v1/usage?days=30", "/api/v1/auth/me"]);
+    const first = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
+    const second = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
+    assert.equal(first.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(second.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    // The second hook call is served from the snapshot and makes no request.
+    assert.deepEqual(seen, ["/api/usage/token/"]);
   });
 });
 

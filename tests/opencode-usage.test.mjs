@@ -36,9 +36,9 @@ test("opencode usage plugins query the resolved provider and expose the shared s
 
   try {
     await withServer((req, res) => {
-      if (req.url === "/api/v1/auth/me") {
+      if (req.url === "/v1/usage?days=30") {
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ code: 0, data: { balance: 27.5 } }));
+        res.end(JSON.stringify({ balance: 27.5 }));
         return;
       }
       res.statusCode = 404;

@@ -1,6 +1,6 @@
 // Turns gateway payloads into the compact one-line usage message.
 
-import { newApiQuotaScale, providerUsageDays, DEFAULT_NEW_API_QUOTA_SCALE } from "./config.mjs";
+import { newApiQuotaScale, providerUsageDays } from "./config.mjs";
 
 export function pickNumber(obj, keys) {
   for (const key of keys) {
@@ -159,45 +159,8 @@ export function formatOpenRouterLine(label, data) {
   return parts.join(" | ");
 }
 
-export function panelQuotaScale(kind) {
-  return kind === "veloera" ? 1000000 : DEFAULT_NEW_API_QUOTA_SCALE;
-}
-
-export function panelQuotaLooksRemaining(kind) {
-  return ["new-api", "anyrouter", "agentrouter", "done-hub", "donehub"].includes(kind);
-}
-
-export async function formatPanelUserSelfLine(label, data, kind) {
-  const root = usageRoot(data);
-  const scale = panelQuotaScale(kind);
-  const quota = pickNumber(root, ["quota"]);
-  const used = pickNumber(root, ["used_quota", "usedQuota"]);
-  const todayIncome = pickNumber(root, ["today_income", "todayIncome"]);
-  const todayUsed = pickNumber(root, ["today_quota_consumption", "todayQuotaConsumption"]);
-
-  if (quota === undefined && used === undefined) {
-    throw new Error("panel /api/user/self payload has no quota fields");
-  }
-
-  const quotaUsd = quota === undefined ? undefined : quota / scale;
-  const usedUsd = used === undefined ? undefined : used / scale;
-  const remainingUsd = panelQuotaLooksRemaining(kind)
-    ? quotaUsd
-    : (quotaUsd === undefined || usedUsd === undefined ? quotaUsd : Math.max(0, quotaUsd - usedUsd));
-  const totalUsd = panelQuotaLooksRemaining(kind)
-    ? (quotaUsd === undefined || usedUsd === undefined ? quotaUsd : quotaUsd + usedUsd)
-    : quotaUsd;
-
-  const parts = usageParts();
-  if (remainingUsd !== undefined) parts.push(`balance ${formatMoney(remainingUsd)}`);
-  if (usedUsd !== undefined && totalUsd !== undefined) {
-    parts.push(`used ${formatMoney(usedUsd)}/${formatMoney(totalUsd)}`);
-  } else if (usedUsd !== undefined) {
-    parts.push(`used ${formatMoney(usedUsd)}`);
-  }
-  if (todayUsed !== undefined) parts.push(`today ${formatMoney(todayUsed / scale)}`);
-  if (todayIncome !== undefined) parts.push(`income ${formatMoney(todayIncome / scale)}`);
-  return parts.join(" | ");
+export function formatOneApiBillingLine(limit, used) {
+  return `API | balance ${formatMoney(Math.max(0, limit - used))} | used ${formatMoney(used)}/${formatMoney(limit)}`;
 }
 
 function formatQuotaLimitedLine(label, root) {

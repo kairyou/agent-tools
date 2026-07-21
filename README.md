@@ -109,9 +109,9 @@ and never touch your edits or comments.
 For API relay / gateway setups: shows the relay's balance / quota inside the
 agent, so when you pay per use or have plan limits you always know how much you
 have spent and how much is left — without opening the gateway console.
-Works with the usage APIs of Sub2API, NewAPI/OneAPI-family panels (OneHub,
-DoneHub, Veloera, ...), and OpenRouter; compatibility can vary with a
-deployment's version and auth scheme.
+Works with API-key usage endpoints exposed by Sub2API, One API, New API, and
+OpenRouter. Compatibility depends on the gateway version and whether the
+corresponding usage endpoint is enabled.
 
 ```bash
 npx -y @kairyou/agent-tools@latest usage -a claude
@@ -140,13 +140,16 @@ endpoint and key — and tune `providerUsage` in `~/.agent-tools/config.jsonc`:
 ```jsonc
 {
   "providerUsage": {
-    "preset": "auto", // sub2api | new-api | veloera | openrouter | ...
-    "userId": "",     // some NewAPI/Veloera panels require your panel user id
+    "preset": "auto", // auto | sub2api | one-api | new-api | openrouter | <custom-route-id>
     "days": 30,       // spend window for the "30d" field (max 90)
     "debug": false    // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
 }
 ```
+
+Keep `preset` set to `auto` for automatic detection. Select a specific protocol
+only when you know which usage endpoint the gateway exposes; a configured
+custom route id is also accepted.
 
 #### Custom gateway routes
 

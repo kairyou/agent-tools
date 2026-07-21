@@ -70,28 +70,6 @@ export async function usagePreset() {
   return String(process.env.PROVIDER_USAGE_PRESET || config.preset || "auto").toLowerCase();
 }
 
-export async function panelUserId() {
-  const config = await agentConfig();
-  const raw = process.env.PROVIDER_USAGE_USER_ID || config.userId || "";
-  const parsed = Number.parseInt(String(raw), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-export async function panelUserHeaders() {
-  const userId = await panelUserId();
-  if (!userId) return {};
-  const value = String(userId);
-  return {
-    "New-API-User": value,
-    "Veloera-User": value,
-    "voapi-user": value,
-    "User-id": value,
-    "X-User-Id": value,
-    "Rix-Api-User": value,
-    "neo-api-user": value,
-  };
-}
-
 // Passive callers (the codex hook fires per prompt; several sessions may run
 // at once) reuse a fresh snapshot instead of hitting the gateway every time.
 // Same knob the statusline uses; 0 disables.
