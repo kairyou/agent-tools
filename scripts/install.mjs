@@ -102,40 +102,6 @@ function nodeCmd(absScript) {
   return `node "${fwd(absScript)}"`;
 }
 
-function stripJsonComments(input) {
-  let out = "";
-  let inString = false;
-  let escaped = false;
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    const next = input[i + 1];
-    if (inString) {
-      out += ch;
-      escaped = ch === "\\" ? !escaped : false;
-      if (ch === "\"" && !escaped) inString = false;
-      continue;
-    }
-    if (ch === "\"") {
-      inString = true;
-      out += ch;
-      continue;
-    }
-    if (ch === "/" && next === "/") {
-      while (i < input.length && input[i] !== "\n") i++;
-      out += "\n";
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      i += 2;
-      while (i < input.length && !(input[i] === "*" && input[i + 1] === "/")) i++;
-      i++;
-      continue;
-    }
-    out += ch;
-  }
-  return out;
-}
-
 function readJsonc(file) {
   if (!fs.existsSync(file)) return {};
   const raw = fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "");
@@ -144,31 +110,6 @@ function readJsonc(file) {
   const parsed = parseJsonc(raw, errors, { allowTrailingComma: true });
   if (errors.length > 0) throw new Error(`Cannot parse ${file} as JSONC`);
   return parsed ?? {};
-}
-
-function headerComments(text) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
-  const header = [];
-  for (const line of lines) {
-    if (/^\s*(?:\/\/.*)?$/.test(line)) {
-      header.push(line);
-      continue;
-    }
-    break;
-  }
-  return header.length ? header.join("\n").replace(/\s+$/, "") + "\n" : "";
-}
-
-function mergeDefaults(target, defaults) {
-  if (Array.isArray(defaults)) return target === undefined ? defaults : target;
-  if (!defaults || typeof defaults !== "object") {
-    return target === undefined ? defaults : target;
-  }
-  const out = target && typeof target === "object" && !Array.isArray(target) ? { ...target } : {};
-  for (const [key, value] of Object.entries(defaults)) {
-    out[key] = mergeDefaults(out[key], value);
-  }
-  return out;
 }
 
 function writeText(file, text, dryRun) {
@@ -215,23 +156,46 @@ function updateOpenCodeTuiConfig(file, { remove, dryRun }) {
   writeText(file, updated, dryRun);
 }
 
+// Keys present in defaults but absent in current, as jsonc-parser edit paths.
+function missingDefaultPaths(current, defaults, basePath = []) {
+  const out = [];
+  for (const [key, value] of Object.entries(defaults)) {
+    const existing = current?.[key];
+    if (existing === undefined) {
+      out.push({ path: [...basePath, key], value });
+    } else if (
+      value && typeof value === "object" && !Array.isArray(value) &&
+      existing && typeof existing === "object" && !Array.isArray(existing)
+    ) {
+      out.push(...missingDefaultPaths(existing, value, [...basePath, key]));
+    }
+  }
+  return out;
+}
+
+// Updates only add missing default keys via surgical jsonc-parser edits, so
+// the user's comments, formatting, and key order survive installer updates.
 function mergeJsoncFile(src, dest, dryRun) {
-  const defaults = readJsonc(src);
-  const defaultHeader = headerComments(fs.readFileSync(src, "utf8"));
-  if (!fs.existsSync(dest)) {
+  if (!fs.existsSync(dest) || !fs.readFileSync(dest, "utf8").trim()) {
     writeText(dest, fs.readFileSync(src, "utf8"), dryRun);
     return;
   }
+  const defaults = readJsonc(src);
   const currentText = fs.readFileSync(dest, "utf8");
-  const current = readJsonc(dest);
-  const merged = mergeDefaults(current, defaults);
-  const currentHeader = headerComments(currentText) || defaultHeader;
-  const mergedText = currentHeader + JSON.stringify(merged, null, 2) + "\n";
-  if (stripJsonComments(currentText).trim() === JSON.stringify(merged, null, 2)) {
+  const additions = missingDefaultPaths(readJsonc(dest), defaults);
+  if (additions.length === 0) {
     console.log(`  kept existing ${dest}`);
     return;
   }
-  writeText(dest, mergedText, dryRun);
+  const eol = currentText.includes("\r\n") ? "\r\n" : "\n";
+  let updated = currentText;
+  for (const { path: keyPath, value } of additions) {
+    const edits = modify(updated, keyPath, value, {
+      formattingOptions: { insertSpaces: true, tabSize: 2, eol },
+    });
+    updated = applyEdits(updated, edits);
+  }
+  writeText(dest, updated, dryRun);
 }
 
 function copyRuntimeFile(src, dest, dryRun, options = {}) {

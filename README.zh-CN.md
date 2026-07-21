@@ -96,7 +96,7 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 使用兼容的 API 中转时, statusline 还会追加 provider usage.
 
 如需控制显示项, 修改 `~/.agent-tools/config.jsonc` 里的
-`statusline.fields`. 安装器更新时可能补充新的默认键; 文件顶部注释和已有值会保留.
+`statusline.fields`. 安装器更新时只会补充缺失的默认键, 不会动你的修改和注释.
 
 ### Provider usage
 

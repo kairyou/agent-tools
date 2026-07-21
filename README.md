@@ -101,8 +101,8 @@ Here `5h` and `w` are Claude's rolling usage windows; `⟳` is the reset countdo
 When a compatible API relay is active, the statusline also appends provider usage.
 
 To choose what appears, edit `statusline.fields` in
-`~/.agent-tools/config.jsonc`. The installer may add new default keys on update;
-it preserves top-of-file comments and existing values.
+`~/.agent-tools/config.jsonc`. Installer updates only add missing default keys
+and never touch your edits or comments.
 
 ### Provider usage
 
