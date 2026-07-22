@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: release notes list commits since the previous tag
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -22,6 +24,17 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm publish
-      - run: gh release create "$GITHUB_REF_NAME" --generate-notes
+      # --generate-notes only lists merged PRs; this repo commits directly to
+      # main, so build the notes from commit subjects instead.
+      - run: |
+          prev="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"
+          if [ -n "$prev" ]; then
+            notes="$(git log --pretty='- %s' "$prev..$GITHUB_REF_NAME")
+
+          **Full Changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$GITHUB_REF_NAME"
+          else
+            notes="$(git log --pretty='- %s' "$GITHUB_REF_NAME")"
+          fi
+          gh release create "$GITHUB_REF_NAME" --notes "$notes"
         env:
           GH_TOKEN: ${{ github.token }}
