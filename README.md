@@ -97,7 +97,7 @@ The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
 ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 
 # With a compatible API relay, its quota info is shown instead, e.g.:
-⎇ main | Opus 4.8 | API | balance $362 | today $61.7 | 30d $566
+⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
 ```
 
 Here `5h` and `w` are Claude's rolling usage windows and `⟳` is the reset
@@ -153,10 +153,10 @@ Output examples:
 
 ```text
 # Relay plan quota.
-API | D $0.0/$100 | W $0.0/$300 | Exp 07-08
+D $0.0/$100 | W $0.0/$300 | Exp 07-08
 
 # Wallet balance.
-API | balance $362 | today $61.7 | 30d $566
+balance $362 | today $61.7 | 30d $566
 ```
 
 Fields: `D/W/M` are daily/weekly/monthly spend against plan limits; `Exp` is
@@ -203,7 +203,7 @@ export async function run(context, { requestJson, agentConfig }) {
   const me = await requestJson(`${context.baseUrl}/api/user/self`, {
     headers: { authorization: `Bearer ${session?.data?.accessToken}` },
   });
-  return { text: `API | balance ¥${me?.data?.balance}` };
+  return { text: `balance ¥${me?.data?.balance}` };
 }
 ```
 

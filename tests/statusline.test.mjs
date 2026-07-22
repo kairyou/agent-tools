@@ -119,7 +119,7 @@ test("Claude statusline appends relay usage snapshot", () => {
     version: 1,
     items: {
       "https://relay.example.com": {
-        text: "API | balance $362 | today $61.7 | 30d $566",
+        text: "balance $362 | today $61.7 | 30d $566",
         source: "v1-usage",
         baseUrl: "https://relay.example.com/v1",
         updatedAt: new Date().toISOString(),
@@ -143,6 +143,6 @@ test("Claude statusline appends relay usage snapshot", () => {
   assert.equal(result.stderr, "");
   assert.equal(
     result.stdout,
-    "Sonnet 4.5 | API | balance $362 | today $61.7 | 30d $566"
+    "Sonnet 4.5 | balance $362 | today $61.7 | 30d $566"
   );
 });

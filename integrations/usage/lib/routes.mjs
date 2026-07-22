@@ -56,7 +56,7 @@ async function fetchV1Usage(context) {
     name: "v1 usage",
   });
   if (!hasV1UsageFields(usageRoot(json))) throw new Error("v1 usage payload has no usage fields");
-  return usageResult(context, "v1-usage", await formatQuota(context.label, json), json);
+  return usageResult(context, "v1-usage", await formatQuota(json), json);
 }
 
 // New API exposes a read-only usage endpoint authenticated by the same relay
@@ -88,7 +88,7 @@ async function fetchNewApiTokenUsage(context) {
     source: "newapi-token",
     raw: json,
   };
-  return usageResult(context, "newapi-token", await formatNewApiTokenLine(context.label, json), normalized);
+  return usageResult(context, "newapi-token", await formatNewApiTokenLine(json), normalized);
 }
 
 // One API's legacy OpenAI billing endpoints use the same relay API key as
@@ -143,7 +143,7 @@ async function fetchOpenRouterUsage(context) {
   for (const endpoint of endpoints) {
     try {
       const json = await requestJson(endpoint.url, { key: context.key, name: endpoint.source });
-      return usageResult(context, endpoint.source, formatOpenRouterLine("OpenRouter", json), json);
+      return usageResult(context, endpoint.source, formatOpenRouterLine(json), json);
     } catch (error) {
       lastError = error;
       await debugLog({ source: endpoint.source, error: error.message });

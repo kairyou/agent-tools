@@ -94,7 +94,7 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
 
 # 使用兼容的 API 中转时, 显示中转的额度信息, 比如:
-⎇ main | Opus 4.8 | API | balance $362 | today $61.7 | 30d $566
+⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
 ```
 
 其中 `5h` / `w` 是 Claude 的滚动用量窗口, `⟳` 后面是重置倒计时;
@@ -144,10 +144,10 @@ provider 的 `base_url` 和密钥; Claude Code: 读取 `ANTHROPIC_BASE_URL` 与
 
 ```text
 # 中转套餐额度.
-API | D $0.0/$100 | W $0.0/$300 | Exp 07-08
+D $0.0/$100 | W $0.0/$300 | Exp 07-08
 
 # 钱包余额.
-API | balance $362 | today $61.7 | 30d $566
+balance $362 | today $61.7 | 30d $566
 ```
 
 字段含义: `D/W/M` 是日/周/月套餐消耗与上限, `Exp` 是套餐到期日,
@@ -192,7 +192,7 @@ export async function run(context, { requestJson, agentConfig }) {
   const me = await requestJson(`${context.baseUrl}/api/user/self`, {
     headers: { authorization: `Bearer ${session?.data?.accessToken}` },
   });
-  return { text: `API | balance ¥${me?.data?.balance}` };
+  return { text: `balance ¥${me?.data?.balance}` };
 }
 ```
 

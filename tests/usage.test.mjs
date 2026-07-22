@@ -123,7 +123,7 @@ test("local usage CLI queries Codex and Claude without a package manager", async
       CODEX_HOME: codexHome,
       OPENAI_BASE_URL: "",
     });
-    assert.deepEqual(codex, { status: 0, stdout: "API | balance $18.8\n", stderr: "" });
+    assert.deepEqual(codex, { status: 0, stdout: "balance $18.8\n", stderr: "" });
 
     const claudeEnv = {
       ...common,
@@ -132,7 +132,7 @@ test("local usage CLI queries Codex and Claude without a package manager", async
       ANTHROPIC_API_KEY: "",
     };
     const claude = await runUsageCli("claude", claudeEnv);
-    assert.deepEqual(claude, { status: 0, stdout: "API | balance $18.8\n", stderr: "" });
+    assert.deepEqual(claude, { status: 0, stdout: "balance $18.8\n", stderr: "" });
 
     // The bundled dist entry must behave exactly like the source entry.
     const bundled = await runUsageCli("claude", claudeEnv, DIST_USAGE_CLI);
@@ -164,7 +164,7 @@ test("custom routes from config.jsonc probe first and are preset-selectable", as
       '  if (typeof requestJson !== "function") throw new Error("helpers missing");\n' +
       "  const config = await agentConfig();\n" +
       '  if (!Array.isArray(config.routes)) throw new Error("agentConfig missing");\n' +
-      "  return { text: `API | custom $1 ${context.label}` };\n" +
+      "  return { text: `custom $1 ${context.label}` };\n" +
       "}\n"
   );
   const config = { routes: ["custom/my-gateway.mjs"] };
@@ -172,7 +172,7 @@ test("custom routes from config.jsonc probe first and are preset-selectable", as
   // Auto mode: the declared route wins before any built-in probe (the base URL
   // points at a closed port, so a network probe would fail loudly).
   const auto = await runProvider({ baseUrl: "http://127.0.0.1:9/v1", config, codexHome, agentHome });
-  assert.equal(auto.systemMessage, "API | custom $1 MOCK");
+  assert.equal(auto.systemMessage, "custom $1 MOCK");
 
   const byPreset = await runProvider({
     baseUrl: "http://127.0.0.1:9/v1",
@@ -181,7 +181,7 @@ test("custom routes from config.jsonc probe first and are preset-selectable", as
     codexHome,
     agentHome,
   });
-  assert.equal(byPreset.systemMessage, "API | custom $1 MOCK");
+  assert.equal(byPreset.systemMessage, "custom $1 MOCK");
 });
 
 test("packaged routes under dist/usage/routes load automatically", async () => {
@@ -193,20 +193,20 @@ test("packaged routes under dist/usage/routes load automatically", async () => {
   writeFileSync(
     join(packagedDir, "corp.mjs"),
     "export async function run(context) {\n" +
-      "  return { text: `API | packaged ${context.label}` };\n" +
+      "  return { text: `packaged ${context.label}` };\n" +
       "}\n"
   );
 
   // No config needed: the packaged route probes before the built-ins.
   const auto = await runProvider({ baseUrl: "http://127.0.0.1:9/v1", codexHome, agentHome });
-  assert.equal(auto.systemMessage, "API | packaged MOCK");
+  assert.equal(auto.systemMessage, "packaged MOCK");
 
   // A config-declared route with the same id overrides the packaged one.
   mkdirSync(join(agentHome, "custom"), { recursive: true });
   writeFileSync(
     join(agentHome, "custom", "corp.mjs"),
     "export async function run() {\n" +
-      '  return { text: "API | declared" };\n' +
+      '  return { text: "declared" };\n' +
       "}\n"
   );
   const declared = await runProvider({
@@ -215,7 +215,7 @@ test("packaged routes under dist/usage/routes load automatically", async () => {
     codexHome,
     agentHome,
   });
-  assert.equal(declared.systemMessage, "API | declared");
+  assert.equal(declared.systemMessage, "declared");
 });
 
 test("a broken custom route is skipped and built-ins still answer", async () => {
@@ -241,7 +241,7 @@ test("a broken custom route is skipped and built-ins still answer", async () => 
       codexHome,
       agentHome,
     });
-    assert.equal(payload.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(payload.systemMessage, "balance $15.0 | used $5.0/$20.0");
   });
 });
 
@@ -262,7 +262,7 @@ test("provider usage reads One API billing with the relay API key", async () => 
     res.end("{}");
   }, async (base) => {
     const payload = await runProvider({ baseUrl: `${base}/v1`, preset: "one-api" });
-    assert.equal(payload.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(payload.systemMessage, "balance $15.0 | used $5.0/$20.0");
     assert.deepEqual(seen, [
       { url: "/v1/dashboard/billing/subscription", authorization: "Bearer test-key" },
       { url: "/v1/dashboard/billing/usage", authorization: "Bearer test-key" },
@@ -310,8 +310,8 @@ test("provider usage caches the successful route for a service root", async () =
   }, async (base) => {
     const first = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
     const second = await runProvider({ baseUrl: `${base}/v1`, preset: "auto", codexHome, agentHome });
-    assert.equal(first.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
-    assert.equal(second.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(first.systemMessage, "balance $15.0 | used $5.0/$20.0");
+    assert.equal(second.systemMessage, "balance $15.0 | used $5.0/$20.0");
     assert.deepEqual(seen, ["/v1/usage?days=30", "/api/usage/token/", "/api/usage/token/"]);
 
     const cache = JSON.parse(readFileSync(join(agentHome, "cache", "usage-routes.json"), "utf8"));
@@ -357,8 +357,8 @@ test("hook mode reuses a fresh snapshot instead of re-querying", async () => {
     const ttl = { env: { AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS: "60000" } };
     const first = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
     const second = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
-    assert.equal(first.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
-    assert.equal(second.systemMessage, "API | balance $15.0 | used $5.0/$20.0");
+    assert.equal(first.systemMessage, "balance $15.0 | used $5.0/$20.0");
+    assert.equal(second.systemMessage, "balance $15.0 | used $5.0/$20.0");
     // The second hook call is served from the snapshot and makes no request.
     assert.deepEqual(seen, ["/api/usage/token/"]);
   });
