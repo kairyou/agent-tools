@@ -320,6 +320,24 @@ test("provider usage caches the successful route for a service root", async () =
   });
 });
 
+test("debug log is capped instead of growing forever", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-debug-log-"));
+  const codexHome = join(temp, "codex");
+  const agentHome = join(temp, "agent");
+  const logPath = join(agentHome, "logs", "usage-debug.log");
+  mkdirSync(join(agentHome, "logs"), { recursive: true });
+  writeFileSync(logPath, `${JSON.stringify({ old: "x".repeat(200) })}\n`.repeat(1600));
+  assert.ok(statSync(logPath).size > 256 * 1024);
+
+  await runProvider({
+    baseUrl: "http://127.0.0.1:9/v1",
+    codexHome,
+    agentHome,
+    env: { PROVIDER_USAGE_DEBUG: "1" },
+  });
+  assert.ok(statSync(logPath).size < 256 * 1024);
+});
+
 test("hook mode reuses a fresh snapshot instead of re-querying", async () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-ttl-"));
   const codexHome = join(temp, "codex");

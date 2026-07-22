@@ -126,11 +126,11 @@ function mergeSetCookiePairs(cookieHeader, setCookieHeaders) {
 }
 
 export async function requestJson(url, options = {}) {
-  const { key = "", headers = {}, name = "usage" } = options;
+  const { key = "", headers = {}, name = "usage", timeoutMs = REQUEST_TIMEOUT_MS } = options;
   let cookieHeader = "";
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(url, {
       headers: {
         accept: "application/json",

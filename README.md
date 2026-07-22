@@ -114,9 +114,7 @@ OpenRouter. Compatibility depends on the gateway version and whether the
 corresponding usage endpoint is enabled.
 
 ```bash
-npx -y @kairyou/agent-tools@latest usage -a claude
-npx -y @kairyou/agent-tools@latest usage -a codex
-npx -y @kairyou/agent-tools@latest usage -a opencode
+npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 ```
 
 - **Claude Code** — installs the `at-usage` skill into `~/.claude/skills`; invoke
@@ -220,8 +218,7 @@ Lets a main model that cannot see images ask a multimodal model specific questio
 #### Install
 
 ```bash
-npx -y @kairyou/agent-tools@latest vision -a claude
-npx -y @kairyou/agent-tools@latest vision -a codex claude opencode
+npx -y @kairyou/agent-tools@latest vision -a claude codex opencode
 ```
 
 Uninstalling keeps your vision provider config. The installer registers the

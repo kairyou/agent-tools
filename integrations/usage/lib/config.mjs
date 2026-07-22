@@ -1,7 +1,7 @@
 // Paths, constants, config.jsonc access, and debug logging shared by the
 // usage runtime modules.
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, open, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -47,10 +47,31 @@ export async function agentConfig() {
   return agentConfigCache;
 }
 
+const DEBUG_LOG_MAX_BYTES = 256 * 1024;
+const DEBUG_LOG_KEEP_BYTES = 128 * 1024;
+
+async function rotateDebugLogIfNeeded() {
+  try {
+    const { size } = await stat(DEBUG_PATH);
+    if (size <= DEBUG_LOG_MAX_BYTES) return;
+    const handle = await open(DEBUG_PATH, "r");
+    try {
+      const buffer = Buffer.alloc(DEBUG_LOG_KEEP_BYTES);
+      await handle.read(buffer, 0, DEBUG_LOG_KEEP_BYTES, size - DEBUG_LOG_KEEP_BYTES);
+      await writeFile(DEBUG_PATH, buffer.toString("utf8").replace(/^[^\n]*\n?/, ""));
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    // Rotation is best-effort; appending must not fail because of it.
+  }
+}
+
 export async function debugLog(event) {
   const config = await agentConfig();
   if (process.env.PROVIDER_USAGE_DEBUG !== "1" && config.debug !== true) return;
   await mkdir(dirname(DEBUG_PATH), { recursive: true });
+  await rotateDebugLogIfNeeded();
   const line = JSON.stringify({
     at: new Date().toISOString(),
     ...event,

@@ -106,9 +106,7 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 具体兼容性取决于网关版本及其是否开放相应接口.
 
 ```bash
-npx -y @kairyou/agent-tools@latest usage -a claude
-npx -y @kairyou/agent-tools@latest usage -a codex
-npx -y @kairyou/agent-tools@latest usage -a opencode
+npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 ```
 
 - **Claude Code** — 把 `at-usage` skill 装入 `~/.claude/skills`; 调用
@@ -206,8 +204,7 @@ API | balance $362 | today $61.7 | 30d $566
 #### 安装
 
 ```bash
-npx -y @kairyou/agent-tools@latest vision -a claude
-npx -y @kairyou/agent-tools@latest vision -a codex claude opencode
+npx -y @kairyou/agent-tools@latest vision -a claude codex opencode
 ```
 
 卸载默认保留 vision provider 配置. 安装器会为每个 agent 注册 `inspect_image`
