@@ -28,12 +28,13 @@ jobs:
       # main, so build the notes from commit subjects instead.
       - run: |
           prev="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"
+          range="${prev:+$prev..}$GITHUB_REF_NAME"
+          # Skip npm version's bare "x.y.z" bump commits.
+          notes="$(git log --pretty='- %s' --invert-grep --grep='^[0-9]\+\.[0-9]\+\.[0-9]\+$' "$range")"
           if [ -n "$prev" ]; then
-            notes="$(git log --pretty='- %s' "$prev..$GITHUB_REF_NAME")
+            notes="$notes
 
           **Full Changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$GITHUB_REF_NAME"
-          else
-            notes="$(git log --pretty='- %s' "$GITHUB_REF_NAME")"
           fi
           gh release create "$GITHUB_REF_NAME" --notes "$notes"
         env:
