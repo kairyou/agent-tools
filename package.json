@@ -3,6 +3,10 @@
   "version": "0.7.3",
   "description": "Reusable Agent Skills and installable integrations (statusline, provider usage, vision) for Codex, Claude Code, and opencode.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kairyou/agent-tools.git"
+  },
   "engines": {
     "node": ">=22"
   },
