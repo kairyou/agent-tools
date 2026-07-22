@@ -242,7 +242,9 @@ function installRuntimeAssets(opts) {
   }
   console.log(`runtime: ${INSTALL_ROOT}`);
   for (const [src, dest, options] of files) copyRuntimeFile(src, dest, opts.dryRun, options);
-  if (wants(opts, "usage")) syncUsageRoutesDir(opts.dryRun);
+  // The statusline refreshes via the usage engine, so it needs packaged
+  // routes too.
+  if (wants(opts, "usage") || wants(opts, "statusline")) syncUsageRoutesDir(opts.dryRun);
 }
 
 // Repo-shipped usage routes are replaced wholesale so routes removed from the

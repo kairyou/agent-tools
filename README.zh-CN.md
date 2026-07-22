@@ -90,10 +90,13 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 
 ```text
 ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+
+# 使用兼容的 API 中转时, 显示中转的额度信息, 比如:
+⎇ main | Opus 4.8 | API | balance $362 | today $61.7 | 30d $566
 ```
 
-其中 `5h` / `w` 是 Claude 的滚动用量窗口, `⟳` 后面是重置倒计时.
-使用兼容的 API 中转时, statusline 还会追加 provider usage.
+其中 `5h` / `w` 是 Claude 的滚动用量窗口, `⟳` 后面是重置倒计时;
+中转额度信息的兼容性与配置见下方 [Provider usage](#provider-usage).
 
 如需控制显示项, 修改 `~/.agent-tools/config.jsonc` 里的
 `statusline.fields`. 安装器更新时只会补充缺失的默认键, 不会动你的修改和注释.

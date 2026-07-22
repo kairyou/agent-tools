@@ -95,10 +95,14 @@ output is:
 
 ```text
 ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+
+# With a compatible API relay, its quota info is shown instead, e.g.:
+⎇ main | Opus 4.8 | API | balance $362 | today $61.7 | 30d $566
 ```
 
-Here `5h` and `w` are Claude's rolling usage windows; `⟳` is the reset countdown.
-When a compatible API relay is active, the statusline also appends provider usage.
+Here `5h` and `w` are Claude's rolling usage windows and `⟳` is the reset
+countdown; see [Provider usage](#provider-usage) below for relay quota
+compatibility and configuration.
 
 To choose what appears, edit `statusline.fields` in
 `~/.agent-tools/config.jsonc`. Installer updates only add missing default keys
