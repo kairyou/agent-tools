@@ -141,7 +141,7 @@ endpoint and key — and tune `providerUsage` in `~/.agent-tools/config.jsonc`:
 {
   "providerUsage": {
     "preset": "auto", // auto | sub2api | one-api | new-api | openrouter | <custom-route-id>
-    "days": 30,       // spend window for the "30d" field (max 90)
+    "days": 30,       // how many recent days of spend to count
     "debug": false    // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
 }

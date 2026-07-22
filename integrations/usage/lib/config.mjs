@@ -61,8 +61,8 @@ export async function debugLog(event) {
 export async function providerUsageDays() {
   const config = await agentConfig();
   const value = Number(process.env.PROVIDER_USAGE_DAYS || config.days || DEFAULT_USAGE_DAYS);
-  if (!Number.isInteger(value) || value <= 0 || value > MAX_USAGE_DAYS) return DEFAULT_USAGE_DAYS;
-  return value;
+  if (!Number.isInteger(value) || value <= 0) return DEFAULT_USAGE_DAYS;
+  return Math.min(value, MAX_USAGE_DAYS);
 }
 
 export async function usagePreset() {

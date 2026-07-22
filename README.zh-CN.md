@@ -131,7 +131,7 @@ provider 的 `base_url` 和密钥; Claude Code: 读取 `ANTHROPIC_BASE_URL` 与
 {
   "providerUsage": {
     "preset": "auto", // auto | sub2api | one-api | new-api | openrouter | <自定义 route id>
-    "days": 30,       // "30d" 字段的统计窗口(最大 90)
+    "days": 30,       // 统计最近多少天的消耗
     "debug": false    // true: 探测过程写入 ~/.agent-tools/logs/usage-debug.log
   }
 }
