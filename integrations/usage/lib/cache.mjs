@@ -2,7 +2,7 @@
 // gateway, the latest usage snapshot, and refresh bookkeeping.
 
 import { writeFile, mkdir, open, unlink, rename, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import {
   CACHE_DIR,
@@ -37,6 +37,12 @@ async function readJsonCache(path, field) {
 // plus rename keeps readers from ever seeing a half-written file.
 async function updateJsonCache(path, field, source, mutate) {
   const release = await acquireWriteLock();
+  if (!release) {
+    // Losing one update is safer than an unlocked read-modify-write, which
+    // would drop the other gateways' entries. Caches refill on the next run.
+    await debugLog({ source, skipped: "cache write lock unavailable" });
+    return;
+  }
   try {
     const cache = await readJsonCache(path, field);
     mutate(cache[field]);
@@ -108,18 +114,26 @@ export async function canRefreshUsage(context, minIntervalMs) {
 // it is older than staleMs. Returns a release function, or null when held.
 async function tryLock(lockPath, staleMs, details = {}) {
   await mkdir(dirname(lockPath), { recursive: true });
+  const token = randomUUID();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const handle = await open(lockPath, "wx");
       try {
         await handle.writeFile(
-          `${JSON.stringify({ pid: process.pid, ...details, startedAt: new Date().toISOString() })}\n`
+          `${JSON.stringify({ token, pid: process.pid, ...details, startedAt: new Date().toISOString() })}\n`
         );
       } finally {
         await handle.close();
       }
       return async () => {
-        await unlink(lockPath).catch(() => {});
+        // Release only our own lock: if we were declared stale and taken over,
+        // the file now belongs to another process and must survive.
+        try {
+          const held = JSON.parse(await readTextIfExists(lockPath));
+          if (held?.token === token) await unlink(lockPath);
+        } catch {
+          // Unreadable or already gone: nothing of ours left to release.
+        }
       };
     } catch (error) {
       if (error?.code !== "EEXIST" || attempt > 0) return null;
@@ -128,7 +142,15 @@ async function tryLock(lockPath, staleMs, details = {}) {
         () => Infinity // vanished under us: retry immediately
       );
       if (age <= staleMs) return null;
-      await unlink(lockPath).catch(() => {});
+      // Claim the stale lock by renaming it: rename is atomic, so only one
+      // process wins and nobody deletes a lock another just created.
+      try {
+        const claimed = `${lockPath}.${token}`;
+        await rename(lockPath, claimed);
+        await unlink(claimed).catch(() => {});
+      } catch {
+        return null; // another process claimed it first
+      }
     }
   }
   return null;
@@ -142,12 +164,15 @@ function refreshLockPath(context) {
   return join(CACHE_DIR, `usage-refresh-${hash}.lock`);
 }
 
-export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
+// Long enough that a slow but healthy refresh is never declared stale: probing
+// every route can take minutes when a gateway stalls (each request retries once
+// behind a 10s timeout). Shorter than this and a live refresh gets taken over.
+export async function acquireUsageRefreshLease(context, leaseMs = 180_000) {
   return await tryLock(refreshLockPath(context), leaseMs, { baseUrl: context.baseUrl });
 }
 
-// Writers wait briefly for each other. Cache writes must never block a
-// background refresh, so on timeout we proceed unserialized instead.
+// Writers wait briefly for each other; null means "skip this write" so a cache
+// update never blocks a background refresh.
 async function acquireWriteLock({ timeoutMs = 500, staleMs = 5_000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   do {
@@ -155,5 +180,5 @@ async function acquireWriteLock({ timeoutMs = 500, staleMs = 5_000 } = {}) {
     if (release) return release;
     await new Promise((resolve) => setTimeout(resolve, 10));
   } while (Date.now() < deadline);
-  return async () => {};
+  return null;
 }

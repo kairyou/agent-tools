@@ -540,11 +540,16 @@ test("hook refreshes a missing snapshot in a detached process", async () => {
   });
 });
 
+// config.mjs resolves AGENT_TOOLS_HOME at import time, so the env has to be set
+// before the first load; the module is then shared by the lock tests below.
+const LOCK_TEST_HOME = mkdtempSync(join(tmpdir(), "agent-tools-refresh-lock-"));
+async function lockApi() {
+  process.env.AGENT_TOOLS_HOME = LOCK_TEST_HOME;
+  return await import("../integrations/usage/lib/cache.mjs");
+}
+
 test("refresh locks are per relay, not global", async () => {
-  const temp = mkdtempSync(join(tmpdir(), "agent-tools-refresh-lock-"));
-  // config.mjs reads AGENT_TOOLS_HOME at import time, so set it before loading.
-  process.env.AGENT_TOOLS_HOME = temp;
-  const { acquireUsageRefreshLease } = await import("../integrations/usage/lib/cache.mjs");
+  const { acquireUsageRefreshLease } = await lockApi();
 
   const first = await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" });
   const second = await acquireUsageRefreshLease({ baseUrl: "https://relay-b.example.test/v1" });
@@ -556,6 +561,28 @@ test("refresh locks are per relay, not global", async () => {
   await first();
   assert.ok(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" }));
   await second();
+});
+
+test("a stale takeover keeps the new holder's lock", async () => {
+  const { acquireUsageRefreshLease } = await lockApi();
+  const context = { baseUrl: "https://relay-stale.example.test/v1" };
+
+  // leaseMs 0 declares any existing lock stale, so the second call takes over.
+  const stalled = await acquireUsageRefreshLease(context, 0);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const takeover = await acquireUsageRefreshLease(context, 0);
+  assert.ok(stalled);
+  assert.ok(takeover, "an expired lock should be reclaimable");
+
+  // The original holder finishing late must not release the new holder's lock.
+  await stalled();
+  assert.equal(
+    await acquireUsageRefreshLease(context, 180_000),
+    null,
+    "the takeover lock must survive the original holder's release"
+  );
+  await takeover();
+  assert.ok(await acquireUsageRefreshLease(context, 180_000));
 });
 
 test("concurrent hooks share one background refresh", async () => {
