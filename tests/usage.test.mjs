@@ -563,11 +563,30 @@ test("refresh locks are per relay, not global", async () => {
   await second();
 });
 
+test("a holder heartbeating its lock outlives the stale window", async () => {
+  const { acquireUsageRefreshLease } = await lockApi();
+  const context = { baseUrl: "https://relay-live.example.test/v1" };
+
+  // 300ms lease keeps the lock warm every 100ms, so waiting well past the
+  // window must not let anyone else in.
+  const held = await acquireUsageRefreshLease(context, 300);
+  assert.ok(held);
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.equal(
+    await acquireUsageRefreshLease(context, 300),
+    null,
+    "a holder that keeps its lock warm should not be taken over"
+  );
+  await held();
+  assert.ok(await acquireUsageRefreshLease(context, 300));
+});
+
 test("a stale takeover keeps the new holder's lock", async () => {
   const { acquireUsageRefreshLease } = await lockApi();
   const context = { baseUrl: "https://relay-stale.example.test/v1" };
 
-  // leaseMs 0 declares any existing lock stale, so the second call takes over.
+  // leaseMs 0 declares any existing lock stale; the 20ms wait stays under the
+  // 50ms heartbeat floor so the lock is genuinely not refreshed in between.
   const stalled = await acquireUsageRefreshLease(context, 0);
   await new Promise((resolve) => setTimeout(resolve, 20));
   const takeover = await acquireUsageRefreshLease(context, 0);

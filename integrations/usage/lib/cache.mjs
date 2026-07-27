@@ -1,7 +1,7 @@
 // On-disk state under ~/.agent-tools/cache: the last working route per
 // gateway, the latest usage snapshot, and refresh bookkeeping.
 
-import { writeFile, mkdir, open, unlink, rename, stat } from "node:fs/promises";
+import { writeFile, mkdir, open, unlink, rename, stat, utimes } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import {
@@ -110,8 +110,16 @@ export async function canRefreshUsage(context, minIntervalMs) {
 }
 
 // `wx` fails when the file exists, which makes creating it an atomic
-// cross-process lock. A lock left behind by a killed process is reclaimed once
-// it is older than staleMs. Returns a release function, or null when held.
+// cross-process lock. Returns a release function, or null when the lock is held.
+//
+// Best-effort, not a guarantee: the holder keeps touching the file so a live
+// holder is unlikely to be declared stale, but a suspended machine, a stalled
+// event loop, or a failing utimes can still make one miss its heartbeat. The
+// owner token on release covers most of what slips through — a takeover that
+// happens between reading the token and unlinking still isn't excluded, and a
+// stale holder's heartbeat can even touch the new owner's file, since utimes
+// works on the path rather than a handle. Good enough for a background usage
+// cache, where the worst case is one duplicated refresh that self-heals.
 async function tryLock(lockPath, staleMs, details = {}) {
   await mkdir(dirname(lockPath), { recursive: true });
   const token = randomUUID();
@@ -125,9 +133,15 @@ async function tryLock(lockPath, staleMs, details = {}) {
       } finally {
         await handle.close();
       }
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        utimes(lockPath, now, now).catch(() => {});
+      }, Math.max(50, Math.floor(staleMs / 3)));
+      heartbeat.unref(); // must never keep the process alive
       return async () => {
-        // Release only our own lock: if we were declared stale and taken over,
-        // the file now belongs to another process and must survive.
+        clearInterval(heartbeat);
+        // If we were taken over anyway, the file belongs to someone else and
+        // must survive; this check is why a missed heartbeat is recoverable.
         try {
           const held = JSON.parse(await readTextIfExists(lockPath));
           if (held?.token === token) await unlink(lockPath);
@@ -164,10 +178,9 @@ function refreshLockPath(context) {
   return join(CACHE_DIR, `usage-refresh-${hash}.lock`);
 }
 
-// Long enough that a slow but healthy refresh is never declared stale: probing
-// every route can take minutes when a gateway stalls (each request retries once
-// behind a 10s timeout). Shorter than this and a live refresh gets taken over.
-export async function acquireUsageRefreshLease(context, leaseMs = 180_000) {
+// The holder keeps its lock warm, so this window mostly decides how soon a
+// crashed refresh is reclaimed rather than how long a slow one may run.
+export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
   return await tryLock(refreshLockPath(context), leaseMs, { baseUrl: context.baseUrl });
 }
 
