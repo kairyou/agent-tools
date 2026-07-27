@@ -534,6 +534,24 @@ test("hook refreshes a missing snapshot in a detached process", async () => {
   });
 });
 
+test("refresh locks are per relay, not global", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-refresh-lock-"));
+  // config.mjs reads AGENT_TOOLS_HOME at import time, so set it before loading.
+  process.env.AGENT_TOOLS_HOME = temp;
+  const { acquireUsageRefreshLease } = await import("../integrations/usage/lib/cache.mjs");
+
+  const first = await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" });
+  const second = await acquireUsageRefreshLease({ baseUrl: "https://relay-b.example.test/v1" });
+  assert.ok(first, "first relay should get its lock");
+  assert.ok(second, "a different relay must not be blocked by the first");
+
+  // The same relay is still mutually exclusive, and /v1 normalizes to one key.
+  assert.equal(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test" }), null);
+  await first();
+  assert.ok(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" }));
+  await second();
+});
+
 test("concurrent hooks share one background refresh", async () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-refresh-lock-"));
   const codexHome = join(temp, "codex");

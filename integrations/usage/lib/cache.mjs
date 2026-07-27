@@ -2,12 +2,13 @@
 // gateway, the latest usage snapshot, and refresh bookkeeping.
 
 import { writeFile, mkdir, open, unlink } from "node:fs/promises";
-import { dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { dirname, join } from "node:path";
 import {
+  CACHE_DIR,
   ROUTE_CACHE_PATH,
   SNAPSHOT_PATH,
   REFRESH_STATE_PATH,
-  REFRESH_LOCK_PATH,
   readTextIfExists,
   debugLog,
 } from "./config.mjs";
@@ -128,11 +129,20 @@ export async function canRefreshUsage(context, minIntervalMs) {
   return latest === 0 || Date.now() - latest >= minIntervalMs;
 }
 
+// One lock per gateway, keyed like the route and snapshot caches, so
+// refreshing one relay never blocks another.
+function refreshLockPath(context) {
+  const key = usageRouteCacheKey(context.baseUrl);
+  const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
+  return join(CACHE_DIR, `usage-refresh-${hash}.lock`);
+}
+
 export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
-  await mkdir(dirname(REFRESH_LOCK_PATH), { recursive: true });
+  const lockPath = refreshLockPath(context);
+  await mkdir(dirname(lockPath), { recursive: true });
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const handle = await open(REFRESH_LOCK_PATH, "wx");
+      const handle = await open(lockPath, "wx");
       try {
         await handle.writeFile(
           `${JSON.stringify({ pid: process.pid, baseUrl: context.baseUrl, startedAt: new Date().toISOString() })}\n`
@@ -141,19 +151,19 @@ export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
         await handle.close();
       }
       return async () => {
-        await unlink(REFRESH_LOCK_PATH).catch(() => {});
+        await unlink(lockPath).catch(() => {});
       };
     } catch (error) {
       if (error?.code !== "EEXIST" || attempt > 0) return null;
       try {
-        const lock = JSON.parse(await readTextIfExists(REFRESH_LOCK_PATH));
+        const lock = JSON.parse(await readTextIfExists(lockPath));
         const startedAt = Date.parse(lock?.startedAt || "");
         if (Number.isFinite(startedAt) && Date.now() - startedAt > leaseMs) {
-          await unlink(REFRESH_LOCK_PATH).catch(() => {});
+          await unlink(lockPath).catch(() => {});
           continue;
         }
       } catch {
-        await unlink(REFRESH_LOCK_PATH).catch(() => {});
+        await unlink(lockPath).catch(() => {});
         continue;
       }
       return null;
