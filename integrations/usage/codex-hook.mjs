@@ -16,6 +16,7 @@ const LOG_PATH = path.join(AGENT_TOOLS_HOME, "logs", "usage-hook.log");
 const TIMEOUT_MS = Number(process.env.AGENT_TOOLS_USAGE_HOOK_TIMEOUT_MS || 4500);
 const MAX_LOG_BYTES = Number(process.env.AGENT_TOOLS_USAGE_HOOK_LOG_BYTES || 256 * 1024);
 const KEEP_LOG_BYTES = 128 * 1024;
+const SILENT = process.argv.includes("--silent");
 
 function hookOut(message) {
   const payload = { continue: true };
@@ -64,6 +65,10 @@ function failureMessage() {
   return `API usage hook failed; see ${LOG_PATH.replace(/\\/g, "/")}`;
 }
 
+function hookFailureOut() {
+  hookOut(SILENT ? "" : failureMessage());
+}
+
 function parseHookJson(stdout) {
   const text = stdout.trim();
   if (!text) return { continue: true };
@@ -73,17 +78,21 @@ function parseHookJson(stdout) {
 async function runUsageScript() {
   if (!fs.existsSync(USAGE_SCRIPT)) {
     logFailure({ reason: "missing usage script", usageScript: USAGE_SCRIPT });
-    hookOut(failureMessage());
+    hookFailureOut();
     return;
   }
 
   const result = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [USAGE_SCRIPT, "hook", "--agent", "codex"], {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
+    const child = spawn(
+      process.execPath,
+      [USAGE_SCRIPT, "hook", "--agent", "codex", ...(SILENT ? ["--silent"] : [])],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      }
+    );
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -126,7 +135,7 @@ async function runUsageScript() {
       node: process.version,
       platform: `${process.platform} ${os.release()}`,
     });
-    hookOut(failureMessage());
+    hookFailureOut();
     return;
   }
 
@@ -141,7 +150,7 @@ async function runUsageScript() {
       stderr: preview(result.stderr),
       usageScript: USAGE_SCRIPT,
     });
-    hookOut(failureMessage());
+    hookFailureOut();
   }
 }
 
@@ -153,5 +162,5 @@ try {
     error: error?.stack || error?.message || String(error),
     usageScript: USAGE_SCRIPT,
   });
-  hookOut(failureMessage());
+  hookFailureOut();
 }

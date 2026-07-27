@@ -1,12 +1,13 @@
 // On-disk state under ~/.agent-tools/cache: the last working route per
 // gateway, the latest usage snapshot, and refresh bookkeeping.
 
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, open, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   ROUTE_CACHE_PATH,
   SNAPSHOT_PATH,
   REFRESH_STATE_PATH,
+  REFRESH_LOCK_PATH,
   readTextIfExists,
   debugLog,
 } from "./config.mjs";
@@ -112,4 +113,51 @@ export async function rememberRefreshState(context, patch) {
   } catch (error) {
     await debugLog({ source: "refresh-state", error: error.message });
   }
+}
+
+export async function canRefreshUsage(context, minIntervalMs) {
+  if (minIntervalMs <= 0) return true;
+  const state = await readRefreshState();
+  const item = state.items[usageRouteCacheKey(context.baseUrl)] || {};
+  const latest = Math.max(
+    ...[item.lastStartedAt, item.lastSuccessAt, item.lastFailureAt]
+      .map((value) => Date.parse(value || ""))
+      .filter(Number.isFinite),
+    0
+  );
+  return latest === 0 || Date.now() - latest >= minIntervalMs;
+}
+
+export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
+  await mkdir(dirname(REFRESH_LOCK_PATH), { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(REFRESH_LOCK_PATH, "wx");
+      try {
+        await handle.writeFile(
+          `${JSON.stringify({ pid: process.pid, baseUrl: context.baseUrl, startedAt: new Date().toISOString() })}\n`
+        );
+      } finally {
+        await handle.close();
+      }
+      return async () => {
+        await unlink(REFRESH_LOCK_PATH).catch(() => {});
+      };
+    } catch (error) {
+      if (error?.code !== "EEXIST" || attempt > 0) return null;
+      try {
+        const lock = JSON.parse(await readTextIfExists(REFRESH_LOCK_PATH));
+        const startedAt = Date.parse(lock?.startedAt || "");
+        if (Number.isFinite(startedAt) && Date.now() - startedAt > leaseMs) {
+          await unlink(REFRESH_LOCK_PATH).catch(() => {});
+          continue;
+        }
+      } catch {
+        await unlink(REFRESH_LOCK_PATH).catch(() => {});
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
 }

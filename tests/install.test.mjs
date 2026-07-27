@@ -62,8 +62,11 @@ test("installer wires and unwires Codex usage without removing unrelated hooks",
   assert.equal(installed.hooks.PreToolUse.length, 1);
   assert.deepEqual(installed.hooks.PreToolUse[0], existingHook);
   assert.equal(installed.hooks.UserPromptSubmit.length, 1);
-  assert.match(installed.hooks.UserPromptSubmit[0].hooks[0].command, /\/dist\/usage\/codex-hook\.mjs"$/);
+  assert.match(installed.hooks.UserPromptSubmit[0].hooks[0].command, /\/dist\/usage\/codex-hook\.mjs" --silent$/);
+  assert.equal(installed.hooks.UserPromptSubmit[0].hooks[0].statusMessage, undefined);
   assert.equal(installed.hooks.Stop.length, 1);
+  assert.match(installed.hooks.Stop[0].hooks[0].command, /\/dist\/usage\/codex-hook\.mjs"$/);
+  assert.equal(installed.hooks.Stop[0].hooks[0].statusMessage, undefined);
   const skillFile = join(skillsDir, "at-usage", "SKILL.md");
   const skill = readFileSync(skillFile, "utf8");
   assert.match(skill, /dist\/usage\/cli\.mjs" --agent codex/);

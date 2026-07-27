@@ -4,7 +4,10 @@
 import { createContext, runInContext } from "node:vm";
 import { debugLog } from "./config.mjs";
 
-const REQUEST_TIMEOUT_MS = 5000;
+// No user waits on this request: the hook reads a snapshot and refreshes in a
+// detached process, and skill/CLI queries are explicit. Custom routes can pass
+// their own timeoutMs.
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const SHIELD_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
@@ -126,7 +129,7 @@ function mergeSetCookiePairs(cookieHeader, setCookieHeaders) {
 }
 
 export async function requestJson(url, options = {}) {
-  const { key = "", headers = {}, name = "usage", timeoutMs = REQUEST_TIMEOUT_MS } = options;
+  const { key = "", headers = {}, name = "usage", timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = options;
   let cookieHeader = "";
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();

@@ -7,11 +7,19 @@
 // Everything else lives in ./lib (config, urls, http, cache, format, context,
 // routes) and is bundled into dist/usage/core.mjs at build time.
 
-import { pathToFileURL } from "node:url";
-import { debugLog, usagePreset, snapshotTtlMs } from "./lib/config.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawn } from "node:child_process";
+import {
+  debugLog,
+  usagePreset,
+  HOOK_SNAPSHOT_MAX_AGE_MS,
+  REFRESH_INTERVAL_MS,
+} from "./lib/config.mjs";
 import { isOfficialBaseUrl } from "./lib/urls.mjs";
 import {
   readUsageSnapshot,
+  acquireUsageRefreshLease,
+  canRefreshUsage,
   rememberUsageRoute,
   rememberUsageSnapshot,
   rememberRefreshState,
@@ -20,7 +28,7 @@ import { orderedUsageRoutes } from "./lib/routes.mjs";
 import { usageContext, normalizeUsageContext } from "./lib/context.mjs";
 
 function parseArgs(argv) {
-  const opts = { mode: "hook", agent: "codex" };
+  const opts = { mode: "hook", agent: "codex", silent: false };
   let modeSet = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -28,6 +36,8 @@ function parseArgs(argv) {
       opts.agent = argv[++i];
     } else if (arg.startsWith("--agent=")) {
       opts.agent = arg.slice("--agent=".length);
+    } else if (arg === "--silent") {
+      opts.silent = true;
     } else if (!arg.startsWith("-") && !modeSet) {
       opts.mode = arg;
       modeSet = true;
@@ -111,30 +121,68 @@ export async function queryProviderUsage(input, options = {}) {
 }
 
 async function refresh(agent = "codex") {
-  return await queryAgentProviderUsage(agent);
+  const context = await usageContext(agent);
+  const release = await acquireUsageRefreshLease(context);
+  if (!release) return { skipped: true, text: "" };
+  try {
+    if (!(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return { skipped: true, text: "" };
+    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
+    return await queryUsageContext(context, { agent, rememberSnapshot: true });
+  } finally {
+    await release();
+  }
+}
+
+async function cachedUsage(context) {
+  const cached = await readUsageSnapshot(context);
+  const ageMs = cached?.updatedAt ? Date.now() - Date.parse(cached.updatedAt) : Infinity;
+  return cached?.text && Number.isFinite(ageMs) ? { ...cached, ageMs } : null;
 }
 
 export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0 } = {}) {
   const context = await usageContext(agent);
   if (maxAgeMs > 0) {
-    const cached = await readUsageSnapshot(context);
-    const age = cached?.updatedAt ? Date.now() - Date.parse(cached.updatedAt) : Infinity;
-    if (cached?.text && age < maxAgeMs) return { ...cached, cached: true };
+    const cached = await cachedUsage(context);
+    if (cached && cached.ageMs < maxAgeMs) return { ...cached, cached: true };
   }
   return await queryUsageContext(context, { agent, rememberSnapshot: true });
+}
+
+function scheduleRefresh(agent) {
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "refresh", "--agent", agent], {
+    cwd: process.cwd(),
+    env: process.env,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.on("error", () => {});
+  child.unref();
+}
+
+async function hook(agent, { silent = false } = {}) {
+  const context = await usageContext(agent);
+  const cached = await cachedUsage(context);
+  if (
+    (!cached || cached.ageMs >= REFRESH_INTERVAL_MS) &&
+    (await canRefreshUsage(context, REFRESH_INTERVAL_MS))
+  ) {
+    scheduleRefresh(agent);
+  }
+  hookOut(silent ? "" : cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "");
 }
 
 async function main() {
   try {
     if (mode === "refresh") {
       await refresh(cli.agent);
-    } else if (mode === "print" || mode === "print-or-refresh") {
-      const result = await refresh(cli.agent);
+    } else if (mode === "print") {
+      // Explicit request: query directly instead of going through the
+      // background refresh throttle, which would print nothing.
+      const result = await queryAgentProviderUsage(cli.agent);
       textOut(result?.text || "");
     } else if (mode === "hook") {
-      // Hook mode fires on every prompt; serve a fresh snapshot when possible.
-      const result = await queryAgentProviderUsage(cli.agent, { maxAgeMs: snapshotTtlMs() });
-      hookOut(result?.text || "");
+      await hook(cli.agent, { silent: cli.silent });
     } else {
       throw new Error(`unknown mode: ${mode}`);
     }

@@ -16,6 +16,7 @@ export const DEBUG_PATH = join(AGENT_TOOLS_HOME, "logs", "usage-debug.log");
 export const ROUTE_CACHE_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-routes.json");
 export const SNAPSHOT_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-snapshot.json");
 export const REFRESH_STATE_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-refresh-state.json");
+export const REFRESH_LOCK_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-refresh.lock");
 export const DEFAULT_USAGE_DAYS = 30;
 export const MAX_USAGE_DAYS = 90;
 export const DEFAULT_NEW_API_QUOTA_SCALE = 500000;
@@ -91,13 +92,13 @@ export async function usagePreset() {
   return String(process.env.PROVIDER_USAGE_PRESET || config.preset || "auto").toLowerCase();
 }
 
-// Passive callers (the codex hook fires per prompt; several sessions may run
-// at once) reuse a fresh snapshot instead of hitting the gateway every time.
-// Same knob the statusline uses; 0 disables.
-export function snapshotTtlMs() {
-  const raw = Number(process.env.AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS);
-  return Number.isFinite(raw) && raw >= 0 ? raw : 60_000;
-}
+// Timing follows the caller's shape, so it is fixed rather than configurable:
+// the hook never waits on the network (snapshot + background refresh), and
+// every other caller either runs detached or is an explicit user request.
+// Past this age a snapshot is too stale to show instead of nothing.
+export const HOOK_SNAPSHOT_MAX_AGE_MS = 10 * 60_000;
+// Minimum gap between gateway queries, however many hooks fire.
+export const REFRESH_INTERVAL_MS = 60_000;
 
 export async function newApiQuotaScale() {
   const config = await agentConfig();

@@ -395,14 +395,13 @@ function removeFile(file, dryRun) {
   console.log(`  removed ${file}`);
 }
 
-function usageEntry() {
+function usageEntry({ silent = false } = {}) {
   return {
     hooks: [
       {
         type: "command",
-        command: nodeCmd(RUNTIME.codexUsageHook),
+        command: `${nodeCmd(RUNTIME.codexUsageHook)}${silent ? " --silent" : ""}`,
         timeout: 5,
-        statusMessage: "Refreshing API usage",
       },
     ],
   };
@@ -433,7 +432,7 @@ function applyProviderUsage(cfg, { remove }) {
     }
     cfg.hooks[event] = cfg.hooks[event] || [];
     cfg.hooks[event] = cfg.hooks[event].filter((entry) => !isOurProviderUsageEntry(entry));
-    cfg.hooks[event].push(usageEntry());
+    cfg.hooks[event].push(usageEntry({ silent: event === "UserPromptSubmit" }));
   }
   if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
 }

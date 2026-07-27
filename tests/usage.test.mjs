@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
-import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -41,7 +41,7 @@ async function runProvider({ baseUrl, preset = "auto", config = {}, codexHome, a
   );
 
   const result = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [PROVIDER_SCRIPT, "hook"], {
+    const child = spawn(process.execPath, [USAGE_CLI, "--agent", "codex"], {
       cwd: ROOT,
       env: {
         ...process.env,
@@ -51,8 +51,6 @@ async function runProvider({ baseUrl, preset = "auto", config = {}, codexHome, a
         PROVIDER_USAGE_BASE_URL: "",
         SUB2API_BASE_URL: "",
         OPENAI_BASE_URL: "",
-        // Snapshot reuse is covered by its own test; keep the rest live.
-        AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS: "0",
         ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -72,7 +70,46 @@ async function runProvider({ baseUrl, preset = "auto", config = {}, codexHome, a
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(result.stderr, "");
+  const systemMessage = result.stdout.trim();
+  return systemMessage ? { continue: true, systemMessage } : { continue: true };
+}
+
+async function runHook(env, args = []) {
+  const result = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [PROVIDER_SCRIPT, "hook", "--agent", "codex", ...args], {
+      cwd: ROOT,
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("exit", (status) => resolve({ status, stdout, stderr }));
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stderr, "");
   return JSON.parse(result.stdout);
+}
+
+async function waitFor(check, timeoutMs = 3_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail("timed out waiting for expected condition");
+}
+
+function writeCodexProvider(codexHome, agentHome, baseUrl) {
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(agentHome, { recursive: true });
+  writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ OPENAI_API_KEY: "test-key" }));
+  writeFileSync(
+    join(codexHome, "config.toml"),
+    `model_provider = "mock"\n[model_providers.mock]\nname = "Mock"\nbase_url = "${baseUrl}"\n`
+  );
+  writeFileSync(join(agentHome, "config.jsonc"), JSON.stringify({ providerUsage: {} }));
 }
 
 async function runUsageCli(agent, env, entry = USAGE_CLI) {
@@ -432,29 +469,95 @@ test("debug log is capped instead of growing forever", async () => {
   assert.ok(statSync(logPath).size < 256 * 1024);
 });
 
-test("hook mode reuses a fresh snapshot instead of re-querying", async () => {
+test("hook returns the latest local snapshot without waiting for a gateway request", async () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-ttl-"));
   const codexHome = join(temp, "codex");
   const agentHome = join(temp, "agent");
-  const seen = [];
+  let requests = 0;
 
   await withServer((req, res) => {
-    seen.push(req.url);
+    requests += 1;
     if (req.url === "/api/usage/token/") {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
+      setTimeout(() => {
+        res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
+      }, requests === 1 ? 0 : 1_200);
       return;
     }
     res.statusCode = 404;
     res.end("{}");
   }, async (base) => {
-    const ttl = { env: { AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS: "60000" } };
-    const first = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
-    const second = await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome, ...ttl });
-    assert.equal(first.systemMessage, "balance $15.0 | used $5.0/$20.0");
-    assert.equal(second.systemMessage, "balance $15.0 | used $5.0/$20.0");
-    // The second hook call is served from the snapshot and makes no request.
-    assert.deepEqual(seen, ["/api/usage/token/"]);
+    await runProvider({ baseUrl: `${base}/v1`, preset: "new-api", codexHome, agentHome });
+    const startedAt = Date.now();
+    const payload = await runHook({
+      CODEX_HOME: codexHome,
+      AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_PRESET: "new-api",
+    });
+    assert.ok(Date.now() - startedAt < 800, "hook should not wait for the gateway");
+    assert.deepEqual(payload, { continue: true, systemMessage: "balance $15.0 | used $5.0/$20.0" });
+    assert.doesNotMatch(payload.systemMessage, /cached|refreshing/i);
+    const silentPayload = await runHook({
+      CODEX_HOME: codexHome,
+      AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_PRESET: "new-api",
+    }, ["--silent"]);
+    assert.deepEqual(silentPayload, { continue: true });
+    assert.equal(requests, 1);
+  });
+});
+
+test("hook refreshes a missing snapshot in a detached process", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-refresh-"));
+  const codexHome = join(temp, "codex");
+  const agentHome = join(temp, "agent");
+  let requests = 0;
+
+  await withServer((req, res) => {
+    requests += 1;
+    assert.equal(req.url, "/api/usage/token/");
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
+  }, async (base) => {
+    writeCodexProvider(codexHome, agentHome, `${base}/v1`);
+    const payload = await runHook({
+      CODEX_HOME: codexHome,
+      AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_PRESET: "new-api",
+    });
+    assert.deepEqual(payload, { continue: true });
+    const snapshotPath = join(agentHome, "cache", "usage-snapshot.json");
+    await waitFor(() => existsSync(snapshotPath));
+    assert.equal(requests, 1);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    assert.equal(Object.values(snapshot.items)[0].text, "balance $15.0 | used $5.0/$20.0");
+  });
+});
+
+test("concurrent hooks share one background refresh", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-provider-refresh-lock-"));
+  const codexHome = join(temp, "codex");
+  const agentHome = join(temp, "agent");
+  let requests = 0;
+
+  await withServer((req, res) => {
+    requests += 1;
+    assert.equal(req.url, "/api/usage/token/");
+    res.setHeader("content-type", "application/json");
+    setTimeout(() => res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } })), 150);
+  }, async (base) => {
+    writeCodexProvider(codexHome, agentHome, `${base}/v1`);
+    const env = {
+      CODEX_HOME: codexHome,
+      AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_PRESET: "new-api",
+    };
+    const [first, second] = await Promise.all([runHook(env), runHook(env)]);
+    assert.deepEqual(first, { continue: true });
+    assert.deepEqual(second, { continue: true });
+    await waitFor(() => requests === 1);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.equal(requests, 1);
   });
 });
 
@@ -497,6 +600,29 @@ test("Codex usage hook wrapper logs failures and exits successfully", async () =
   const logPath = join(agentHome, "logs", "usage-hook.log");
   const log = readFileSync(logPath, "utf8");
   assert.match(log, /missing usage script/);
+});
+
+test("Codex usage hook wrapper keeps silent hooks silent when it fails", async () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-usage-hook-silent-"));
+  const agentHome = join(temp, "agent");
+  const hookDir = join(agentHome, "hooks", "codex");
+  mkdirSync(hookDir, { recursive: true });
+  copyFileSync(CODEX_USAGE_HOOK, join(hookDir, "usage-hook.mjs"));
+
+  const result = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [join(hookDir, "usage-hook.mjs"), "--silent"], {
+      cwd: ROOT,
+      env: { ...process.env, AGENT_TOOLS_HOME: agentHome },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.on("exit", (status) => resolve({ status, stdout }));
+  });
+
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { continue: true });
+  assert.match(readFileSync(join(agentHome, "logs", "usage-hook.log"), "utf8"), /missing usage script/);
 });
 
 test("Codex usage hook wrapper caps failure log size", async () => {
