@@ -57,6 +57,15 @@ const INSTALL_ROOT =
   process.env.AGENT_TOOLS_HOME || path.join(os.homedir(), ".agent-tools");
 const META_KEY = "_agentTools";
 const META_VERSION = 1;
+// Stamped into install-state.json so a later install can tell which release
+// wrote the current layout. Purely informational today.
+const PACKAGE_VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")).version || "";
+  } catch {
+    return "";
+  }
+})();
 // Everything copied into ~/.agent-tools is built output from dist/ (see
 // scripts/build.mjs); integrations/ holds the sources.
 const SOURCE = {
@@ -630,6 +639,7 @@ function managedSkillStatus(dest, identity) {
 
 function recordManagedSkill(dest, identity) {
   const state = readInstallState();
+  state.packageVersion = PACKAGE_VERSION;
   state.artifacts[skillManifestKey(dest)] = {
     path: fwd(path.resolve(dest)),
     ...identity,

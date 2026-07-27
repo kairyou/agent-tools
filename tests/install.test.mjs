@@ -101,6 +101,11 @@ test("installer installs Claude usage as a managed local skill", () => {
   assert.equal(managed.length, 1);
   assert.equal(managed[0].capability, "usage");
   assert.match(managed[0].sha256, /^[a-f0-9]{64}$/);
+  // Records which release wrote this layout, for diagnosing a later upgrade.
+  const { version: packageVersion } = JSON.parse(
+    readFileSync(join(ROOT, "package.json"), "utf8")
+  );
+  assert.equal(state.packageVersion, packageVersion);
 
   runInstall([...args, "--uninstall"], env);
   assert.equal(existsSync(skillDir), false);
