@@ -475,13 +475,19 @@ test("hook returns the latest local snapshot without waiting for a gateway reque
   const agentHome = join(temp, "agent");
   let requests = 0;
 
+  // Only the seeding request is served; a hook that (wrongly) queried the
+  // gateway would hit this delay, so the budget below has wide margin over
+  // process startup without weakening the check.
+  const SLOW_GATEWAY_MS = 5_000;
+  const HOOK_BUDGET_MS = 2_000;
+
   await withServer((req, res) => {
     requests += 1;
     if (req.url === "/api/usage/token/") {
       res.setHeader("content-type", "application/json");
       setTimeout(() => {
         res.end(JSON.stringify({ data: { quota: 10_000_000, used_quota: 2_500_000 } }));
-      }, requests === 1 ? 0 : 1_200);
+      }, requests === 1 ? 0 : SLOW_GATEWAY_MS);
       return;
     }
     res.statusCode = 404;
@@ -494,7 +500,7 @@ test("hook returns the latest local snapshot without waiting for a gateway reque
       AGENT_TOOLS_HOME: agentHome,
       PROVIDER_USAGE_PRESET: "new-api",
     });
-    assert.ok(Date.now() - startedAt < 800, "hook should not wait for the gateway");
+    assert.ok(Date.now() - startedAt < HOOK_BUDGET_MS, "hook should not wait for the gateway");
     assert.deepEqual(payload, { continue: true, systemMessage: "balance $15.0 | used $5.0/$20.0" });
     assert.doesNotMatch(payload.systemMessage, /cached|refreshing/i);
     const silentPayload = await runHook({
