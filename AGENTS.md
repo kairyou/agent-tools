@@ -33,8 +33,8 @@ after touching anything under `integrations/`.
 
 ## Docs
 
-- No fullwidth punctuation in prose, including in Chinese text. Display symbols
-  such as `-` and the statusline glyphs are fine.
+- Never use CJK/fullwidth punctuation. Write `,` `.` `:` `;` `(` `)` even in
+  Chinese text.
 - `README.md` and `README.zh-CN.md` change together.
 - Prefer deleting a sentence over explaining it. Say what the reader must do,
   not how it works inside.

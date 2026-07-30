@@ -1,7 +1,10 @@
-# at-self-eval
+# Extras
+
+完整可用, 但不属于核心开发流程的内容. 按需单独安装.
+
+## at-self-eval
 
 把贡献者的 git 历史归纳成评审友好的自评产出清单, 用于季度/半年/晋升等绩效周期.
-它不作用于代码, 所以放在这里而不是 [README](../../README.zh-CN.md#skills).
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y

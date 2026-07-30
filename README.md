@@ -71,8 +71,8 @@ Usage:
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
 
-Not a coding workflow: [at-self-eval](docs/en/at-self-eval.md) summarizes git
-history into a performance self-review draft.
+Outside the core workflow: [extras](docs/en/extras.md) covers at-self-eval, which
+summarizes git history into a performance self-review draft.
 
 ## Integrations
 

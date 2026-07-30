@@ -71,7 +71,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
 
-不作用于代码: [at-self-eval](docs/zh-CN/at-self-eval.md) 把 git 历史归纳成绩效自评草稿.
+核心流程之外: [extras](docs/zh-CN/extras.md) 收录 at-self-eval, 把 git 历史归纳成绩效自评草稿.
 
 ## Integrations
 
