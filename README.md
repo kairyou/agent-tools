@@ -235,11 +235,19 @@ Contributors can see the [repository structure](docs/en/repository-structure.md)
 
 ## FAQ
 
-### Why does global installation fail for PromptScript?
+### Why does installing skills report PromptScript as unsupported?
 
 `PromptScript does not support global skill installation` means that the
 PromptScript agent does not support global installation. It does not affect
 other agents and can be ignored. See [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
+
+### How do I install skills without GitHub access?
+
+Install from the npm package instead (swap `at-commit` for the skills you want):
+
+```bash
+cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
+```
 
 ## Acknowledgements
 

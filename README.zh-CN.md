@@ -229,10 +229,18 @@ npx -y github:kairyou/agent-tools usage -a codex
 
 ## FAQ
 
-### 为什么全局安装提示 PromptScript 不支持?
+### 为什么安装 skills 时提示 PromptScript 不支持?
 
 `PromptScript does not support global skill installation` 表示 PromptScript Agent 不支持全局
 安装, 不影响其他 Agent, 可忽略. 参见 [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
+
+### 无法访问 GitHub 时如何安装 skills?
+
+直接从 npm 包安装(`at-commit` 换成你要装的 skill):
+
+```bash
+cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
+```
 
 ## 参考与致谢
 
