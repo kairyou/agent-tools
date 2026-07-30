@@ -153,21 +153,23 @@ Output examples:
 
 ```text
 # Plan limits (sub2api / openai-compatible).
-D $0.0/$100 | W $0.0/$300 | Exp 07-08
+D $0.0/$100 | W $0.0/$300 ⟳3d1h | Exp 07-08
 
 # Multi-window limits (claude-code-hub).
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
 # Balance and usage (one-api / one-hub / done-hub / new-api / openrouter).
-balance $15.0 | used $5.0/$20.0
+balance $15.0 | used $5.0/$20.0 | ⟳3d1h
 
 # Wallet and recent spend (sub2api).
 balance $362 | today $61.7 | 30d $566
 ```
 
 Fields: `5h/D/W/M/T` are five-hour/daily/weekly/monthly/total spend against
-limits; `Exp` is the plan expiry; `balance` is wallet credit; `used` is consumed
-credit; `today` and `30d` are today's and the last 30 days' API spend.
+limits; `⟳` is the time until a known limit reset; `Exp` is the plan expiry;
+`balance` is wallet credit; `used` is consumed credit; `today` and `30d` are
+today's and the last 30 days' API spend. A reset countdown is shown only when
+the gateway returns enough timing information to determine it reliably.
 
 #### Custom gateway routes
 

@@ -149,20 +149,22 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 
 ```text
 # 套餐限额 (sub2api / openai-compatible).
-D $0.0/$100 | W $0.0/$300 | Exp 07-08
+D $0.0/$100 | W $0.0/$300 ⟳3d1h | Exp 07-08
 
 # 多窗口限额 (claude-code-hub).
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
 # 余额与用量 (one-api / one-hub / done-hub / new-api / openrouter).
-balance $15.0 | used $5.0/$20.0
+balance $15.0 | used $5.0/$20.0 | ⟳3d1h
 
 # 钱包与近期消耗 (sub2api).
 balance $362 | today $61.7 | 30d $566
 ```
 
-字段含义: `5h/D/W/M/T` 是 5 小时/日/周/月/总消耗与上限, `Exp` 是套餐到期日,
-`balance` 是钱包余额, `used` 是已用额度, `today` / `30d` 是今日与近 30 天 API 消耗.
+字段含义: `5h/D/W/M/T` 是 5 小时/日/周/月/总消耗与上限, `⟳` 后面是已知限额的
+重置倒计时, `Exp` 是套餐到期日, `balance` 是钱包余额, `used` 是已用额度,
+`today` / `30d` 是今日与近 30 天 API 消耗. 只有网关返回的信息足以可靠确定
+重置时间时才会显示倒计时.
 
 #### 自定义网关路由
 

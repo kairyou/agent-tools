@@ -6,6 +6,15 @@ import { newApiQuotaScale, providerUsageDays } from "./config.mjs";
 
 const ONE_API_HARD_LIMIT_SENTINEL_USD = 1_000_000;
 
+const RESET_TIME_FIELDS = Object.freeze({
+  // Sub2API rate-limit entries returned alongside quota usage.
+  SUB2API_RATE_LIMIT: "reset_at",
+  // Sub2API /v1/usage response: subscription weekly-window anchor.
+  SUB2API_SUBSCRIPTION_WEEKLY_START: "weekly_window_start",
+  // OpenRouter /api/v1/key response: absolute key-limit reset.
+  OPENROUTER_KEY_LIMIT: "limit_reset",
+});
+
 export function pickNumber(obj, keys) {
   for (const key of keys) {
     const value = obj?.[key];
@@ -38,6 +47,45 @@ function shortDate(value) {
   if (!value) return "";
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[2]}-${match[3]}` : "";
+}
+
+function timestampMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function compactDurationUntil(value) {
+  const resetMs = timestampMs(value);
+  if (resetMs === undefined) return "";
+
+  const remainingMs = resetMs - Date.now();
+  if (remainingMs <= 0) return "";
+
+  let seconds = Math.floor(remainingMs / 1000);
+  if (seconds <= 0) return "0m";
+  const days = Math.floor(seconds / 86400);
+  seconds %= 86400;
+  const hours = Math.floor(seconds / 3600);
+  seconds %= 3600;
+  const minutes = Math.floor(seconds / 60);
+  if (days) return `${days}d${hours}h`;
+  if (hours) return `${hours}h${minutes}m`;
+  return `${minutes}m`;
+}
+
+function rateLimitResetAt(entry) {
+  const value = entry?.[RESET_TIME_FIELDS.SUB2API_RATE_LIMIT];
+  return timestampMs(value) === undefined ? undefined : value;
+}
+
+function weeklyResetAt(subscription) {
+  const startMs = timestampMs(
+    subscription?.[RESET_TIME_FIELDS.SUB2API_SUBSCRIPTION_WEEKLY_START]
+  );
+  return startMs === undefined ? undefined : startMs + 7 * 86400 * 1000;
 }
 
 function hasSubscriptionLimits(root) {
@@ -163,7 +211,7 @@ export function formatOpenRouterLine(data) {
   const limit = pickNumber(root, ["limit", "limit_remaining", "total_credits"]);
   const remaining = pickNumber(root, ["limit_remaining", "remaining_credits"]);
   const used = pickNumber(root, ["usage", "total_usage", "spend"]);
-  const reset = root?.limit_reset || root?.reset_at ? shortDate(root.limit_reset || root.reset_at) : "";
+  const reset = compactDurationUntil(root?.[RESET_TIME_FIELDS.OPENROUTER_KEY_LIMIT]);
   const parts = [];
 
   if (remaining !== undefined) parts.push(`balance ${formatMoney(remaining)}`);
@@ -172,7 +220,7 @@ export function formatOpenRouterLine(data) {
   } else if (used !== undefined) {
     parts.push(`used ${formatMoney(used)}`);
   }
-  if (reset) parts.push(`Reset ${reset}`);
+  if (reset) parts.push(`⟳${reset}`);
 
   if (parts.length === 0) throw new Error("OpenRouter payload has no usage fields");
   return parts.join(" | ");
@@ -254,8 +302,9 @@ function formatQuotaLimitedLine(root) {
         const window = entry?.window;
         const rateLimit = pickNumber(entry, ["limit"]);
         const rateUsed = pickNumber(entry, ["used"]);
+        const reset = compactDurationUntil(rateLimitResetAt(entry));
         return window && rateLimit !== undefined && rateUsed !== undefined
-          ? `${window} ${formatMoney(rateUsed)}/${formatMoney(rateLimit)}`
+          ? `${window} ${formatMoney(rateUsed)}/${formatMoney(rateLimit)}${reset ? ` ⟳${reset}` : ""}`
           : "";
       })
       .filter(Boolean);
@@ -290,10 +339,13 @@ function formatUsageLine(root) {
   const monthlyLimit = pickNumber(sub, ["monthly_limit_usd"]);
   const monthlyUsage = pickNumber(sub, ["monthly_usage_usd"]);
   const expires = shortDate(sub.expires_at);
+  const weeklyReset = compactDurationUntil(weeklyResetAt(sub));
 
   const parts = [];
   if (dailyLimit > 0 && dailyUsage !== undefined) parts.push(`D ${formatMoney(dailyUsage)}/${formatMoney(dailyLimit)}`);
-  if (weeklyLimit > 0 && weeklyUsage !== undefined) parts.push(`W ${formatMoney(weeklyUsage)}/${formatMoney(weeklyLimit)}`);
+  if (weeklyLimit > 0 && weeklyUsage !== undefined) {
+    parts.push(`W ${formatMoney(weeklyUsage)}/${formatMoney(weeklyLimit)}${weeklyReset ? ` ⟳${weeklyReset}` : ""}`);
+  }
   if (monthlyLimit > 0 && monthlyUsage !== undefined) parts.push(`M ${formatMoney(monthlyUsage)}/${formatMoney(monthlyLimit)}`);
   if (expires) parts.push(`Exp ${expires}`);
   return parts.join(" | ");

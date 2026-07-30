@@ -177,6 +177,118 @@ test("local usage CLI queries Codex and Claude without a package manager", async
   });
 });
 
+test("Sub2API weekly limits include the time until reset", async () => {
+  const resetInMs = ((3 * 24 + 1) * 60 + 30) * 60 * 1000;
+  const weeklyWindowStart = new Date(Date.now() + resetInMs - 7 * 86400 * 1000).toISOString();
+
+  await withServer((req, res) => {
+    if (req.url === "/v1/usage?days=30") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        subscription: {
+          weekly_limit_usd: 480,
+          weekly_usage_usd: 153.0666432,
+          weekly_window_start: weeklyWindowStart,
+        },
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const payload = await runProvider({ baseUrl: `${baseUrl}/v1`, preset: "sub2api" });
+    assert.equal(payload.systemMessage, "W $153/$480 ⟳3d1h");
+  });
+});
+
+test("v1 usage rate-limit windows require an explicit reset time", async () => {
+  const fiveHourReset = new Date(Date.now() + ((2 * 60 + 54) * 60 + 30) * 1000).toISOString();
+  const weeklyResetInMs = ((3 * 24 + 1) * 60 + 30) * 60 * 1000;
+  const weeklyWindowStart = new Date(Date.now() + weeklyResetInMs - 7 * 86400 * 1000).toISOString();
+
+  await withServer((req, res) => {
+    if (req.url === "/v1/usage?days=30") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        mode: "quota_limited",
+        quota: { limit: 100, used: 20 },
+        rate_limits: [
+          { window: "5h", limit: 10, used: 2.1, reset_at: fiveHourReset },
+          { window: "W", limit: 480, used: 153.0666432, window_start: weeklyWindowStart },
+        ],
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const payload = await runProvider({ baseUrl: `${baseUrl}/v1`, preset: "openai-compatible" });
+    assert.equal(payload.systemMessage, "Q $20.0/$100 | 5h $2.1/$10.0 ⟳2h54m, W $153/$480");
+  });
+});
+
+test("expired Sub2API windows omit the reset countdown", async () => {
+  const expiredWindowStart = new Date(Date.now() - 8 * 86400 * 1000).toISOString();
+
+  await withServer((req, res) => {
+    if (req.url === "/v1/usage?days=30") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        subscription: {
+          weekly_limit_usd: 480,
+          weekly_usage_usd: 0,
+          weekly_window_start: expiredWindowStart,
+        },
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const payload = await runProvider({ baseUrl: `${baseUrl}/v1`, preset: "sub2api" });
+    assert.equal(payload.systemMessage, "W $0.0/$480");
+  });
+});
+
+test("OpenRouter limit reset is displayed as a compact countdown", async () => {
+  const resetAt = new Date(Date.now() + ((3 * 24 + 1) * 60 + 30) * 60 * 1000).toISOString();
+
+  await withServer((req, res) => {
+    if (req.url === "/api/v1/key") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ data: {
+        limit: 20,
+        limit_remaining: 15,
+        usage: 5,
+        limit_reset: resetAt,
+      } }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const payload = await runProvider({ baseUrl: `${baseUrl}/api/v1`, preset: "openrouter" });
+    assert.equal(payload.systemMessage, "balance $15.0 | used $5.0/$20.0 | ⟳3d1h");
+  });
+});
+
+test("a future reset less than one minute away is displayed as zero minutes", async () => {
+  const resetAt = new Date(Date.now() + 45 * 1000).toISOString();
+
+  await withServer((req, res) => {
+    if (req.url === "/api/v1/key") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ data: { usage: 5, limit_reset: resetAt } }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const payload = await runProvider({ baseUrl: `${baseUrl}/api/v1`, preset: "openrouter" });
+    assert.equal(payload.systemMessage, "used $5.0 | ⟳0m");
+  });
+});
+
 test("local usage CLI rejects unsupported agents without querying", async () => {
   const result = await runUsageCli("opencode", {});
   assert.equal(result.status, 2);
