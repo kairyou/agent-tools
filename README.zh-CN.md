@@ -77,6 +77,7 @@ Runtime capability, 按 agent 选装:
 
 ```bash
 npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
+# npx -y github:kairyou/agent-tools <capability> -a <agent...>  # 或用 GitHub 上的最新代码(需 Git)
 ```
 
 `--dry-run` 预览, `--uninstall` 解除对应集成, 重新执行安装命令即为更新.
@@ -217,16 +218,6 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背�
 
 [extras](docs/zh-CN/extras.md) 收录场景较窄的内容.
 
-## 从 Git 运行
-
-如需直接使用仓库版本, 可将 npm 包名替换为 `github:kairyou/agent-tools` (本机需已安装 Git):
-
-```bash
-npx -y github:kairyou/agent-tools usage -a codex
-```
-
-贡献者可参考[仓库结构](docs/zh-CN/repository-structure.md).
-
 ## FAQ
 
 ### 为什么安装 skills 时提示 PromptScript 不支持?
@@ -241,6 +232,10 @@ npx -y github:kairyou/agent-tools usage -a codex
 ```bash
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
 ```
+
+### 想参与开发?
+
+参见[仓库结构](docs/zh-CN/repository-structure.md).
 
 ## 参考与致谢
 

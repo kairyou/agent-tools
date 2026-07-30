@@ -77,6 +77,7 @@ Runtime capabilities, installed per agent:
 
 ```bash
 npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
+# npx -y github:kairyou/agent-tools <capability> -a <agent...>  # Or the latest code from GitHub (needs Git)
 ```
 
 `--dry-run` previews, `--uninstall` unwires the integration from the agent, and
@@ -222,17 +223,6 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the nav
 
 See [extras](docs/en/extras.md) for situational content.
 
-## Run from Git
-
-To run directly from the repository, replace the npm package name with
-`github:kairyou/agent-tools` (Git required):
-
-```bash
-npx -y github:kairyou/agent-tools usage -a codex
-```
-
-Contributors can see the [repository structure](docs/en/repository-structure.md).
-
 ## FAQ
 
 ### Why does installing skills report PromptScript as unsupported?
@@ -248,6 +238,10 @@ Install from the npm package instead (swap `at-commit` for the skills you want):
 ```bash
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
 ```
+
+### Want to contribute?
+
+See the [repository structure](docs/en/repository-structure.md).
 
 ## Acknowledgements
 
