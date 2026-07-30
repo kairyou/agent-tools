@@ -36,7 +36,7 @@ export async function run(context, { requestJson, agentConfig }) {
   const session = await login.json();
 
   // requestJson 会解析 JSON, 并在非 2xx 响应时抛错; 需要时可在这里传入
-  // authorization、cookie 等自定义认证 header.
+  // authorization, cookie 等自定义认证 header.
   const me = await requestJson(`${context.baseUrl}/api/user/self`, {
     headers: { authorization: `Bearer ${session?.data?.accessToken}` },
   });
