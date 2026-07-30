@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-可复用的 Agent Skills, 以及面向 Codex, Claude Code 与 opencode 的可安装 integrations: statusline, provider usage 与跨模型识图.
+可复用的 Agent Skills, 以及可装入 Codex, Claude Code 与 opencode 的 integrations: statusline, provider usage 与跨模型识图.
 
 需要 Node.js >= 22.
 
@@ -70,8 +70,6 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 - `/at-zentao task <id>` — 直接处理指定 task
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
-
-核心流程之外: [extras](docs/zh-CN/extras.md) 收录 at-self-eval, 把 git 历史归纳成绩效自评草稿.
 
 ## Integrations
 
@@ -214,6 +212,10 @@ npx -y @kairyou/agent-tools@latest vision -a claude codex opencode
 ```bash
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背景色和高度是多少"
 ```
+
+## Extras
+
+[extras](docs/zh-CN/extras.md) 收录场景较窄的内容.
 
 ## 从 Git 运行
 

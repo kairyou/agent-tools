@@ -1,7 +1,7 @@
 {
   "name": "agent-tools",
   "version": "0.1.0",
-  "description": "Reusable Agent Skills and installable integrations (statusline, provider usage, vision) for Codex, Claude Code, and opencode",
+  "description": "Reusable Agent Skills, plus integrations (statusline, provider usage, vision) that install into Codex, Claude Code, and opencode",
   "author": {
     "name": "kairyou"
   },

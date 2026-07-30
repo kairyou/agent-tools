@@ -1,6 +1,6 @@
 # Extras
 
-Fully usable, but outside the core development workflow. Install each on demand.
+Fully usable, just situational. Install each on demand.
 
 ## at-self-eval
 

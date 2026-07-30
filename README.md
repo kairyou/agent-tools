@@ -1,6 +1,6 @@
 # Agent Tools
 
-Reusable Agent Skills and installable integrations — statusline, provider usage, and vision — for Codex, Claude Code, and opencode.
+Reusable Agent Skills, plus integrations (statusline, provider usage, vision) that install into Codex, Claude Code, and opencode.
 
 Requires Node.js >= 22.
 
@@ -70,9 +70,6 @@ Usage:
 - `/at-zentao task <id>` — work a specific task
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
-
-Outside the core workflow: [extras](docs/en/extras.md) covers at-self-eval, which
-summarizes git history into a performance self-review draft.
 
 ## Integrations
 
@@ -220,6 +217,10 @@ To diagnose the provider setup or test recognition quality manually:
 ```bash
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the navbar background color and height?"
 ```
+
+## Extras
+
+See [extras](docs/en/extras.md) for situational content.
 
 ## Run from Git
 
