@@ -33,7 +33,8 @@ after touching anything under `integrations/`.
 
 ## Docs
 
-- ASCII punctuation everywhere, including in Chinese text.
+- No fullwidth punctuation in prose, including in Chinese text. Display symbols
+  such as `-` and the statusline glyphs are fine.
 - `README.md` and `README.zh-CN.md` change together.
 - Prefer deleting a sentence over explaining it. Say what the reader must do,
   not how it works inside.
