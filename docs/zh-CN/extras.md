@@ -24,7 +24,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 
 ## at-daily-log
 
-汇总一天内各项目的 Git 活动, 生成工作日报.
+按天汇总各项目的 Git 活动, 生成工作日报.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -34,11 +34,12 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 
 - `/at-daily-log` — 输出今天的日报
 - `/at-daily-log 2026-07-31` — 指定日期
+- `/at-daily-log 上周` / `/at-daily-log 最近两周` — 范围内每天一条, 跳过没有提交的日子
 - `/at-daily-log 统计 C:\projects\project-a 今天的工作` — 只统计指定项目
 - `/at-daily-log 另外包含 C:\projects\project-c` — 在默认范围上追加
 - `/at-daily-log 记录日报` — 记录到配置的文件; 同一天重复执行只更新生成的部分
 - `/at-daily-log 记录到 C:\projects\daily-log.md` — 记录到指定文件
-- `/at-daily-log 每个工作日 18:00 自动记录` — 引导搭建系统定时任务
+- `/at-daily-log 每天 18:00 自动记录` — 引导搭建系统定时任务; 没有提交的日子不会写入
 
 生成的结果请人工核对.
 

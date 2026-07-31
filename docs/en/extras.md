@@ -25,7 +25,7 @@ Review the generated result before use.
 
 ## at-daily-log
 
-Summarize the day's Git activity across projects into a daily work log.
+Summarize each day's Git activity across projects into a daily work log.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -35,11 +35,12 @@ Usage:
 
 - `/at-daily-log` — print today's log
 - `/at-daily-log 2026-07-31` — pick the date
+- `/at-daily-log last week` / `/at-daily-log the last two weeks` — one entry per active day, empty days skipped
 - `/at-daily-log summarize today for C:\projects\project-a` — only that project
 - `/at-daily-log also include C:\projects\project-c` — add to the default scope
 - `/at-daily-log record the log` — record to the configured file; rerunning a day only refreshes the generated part
 - `/at-daily-log record it to C:\projects\daily-log.md` — record to that file
-- `/at-daily-log record every workday at 18:00` — guides you through an OS scheduled task
+- `/at-daily-log record daily at 18:00` — guides you through an OS scheduled task; days without commits are not written
 
 Review the generated result before use.
 

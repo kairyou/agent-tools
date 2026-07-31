@@ -1,7 +1,7 @@
 ---
 name: at-daily-log
-description: "Summarize one day's Git activity into a concise daily work log. Uses the current repository, optional configured work projects, or paths named in conversation; configuration is never required."
-argument-hint: "[<date>]"
+description: "Summarize each day's Git activity into a concise daily work log, for a single date or a range. Uses the current repository, optional configured work projects, or paths named in conversation; configuration is never required."
+argument-hint: "[<date>|<range>]"
 ---
 
 # Daily Work Log
@@ -10,8 +10,9 @@ argument-hint: "[<date>]"
 
 ## Date and evidence scope
 
-Default to today. Accept plain-language dates or `YYYY-MM-DD`; query through the next
-day because Git's `--until` boundary is exclusive. State the resolved date.
+Default to today. Accept plain-language dates or ranges (`2026-07-31`, yesterday, last
+week, this month) and normalize to `[from, to]`; query through `<to + 1 day>` because
+Git's `--until` boundary is exclusive. State the resolved date or range.
 
 Read optional `workProjects` from `~/.agent-tools/config.jsonc`.
 
@@ -64,7 +65,8 @@ Match the user's language and omit empty sections:
 ```
 
 Prefer outcomes over raw Git metrics. If no verified activity exists, say so rather
-than fabricate an entry.
+than fabricate an entry. For a range, output one entry per day with activity, oldest
+first, and skip empty days.
 
 ## Draft or record
 
@@ -76,24 +78,30 @@ write request, writes after previewing the entry. Resolve the destination in ord
 3. no destination: return the draft without writing.
 
 Read the destination before editing. Wrap each date's generated content in that date's
-own markers, `<!-- log:2026-07-31:start -->` / `<!-- log:2026-07-31:end -->`; the date
-line and every line outside the markers belong to the user. For an existing date, show
+own markers, `<!-- log:2026-07-31:start 5,a1b2c3d -->` / `<!-- log:2026-07-31:end -->`,
+where the start marker stores the day's commit count and newest commit hash across the
+scanned projects; the date line and every line outside the markers belong to the user.
+Refresh an existing block when either value changed or the user explicitly asks;
+otherwise leave it alone, because regenerated wording varies between runs. For an existing date, show
 the current block and the regenerated one before writing, then replace only that
 date's block. If the date exists without markers, append a marked block below the
 user's lines instead of editing them. Do not duplicate the date. On duplicate or
 unpaired markers, stop and propose the edit instead of writing. When Git shows no
 activity, leave the file unchanged and say so; the user can add a manual entry
-themselves.
+themselves. Recording a range applies these rules to each day's block independently.
 
 Scheduling is separate; set it up only when the user asks. Prefer the OS scheduler
 (Task Scheduler, cron, launchd) over agent-internal timers, which stop with the agent:
 schedule a headless run of the CLI this skill is executing in, invoking the skill with
-a recording request (in Claude Code, `claude -p "/at-daily-log record the log"`; other
-CLIs have their own headless form). Keep projects and output in config so the command
-stays stable. Before registering, confirm the schedule (suggest workdays),
-make sure the output file is resolvable, and run the exact command once; register only
-after that test run records correctly, and show how to remove the task. Headless auth
+the recording request the user asked for (in Claude Code,
+`claude -p "/at-daily-log record the log"`; other CLIs have their own headless form).
+Keep projects and output in config so the command stays stable. Before registering,
+confirm the schedule, make sure the output file is resolvable, and run the exact
+command once; register only after that test run records correctly, and show how to
+remove the task. Headless auth
 differs from the interactive session, so a failed test run means stop instead of
 registering, and show the exact command, its error output, and the likely fix (log in
-for headless use, adjust the output path). An unattended run has nobody to confirm with, so it must follow the
-marker rules exactly and skip any file it cannot edit that way.
+for headless use, adjust the output path). An unattended run has nobody to confirm
+with, so it must follow the marker rules exactly and skip any file it cannot edit that
+way: it fills missing days and refreshes days whose stored count or hash moved,
+nothing else.
