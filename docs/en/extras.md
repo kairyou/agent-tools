@@ -38,6 +38,7 @@ Usage:
 - `/at-daily-log also include C:\projects\project-c` — add to the default scope
 - `/at-daily-log record the log` — record to the configured file; rerunning a day only refreshes the generated part
 - `/at-daily-log record it to C:\projects\todo.md` — record to that file
+- `/at-daily-log record every workday at 18:00` — guides you through an OS scheduled task
 
 Review the generated result before use.
 

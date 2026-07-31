@@ -81,7 +81,15 @@ that date has no markers, append a marked block below the user's lines instead o
 editing them. Do not duplicate the date. When Git shows no activity, leave the file
 unchanged and say so; the user can add a manual entry themselves.
 
-Scheduling is separate. Only create a scheduled task when the user asks; it should call
-this skill and request recording, while project and output paths remain in config. An
-unattended run has nobody to confirm with, so it must follow the marker rules exactly
-and skip any file it cannot edit that way.
+Scheduling is separate; set it up only when the user asks. Prefer the OS scheduler
+(Task Scheduler, cron, launchd) over agent-internal timers, which stop with the agent:
+schedule a headless run of the CLI this skill is executing in, invoking the skill with
+a recording request (in Claude Code, `claude -p "/at-daily-log record the log"`; other
+CLIs have their own headless form). Keep projects and output in config so the command
+stays stable. Before registering, confirm the schedule (suggest workdays),
+make sure the output file is resolvable, and run the exact command once; register only
+after that test run records correctly, and show how to remove the task. Headless auth
+differs from the interactive session, so a failed test run means stop instead of
+registering, and show the exact command, its error output, and the likely fix (log in
+for headless use, adjust the output path). An unattended run has nobody to confirm with, so it must follow the
+marker rules exactly and skip any file it cannot edit that way.
