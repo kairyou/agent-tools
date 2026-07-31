@@ -60,6 +60,9 @@ Match the user's language:
   2. vscode-plugin: 修复 Webview 刷新后状态丢失问题, 补充回归验证.
 ```
 
+Start each item with the label that best locates the work for a reader: the project
+name when the day spans projects, a module or feature within a single one.
+
 Keep entries compact: the file accumulates for months, so every recurring line must
 earn its place. Do not add per-day summary, total, or section-header lines; the
 numbered items already show project and count.
