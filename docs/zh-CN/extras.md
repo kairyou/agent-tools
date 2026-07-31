@@ -49,10 +49,11 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 
 ```jsonc
 {
-  // at-self-eval, at-daily-log: 默认统计的项目(不配则只统计当前项目)
+  // at-self-eval, at-daily-log: 默认统计的项目(不配则只统计当前项目);
+  // rules: 用大白话写下该项目怎么统计和表述
   "workProjects": [
     "C:\\projects\\project-a",
-    "C:\\projects\\project-b"
+    { "path": "C:\\projects\\project-b", "rules": "代号 phoenix 写成商城App, 跳过 test: 开头的提交" }
     // "C:\\projects\\temporarily-disabled"
   ],
   // at-daily-log: 记录日报的默认文件; 未提供日志时 at-self-eval 也读它作补充

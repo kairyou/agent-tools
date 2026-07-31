@@ -14,7 +14,9 @@ Default to today. Accept plain-language dates or ranges (`2026-07-31`, yesterday
 week, this month) and normalize to `[from, to]`; query through `<to + 1 day>` because
 Git's `--until` boundary is exclusive. State the resolved date or range.
 
-Read optional `workProjects` from `~/.agent-tools/config.jsonc`.
+Read optional `workProjects` from `~/.agent-tools/config.jsonc`. An entry is a path
+or `{ "path", "rules" }`, where the rules are free text this skill follows for that
+project, such as how to label items or which commits to skip.
 
 - No project named: current Git repository plus configured projects.
 - Projects named directly: only those projects.
@@ -37,7 +39,9 @@ by hash.
 Collect non-merge commits for the resolved author and day. Use subjects and changed
 paths to turn related commits into concrete completed work items. Fold formatting,
 version bumps, and follow-up fixes into the outcome they supported; do not inflate one
-change into several deliverables.
+change into several deliverables. Never restate a
+commit subject as the work item; describe the outcome it produced. A day left with
+nothing has no reportable activity.
 
 Use file counts and added/deleted lines only when they meaningfully support the work
 item. Generated files, lockfile churn, renames, and bulk formatting often make those

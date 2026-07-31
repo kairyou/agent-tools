@@ -50,10 +50,11 @@ All in `~/.agent-tools/config.jsonc`:
 
 ```jsonc
 {
-  // at-self-eval, at-daily-log: default projects (otherwise just the current repo)
+  // at-self-eval, at-daily-log: default projects (otherwise just the current repo);
+  // rules: how to summarize and word that project, in plain language
   "workProjects": [
     "C:\\projects\\project-a",
-    "C:\\projects\\project-b"
+    { "path": "C:\\projects\\project-b", "rules": "write codename phoenix as Shop App; skip commits starting with test:" }
     // "C:\\projects\\temporarily-disabled"
   ],
   // at-daily-log: default file when asked to record; at-self-eval also reads it as fallback
