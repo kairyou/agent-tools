@@ -4,8 +4,8 @@ Fully usable, just situational. Install each on demand.
 
 ## at-self-eval
 
-Summarize a contributor's git history into a review-friendly self-evaluation for
-performance cycles (quarterly, semi-annual, promotion).
+Summarize git history, a work log you provide, or both into a self-evaluation
+for performance cycles (quarterly, semi-annual, promotion).
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y

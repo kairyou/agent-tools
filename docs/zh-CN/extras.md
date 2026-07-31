@@ -4,7 +4,7 @@
 
 ## at-self-eval
 
-把贡献者的 git 历史归纳成评审友好的自评产出清单, 用于季度/半年/晋升等绩效周期.
+把 git 历史或你提供的工作日志归纳成自评产出清单, 用于季度/半年/晋升等绩效周期.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
