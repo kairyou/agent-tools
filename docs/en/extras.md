@@ -19,7 +19,7 @@ Usage:
 - `/at-self-eval summarize July for C:\projects\project-a and C:\projects\project-b` — only those projects
 - `/at-self-eval also include C:\projects\project-c` — add to the default scope
 - Paste a daily/weekly log, or give a file path, to add business context
-- `/at-self-eval summarize from C:\projects\todo.md only` — log only, Git is not read
+- `/at-self-eval summarize from C:\projects\daily-log.md only` — log only, Git is not read
 
 Review the generated result before use.
 
@@ -38,7 +38,7 @@ Usage:
 - `/at-daily-log summarize today for C:\projects\project-a` — only that project
 - `/at-daily-log also include C:\projects\project-c` — add to the default scope
 - `/at-daily-log record the log` — record to the configured file; rerunning a day only refreshes the generated part
-- `/at-daily-log record it to C:\projects\todo.md` — record to that file
+- `/at-daily-log record it to C:\projects\daily-log.md` — record to that file
 - `/at-daily-log record every workday at 18:00` — guides you through an OS scheduled task
 
 Review the generated result before use.
@@ -57,7 +57,7 @@ All in `~/.agent-tools/config.jsonc`:
   ],
   // at-daily-log: default file when asked to record; at-self-eval also reads it as fallback
   "dailyLog": {
-    "output": "C:\\projects\\todo.md"
+    "output": "C:\\projects\\daily-log.md"
   }
 }
 ```

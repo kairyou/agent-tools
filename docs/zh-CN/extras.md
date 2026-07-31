@@ -18,7 +18,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 - `/at-self-eval 统计 C:\projects\project-a 和 C:\projects\project-b 的 7 月工作` — 只统计指定项目
 - `/at-self-eval 另外包含 C:\projects\project-c` — 在默认范围上追加
 - 可粘贴日报或周报文本, 也可提供文件路径补充业务背景
-- `/at-self-eval 只根据 C:\projects\todo.md 总结` — 只凭日志生成, 不读 Git
+- `/at-self-eval 只根据 C:\projects\daily-log.md 总结` — 只凭日志生成, 不读 Git
 
 生成的结果请人工核对.
 
@@ -37,7 +37,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 - `/at-daily-log 统计 C:\projects\project-a 今天的工作` — 只统计指定项目
 - `/at-daily-log 另外包含 C:\projects\project-c` — 在默认范围上追加
 - `/at-daily-log 记录日报` — 记录到配置的文件; 同一天重复执行只更新生成的部分
-- `/at-daily-log 记录到 C:\projects\todo.md` — 记录到指定文件
+- `/at-daily-log 记录到 C:\projects\daily-log.md` — 记录到指定文件
 - `/at-daily-log 每个工作日 18:00 自动记录` — 引导搭建系统定时任务
 
 生成的结果请人工核对.
@@ -56,7 +56,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
   ],
   // at-daily-log: 记录日报的默认文件; 未提供日志时 at-self-eval 也读它作补充
   "dailyLog": {
-    "output": "C:\\projects\\todo.md"
+    "output": "C:\\projects\\daily-log.md"
   }
 }
 ```

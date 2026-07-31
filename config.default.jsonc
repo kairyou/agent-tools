@@ -27,6 +27,6 @@
 
   // at-daily-log: default file when asked to record; at-self-eval reads it as fallback
   // , "dailyLog": {
-  //   "output": "C:\\projects\\todo.md"
+  //   "output": "C:\\projects\\daily-log.md"
   // }
 }
