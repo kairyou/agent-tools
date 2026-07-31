@@ -1,10 +1,6 @@
-// agent-tools config.
-// statusline.fields controls both visibility and order.
-// Remove a field to hide it; move a field to reorder it.
-// Available statusline fields: branch, model, fiveHour, week, context, directory.
-// providerUsage is used by the shared usage runtime.
 {
   "statusline": {
+    // Shown in this order; available: branch, model, fiveHour, week, context, directory
     "fields": ["branch", "model", "fiveHour", "week"],
     "separator": " | ",
     "symbols": {
@@ -17,7 +13,18 @@
     }
   },
   "providerUsage": {
-    "days": 30,
-    "debug": false
+    "days": 30,     // recent days of spend to count
+    "debug": false  // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
+
+  // at-self-eval, at-daily-log: default projects (otherwise just the current repo)
+  // , "workProjects": [
+  //   "C:\\projects\\project-a",
+  //   "C:\\projects\\project-b"
+  // ]
+
+  // at-daily-log: default file when asked to record the log
+  // , "dailyLog": {
+  //   "output": "C:\\projects\\todo.md"
+  // }
 }

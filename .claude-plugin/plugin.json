@@ -7,6 +7,7 @@
   },
   "skills": [
     "./skills/workflow/at-commit",
+    "./skills/workflow/at-daily-log",
     "./skills/workflow/at-review",
     "./skills/workflow/at-self-eval",
     "./skills/workflow/at-simplify",

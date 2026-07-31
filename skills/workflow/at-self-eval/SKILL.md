@@ -1,186 +1,99 @@
 ---
 name: at-self-eval
-description: "Summarize a contributor's git history into a concise, review-friendly self-evaluation for performance cycles (quarterly / semi-annual / promotion). Use when the user asks for a PBC, self-review, or work summary. A daily/weekly log may be pasted or a path provided to enrich the result; other repos or branches may be mentioned to aggregate across projects (all optional)."
+description: "Summarize a contributor's Git history into a concise, review-friendly self-evaluation for quarterly, semi-annual, or promotion cycles. Optional logs and additional projects can enrich the evidence."
 argument-hint: "[<author>] [--from yyyy-mm-dd] [--to yyyy-mm-dd]"
 ---
 
 # Self-Evaluation Summary
 
-`git log → group by business line → dedupe → ≤8 concise output points → human review`
+`resolve evidence -> group by business line -> deduplicate -> <=8 outcomes -> review`
 
-## Phase 0 — Gather the evidence
+## Author and date window
 
-Normalize every input form — flags, partial flags, or plain language like
-`统计 1-3月的产出` / `统计上半年的工作` — into a **determined** `(author, from,
-to)` triple, then query. The user's explicit date range always wins; defaults
-only fill what the user did not say. Re-state the resolved window in the output
-header so the user can catch a wrong inference at a glance.
+Normalize flags or plain language such as `统计1-3月的产出` and `统计上半年的工作`
+into `(author, from, to)`. Explicit input wins; fill only missing values:
 
-```bash
-# author — default to the current git identity, do NOT guess variants
-AUTHOR=$(git config user.name)
-# --until is EXCLUSIVE of its date, so push it +1 day to include the last day
-git log --author="$AUTHOR" --since="<from>" --until="<to + 1 day>" --no-merges --format="%ad %s" --date=short
-```
-
-**Author — do not guess:**
-
-1. Default `<author>` to `git config user.name`. Query only with that name; do
-   not infer or try variants. Note that `git log --author` uses regex matching,
-   so this rule limits identity guessing rather than promising strict equality.
-2. If 0 commits come back, do NOT auto-try pinyin/Chinese variants (risk of
-   mismatching a different person or inflating counts). Tell the user nothing
-   was found and show how to self-identify:
-   ```bash
-   git log --format='%an' | sort -u
-   ```
-3. If results come back, end the output with a one-line hint: the user may have
-   commits under other names and can rerun with `--author "name1\|name2"`.
-
-**Date range — `--until` is exclusive, `--since` is inclusive:**
-
-`git log --until=2026-06-30` means *before 2026-06-30 00:00:00* — it silently
-drops every commit on June 30. Always pass `<to + 1 day>` as `--until`.
-
-Fill missing dimensions (user's explicit range always wins):
-
-| User gave | resolved to |
+| User gave | Resolve to |
 | --- | --- |
-| Both `--from` and `--to` | use as-is (apply the `--until +1 day` fix) |
-| Only `--from` | `to` = today |
-| Only `--to` | `from` = Jan 1 of `to`'s year |
-| Neither / plain-language time | **current quarter** |
+| `from` and `to` | use both |
+| only `from` | `to` = today |
+| only `to` | `from` = Jan 1 of that year |
+| no range | current quarter |
 
-Plain-language time (`上半年` / `1-3月` / `近三个月` / `Q1` etc.) → parse to dates,
-defaulting to the current year; if the current month is earlier than the spoken
-months (e.g. it's Feb and the user says `统计 11-12 月`), use the previous
-calendar year. `上半年/下半年` → Jan–Jun / Jul–Dec; `Q1…/一季度…` → calendar
-quarter; `近三个月/最近一个月` → rolling window ending today. No time given →
-current quarter.
+Parse half-years, calendar quarters, month ranges, and rolling periods. Default to the
+current year, except spoken months still ahead of the current month refer to the
+previous year. Query through `<to + 1 day>` because Git's `--until` is exclusive.
+Always exclude merge commits.
 
-`--no-merges` always — merge commits are not deliverables.
+Use an explicit author when supplied; otherwise resolve it independently per repository
+with `git -C <root> config user.name`. Never infer aliases or use the remote login as
+the author. If no commits match, report that and suggest listing known commit authors;
+do not try spelling or language variants. When results exist, mention once that the
+user can provide other author names if needed.
 
-**Re-state the window (required):** the output MUST begin with a one-line header
-so the user can verify or correct an auto-inferred window:
+## Project evidence
 
-```
-> 作者: <author> · 窗口: 2026-01-01 ~ 2026-03-31 · (时间窗口为自动推断, 如不对请指正后重跑)
-```
+Read optional `workProjects` from `~/.agent-tools/config.jsonc`.
 
-When aggregating multiple repos, append a second line listing each repo and the
-branch used. Use plain words, never git jargon like "HEAD":
+- No project named: current Git repository plus configured projects.
+- Projects named directly: only those projects.
+- "Also include" / `另外包含`: add them to the default scope.
 
-```
-> 仓库: <repo1> (分支 next) · <repo2> (分支 main) · (未指定的均用各仓库当前分支, 如不对请指正)
-```
+Resolve paths to Git roots and deduplicate them. Report invalid paths; a non-Git current
+directory does not block other valid projects. Do not clone remote URLs without consent.
 
-No commit count, no "source" line — they add noise without review value.
+Inspect all local branches, current HEAD, user-named branches, and configured upstreams.
+Unless the user requests local-only data, refresh each remote with one best-effort
+`git fetch --no-tags`. Fetch failure is non-fatal. Do not change the working tree or
+local branch history. Deduplicate commits by hash.
 
-### Supplementary context (optional, conversation-driven)
+Begin the result with the resolved author/window and, for multiple repositories, a
+plain-language list of the repositories checked. Mention remote-update failures without
+Git jargon. Do not show commit counts or a generic source line.
 
-Daily/weekly logs, other repos, and other branches are all **optional
-supplementary context**, handled the same way — never via flags. The user offers
-them in conversation; the skill asks to clarify only when the user has already
-expressed intent. Do not prompt for these at the start.
+## Optional logs
 
-**Daily/weekly log** (pasted text or a provided file path) is background context:
-1. Format-agnostic — do not assume any date sectioning or schema; read as
-   continuous text to pick up business-line attribution and intent that commit
-   messages lack.
-2. No fabrication — commit-backed items may be summarized directly. Log-only
-   items must not be mixed into confirmed deliverables; if one appears to be a
-   real non-code outcome (design, research, review, training, delivery support,
-   coordination), list it separately for user confirmation. Include it in the
-   final summary only after the user confirms it.
-3. No time re-attribution — dates come from git log only; for a confirmed
-   log-only outcome, use only a date explicitly present in the log or provided
-   by the user.
+A pasted daily/weekly log or explicit file path provides business context. If neither is
+supplied, optionally read `dailyLog.output` from config. Explicit conversation input
+always wins; a missing log is non-fatal.
 
-**Other repos** (user pastes a path or a remote URL):
-- **Local path** → query with `git -C <path> log ...`; resolve that repo's author
-  independently (same no-guessing rule as the primary repo). Default to that
-  repo's current branch, surfaced in the header for correction.
-- **Remote URL** → do NOT auto-clone. Ask the user whether to clone into a temp
-  dir for this run; only clone on explicit yes. On yes, clone to a temp dir,
-  query it, then delete the temp dir when done (keep it only if the user asks).
-  On no, ask for a local path or have them clone it themselves. Never clone
-  silently — clone has side effects (disk, auth, slow, may fail).
-- Path does not exist / not a git repo → ask, do not guess.
+Commit-backed items may be summarized directly. Keep log-only work separate for user
+confirmation; include it only after confirmation, using only dates stated in the log or
+by the user. Never turn undated log text into work inside the selected window.
 
-**Other branches** (user names them, e.g. "也包含 dev 分支"):
-- Query those branches explicitly. Never run `git log --all` unprompted — on
-  large repos it pulls tens of thousands of commits and overruns context.
-- Confirm scope with the user before scanning all branches.
+If the user supplies a remote repository URL, ask before cloning it to a temporary
+directory and remove it afterward unless asked to keep it. Confirm before scanning every
+remote branch.
 
-**Dedup across repos/branches:** identical commit hashes count once. Do not
-mechanically delete commits by date/subject — separate work can share a generic
-message, while cherry-picked work can have different dates. During grouping,
-merge likely duplicates only when repository, subject, files, and change intent
-show they represent the same work; surface uncertain cases for user confirmation.
+## Group the work
 
-### Language for user-facing text
+Group related commits into business-line or module outcomes. Fold lint, formatting,
+version bumps, repeated syncs, and follow-up fixes into the outcome they supported.
+Drop isolated trivial housekeeping. Similar subjects alone are not duplicates; use the
+repository, changed paths, and intent, and surface uncertain attribution for review.
 
-All output and prompts to the user use plain words. Avoid git jargon ("HEAD",
-"ref", "upstream", "cherry-pick") — users who say "I also worked on the dev
-branch" may not know what HEAD means. Keep "commit" and branch names (with
-context) as those are widely understood.
+## Write the summary
 
-## Phase 1 — Group and dedupe
+Output a numbered list with no more than 8 top-level outcomes. Each item starts with the
+business line/module and states a concrete result with 2-4 key points or one concise
+sentence. Prefer high-impact delivery, architecture, and key fixes; condense or omit
+routine work. Do not distribute the quota evenly if that hides standout results.
 
-Group commits into **business lines / modules** and merge related commits into
-one deliverable. Collapse many commits into the 1–3 outcomes they achieved —
-`fix: lint`, `chore: fmt`, repeated `feat: sync` fold into the larger deliverable
-they supported. If a group has only trivial housekeeping, merge it into a
-related group or drop it. Do not inflate a single commit into a "deliverable."
+Mention a concentrated month only when it adds useful distribution context, never as a
+productivity score. Match the user's language. Every confirmed outcome must trace to a
+commit or a user-confirmed log item.
 
-## Phase 2 — Write the summary
+```text
+> 作者: <author> · 窗口: 2026-01-01 ~ 2026-06-30 · (自动推断, 如不对请指正)
+> 项目: <repo1> · <repo2>
 
-Output a **numbered list**, one deliverable per line, grouped by business line.
-Each line:
-
-- starts with the business line / module, a colon, then 2–4 sub-points or a
-  one-sentence outcome;
-- is verb-led and outcome-oriented (built / shipped / refactored / migrated),
-  not a feature-name dump;
-- is concrete enough to be credible but concise enough to scan.
-
-- **≤8 top-level items — prioritize impact.** When work exceeds 8 lines, keep
-  the high-impact deliverables (built from scratch, major customer delivery,
-  architectural refactor, key fix) and merge or drop routine housekeeping
-  (lint, format, version bumps, repeated sync). Do not split 8 evenly across
-  business lines if that dilutes the standout work.
-- A volume/peak note is worth citing inline **only when a business line clearly
-  concentrated in one month** (e.g. "5月密集完成 <业务线>"), as a distribution
-  cue — not as a self-justifying metric.
-- Match the user's language (Chinese request → Chinese output). Identifiers and
-  product names stay as-is.
-- Do NOT fabricate. Every confirmed deliverable must trace back to a commit or
-  to a user-confirmed log entry. Surface uncertain or log-only outcomes as
-  candidates for confirmation rather than stating it as fact.
-
-Example shape (header + numbered list, placeholders only):
-
-```
-> 作者: <author> · 窗口: 2026-01-01 ~ 2026-06-30 · (时间窗口为自动推断, 如不对请指正后重跑)
-
-1. <业务线A>: <动词开头的产出>; <2–4 个关键点或一句成果>
-2. <业务线B>: ...
+1. <业务线A>: <结果>; <关键点>
+2. <业务线B>: <结果>
 ```
 
-End with a one-line reminder: this is a draft — verify before submitting, since
-AI may merge or misattribute work. Do not write the summary to any file unless
-the user asks.
+End with one reminder that this is a draft requiring review. Do not write it to a file
+unless asked. Add at most one extra hint, and only when evidence is likely incomplete:
 
-**Conditional hints — only when this run likely under-represents the work.**
-Do NOT prompt every time; a clean, complete result ends with just the draft
-reminder above. Append ONE short line only in these cases:
-
-- A log-only item looks like real work but lacks user confirmation → "日志中还有未对应到 commit 的工作; 如属有效产出, 确认后可纳入总结."
-- No daily/weekly log was given AND commit messages are terse / hard to
-  attribute → "本次仅基于 commit 归纳; 若有日报/周报可粘贴文本或提供路径, 能补充业务背景使产出更准."
-- There is concrete evidence that other repos/branches may contain relevant
-  work (the user mentioned them, or the supplied log names work absent from the
-  scanned repo) → "可能还有其他仓库或分支的工作未覆盖; 告知路径/分支后可继续聚合统计."
-
-One line, never a follow-up question. Accept pasted text or a path equally —
-log formats vary widely, never assume a schema.
+- unconfirmed log-only work exists;
+- terse commits lack business context and no log was available;
+- the conversation or log provides concrete evidence of unscanned projects/branches.

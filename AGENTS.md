@@ -34,8 +34,8 @@ after touching anything under `integrations/`.
 ## Docs
 
 - Never use CJK/fullwidth punctuation. Write `,` `.` `:` `;` `(` `)` even in
-  Chinese text.
-- `README.md` and `README.zh-CN.md` change together.
+  Chinese text. In `- term — description` lines the separator is `—`, not `-`.
+- `README.md`, `README.zh-CN.md`, and both `docs/` trees change together.
 - Prefer deleting a sentence over explaining it. Say what the reader must do,
   not how it works inside.
 

@@ -13,12 +13,49 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 
 Usage:
 
-- `/at-self-eval` — current git identity, current quarter
+- `/at-self-eval` — current Git identity, current quarter
 - `/at-self-eval [<author>] [--from yyyy-mm-dd] [--to yyyy-mm-dd]` — pick author and range
 - Plain language works too: say "summarize the first half of the year" instead of writing flags
-- Paste a daily/weekly log, or give a file path, to add business context (optional)
-- Mention other repositories or branches to aggregate across projects; a remote
-  URL prompts before cloning anything
+- `/at-self-eval summarize July for C:\projects\project-a and C:\projects\project-b` — only those projects
+- `/at-self-eval also include C:\projects\project-c` — add to the default scope
+- Paste a daily/weekly log, or give a file path, to add business context
 
-Output is a draft: it never invents deliverables, and every line traces back to a
-commit or to a log entry you confirmed. Review it before submitting.
+Review the generated result before use.
+
+## at-daily-log
+
+Group one day's Git activity by project into a quantified, verifiable work log.
+
+```bash
+npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
+```
+
+Usage:
+
+- `/at-daily-log` — print today's log
+- `/at-daily-log 2026-07-31` — pick the date
+- `/at-daily-log summarize today for C:\projects\project-a` — only that project
+- `/at-daily-log also include C:\projects\project-c` — add to the default scope
+- `/at-daily-log record the log` — record to the configured file; rerunning a day only refreshes the generated part
+- `/at-daily-log record it to C:\projects\todo.md` — record to that file
+
+Review the generated result before use.
+
+## Optional configuration
+
+All in `~/.agent-tools/config.jsonc`:
+
+```jsonc
+{
+  // at-self-eval, at-daily-log: default projects (otherwise just the current repo)
+  "workProjects": [
+    "C:\\projects\\project-a",
+    "C:\\projects\\project-b"
+    // "C:\\projects\\temporarily-disabled"
+  ],
+  // at-daily-log: default destination when asked to record
+  "dailyLog": {
+    "output": "C:\\projects\\todo.md"
+  }
+}
+```
