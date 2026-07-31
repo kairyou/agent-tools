@@ -44,25 +44,25 @@ item. Generated files, lockfile churn, renames, and bulk formatting often make t
 numbers misleading. Metrics are evidence, never hours, difficulty, impact, or a
 productivity score.
 
-Current uncommitted changes may be shown separately as **in progress**, but never as
-proof of work on a past date. User-provided non-code work must remain clearly identified
-as user context.
+Uncommitted changes are not work items. At most, note them factually in a chat draft
+for today (project and files, no invented progress); never write them to the file:
+their dates are unverifiable, and a project left dirty for weeks would reappear as in
+progress every day. User-provided non-code work must remain clearly identified as user
+context.
 
 ## Output
 
-Match the user's language and omit empty sections:
+Match the user's language:
 
 ```markdown
 + 2026-07-31
-  完成 2 项:
   1. agent-tools: 完成多项目日报规则和 skill 落地.
   2. vscode-plugin: 修复 Webview 刷新后状态丢失问题, 补充回归验证.
-
-  进行中 1 项:
-  - iunit-web: 推进导入流程重构, 已完成数据解析.
-
-  汇总: 3 个项目, 2 项完成, 1 项进行中.
 ```
+
+Keep entries compact: the file accumulates for months, so every recurring line must
+earn its place. Do not add per-day summary, total, or section-header lines; the
+numbered items already show project and count.
 
 Prefer outcomes over raw Git metrics. If no verified activity exists, say so rather
 than fabricate an entry. For a range, output one entry per day with activity, oldest
@@ -85,7 +85,10 @@ Refresh an existing block when either value changed or the user explicitly asks;
 otherwise leave it alone, because regenerated wording varies between runs. For an existing date, show
 the current block and the regenerated one before writing, then replace only that
 date's block. If the date exists without markers, append a marked block below the
-user's lines instead of editing them. Do not duplicate the date. On duplicate or
+user's lines instead of editing them. Do not duplicate the date. Insert a new date
+among the existing dated entries at its date-order position, inferring ascending or
+descending from the dates already present (ascending when that is ambiguous); content
+above or below the dated entries, such as notes or todo lists, stays where it is. On duplicate or
 unpaired markers, stop and propose the edit instead of writing. When Git shows no
 activity, leave the file unchanged and say so; the user can add a manual entry
 themselves. Recording a range applies these rules to each day's block independently.
