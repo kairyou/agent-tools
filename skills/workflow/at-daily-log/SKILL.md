@@ -1,6 +1,6 @@
 ---
 name: at-daily-log
-description: "Summarize one day's Git activity into a concise, quantified daily work log. Uses the current repository, optional configured work projects, or paths named in conversation; configuration is never required."
+description: "Summarize one day's Git activity into a concise daily work log. Uses the current repository, optional configured work projects, or paths named in conversation; configuration is never required."
 argument-hint: "[<date>]"
 ---
 
@@ -23,9 +23,11 @@ Resolve paths to Git roots and deduplicate them. Report invalid paths; a non-Git
 directory does not block other valid projects. Do not clone remote URLs without consent.
 
 For each repository, resolve the author with `git -C <root> config user.name`; never
-infer aliases or use the remote login as the author. Inspect all local branches, current
+infer aliases or use the remote login as the author. Filter commits by comparing `%an`
+literally, not via an `--author` regex. Inspect all local branches, current
 HEAD, user-named branches, and configured upstreams. Unless the user requests local-only
-data, refresh each remote with one best-effort `git fetch --no-tags`. Fetch failure is
+data, refresh only the configured upstream branches, grouped into one best-effort
+`git fetch --no-tags <remote> <branch...>` per involved remote. Fetch failure is
 non-fatal. Do not change the working tree or local branch history. Deduplicate commits
 by hash.
 
@@ -73,13 +75,15 @@ write request, writes after previewing the entry. Resolve the destination in ord
 2. optional `dailyLog.output` in `~/.agent-tools/config.jsonc`;
 3. no destination: return the draft without writing.
 
-Read the destination before editing. Wrap content written to a file in
-`<!-- log:start -->` / `<!-- log:end -->` and rewrite only what sits between those
-markers; every other line belongs to the user. For an existing date, show the current
-block and the regenerated one before writing, then replace only the marked block. If
-that date has no markers, append a marked block below the user's lines instead of
-editing them. Do not duplicate the date. When Git shows no activity, leave the file
-unchanged and say so; the user can add a manual entry themselves.
+Read the destination before editing. Wrap each date's generated content in that date's
+own markers, `<!-- log:2026-07-31:start -->` / `<!-- log:2026-07-31:end -->`; the date
+line and every line outside the markers belong to the user. For an existing date, show
+the current block and the regenerated one before writing, then replace only that
+date's block. If the date exists without markers, append a marked block below the
+user's lines instead of editing them. Do not duplicate the date. On duplicate or
+unpaired markers, stop and propose the edit instead of writing. When Git shows no
+activity, leave the file unchanged and say so; the user can add a manual entry
+themselves.
 
 Scheduling is separate; set it up only when the user asks. Prefer the OS scheduler
 (Task Scheduler, cron, launchd) over agent-internal timers, which stop with the agent:

@@ -17,13 +17,15 @@
     "debug": false  // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
 
+  // Optional blocks below: uncomment every line of a block, including its leading comma.
+
   // at-self-eval, at-daily-log: default projects (otherwise just the current repo)
   // , "workProjects": [
   //   "C:\\projects\\project-a",
   //   "C:\\projects\\project-b"
   // ]
 
-  // at-daily-log: default file when asked to record the log
+  // at-daily-log: default file when asked to record; at-self-eval reads it as fallback
   // , "dailyLog": {
   //   "output": "C:\\projects\\todo.md"
   // }

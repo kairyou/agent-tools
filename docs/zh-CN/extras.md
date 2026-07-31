@@ -12,18 +12,19 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 
 用法:
 
-- `/at-self-eval` — 默认当前 Git 用户和当前季度
+- `/at-self-eval` — 默认统计当前 Git 用户本季度的工作
 - `/at-self-eval [<作者>] [--from yyyy-mm-dd] [--to yyyy-mm-dd]` — 指定作者与日期范围
 - 在对话里直接说 `统计上半年的工作` / `统计1-3月的产出` 即可, 无需手写参数
 - `/at-self-eval 统计 C:\projects\project-a 和 C:\projects\project-b 的 7 月工作` — 只统计指定项目
 - `/at-self-eval 另外包含 C:\projects\project-c` — 在默认范围上追加
 - 可粘贴日报或周报文本, 也可提供文件路径补充业务背景
+- `/at-self-eval 只根据 C:\projects\todo.md 总结` — 只凭日志生成, 不读 Git
 
 生成的结果请人工核对.
 
 ## at-daily-log
 
-按项目和日期归并 Git 活动, 生成可核对的量化日报.
+汇总一天内各项目的 Git 活动, 生成工作日报.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -53,7 +54,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
     "C:\\projects\\project-b"
     // "C:\\projects\\temporarily-disabled"
   ],
-  // at-daily-log: 记录日报的默认文件
+  // at-daily-log: 记录日报的默认文件; 未提供日志时 at-self-eval 也读它作补充
   "dailyLog": {
     "output": "C:\\projects\\todo.md"
   }
