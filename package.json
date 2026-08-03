@@ -1,6 +1,6 @@
 {
   "name": "@kairyou/agent-tools",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Reusable Agent Skills, plus integrations (statusline, provider usage, vision) that install into Codex, Claude Code, and opencode.",
   "license": "MIT",
   "repository": {
