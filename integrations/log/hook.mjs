@@ -427,14 +427,17 @@ function dailyItemText(turn) {
   const outcome = String(turn.result_summary || "");
   if (!hasSubstantiveTurn(request, outcome) || isTrivialTurn(request, outcome)) return "";
   const source = outcome || request;
-  const firstLine = source
+  // Flattened rather than first-line: a structured summary often opens with a
+  // preamble line, and the substance sits in the lines after it.
+  const flattened = source
     .split("\n")
-    .map((line) => line.replace(/^[#>*\-\s`]+/, "").trim())
-    .find((line) => line.length > 0);
-  if (!firstLine) return "";
-  return firstLine.length > DAILY_ITEM_MAX_CHARS
-    ? `${firstLine.slice(0, DAILY_ITEM_MAX_CHARS - 3)}...`
-    : firstLine;
+    .map((line) => line.replace(/^[#>*\-\s`|]+/, "").trim())
+    .filter(Boolean)
+    .join(" ");
+  if (!flattened) return "";
+  return flattened.length > DAILY_ITEM_MAX_CHARS
+    ? `${flattened.slice(0, DAILY_ITEM_MAX_CHARS - 3)}...`
+    : flattened;
 }
 
 async function updateDailyFile(outputFile, day, items) {
