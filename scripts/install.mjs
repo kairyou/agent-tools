@@ -7,19 +7,20 @@
 //   statusline  Claude Code statusLine script (claude only).
 //   usage       Active API provider quota/balance (all agents).
 //   vision      inspect_image MCP server + at-vision skill (all agents).
+//   log         AI session work log via agent hooks (all agents).
 //
 // Standalone commands (dispatched before capability parsing):
 //   inspect-image <path|url> --question "..."   Human diagnostic for vision.
 //   mcp-vision                                  Run the vision MCP stdio server.
 //
 // Targets:
-//   claude   -> ~/.claude/settings.json (statusLine key)
+//   claude   -> ~/.claude/settings.json (statusLine key + log hooks)
 //               + ~/.claude/skills/at-usage
 //               ~/.claude.json (vision MCP) + ~/.claude/skills (at-vision)
-//   codex    -> ~/.codex/hooks.json (standalone hooks file)
+//   codex    -> ~/.codex/hooks.json (usage + log hooks)
 //               + ~/.agents/skills/at-usage
 //               ~/.codex/config.toml (vision MCP) + ~/.agents/skills (at-vision)
-//   opencode -> ~/.config/opencode/ (server + TUI plugins,
+//   opencode -> ~/.config/opencode/ (usage + log plugins,
 //               vision MCP in opencode.json + skills/at-vision)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
@@ -69,6 +70,8 @@ const PACKAGE_VERSION = (() => {
 // Everything copied into ~/.agent-tools is built output from dist/ (see
 // scripts/build.mjs); integrations/ holds the sources.
 const SOURCE = {
+  logHook: path.join(REPO_ROOT, "dist", "log", "hook.mjs"),
+  logOpencodePlugin: path.join(REPO_ROOT, "dist", "log", "opencode-plugin.mjs"),
   codexUsageHook: path.join(REPO_ROOT, "dist", "usage", "codex-hook.mjs"),
   usageScript: path.join(REPO_ROOT, "dist", "usage", "core.mjs"),
   usageCli: path.join(REPO_ROOT, "dist", "usage", "cli.mjs"),
@@ -78,6 +81,8 @@ const SOURCE = {
   opencodeUsageTui: path.join(REPO_ROOT, "dist", "usage", "opencode-tui.mjs"),
 };
 const RUNTIME = {
+  logHook: path.join(INSTALL_ROOT, "dist", "log", "hook.mjs"),
+  logOpencodePlugin: path.join(INSTALL_ROOT, "dist", "log", "opencode-plugin.mjs"),
   codexUsageHook: path.join(INSTALL_ROOT, "dist", "usage", "codex-hook.mjs"),
   usageScript: path.join(INSTALL_ROOT, "dist", "usage", "core.mjs"),
   usageCli: path.join(INSTALL_ROOT, "dist", "usage", "cli.mjs"),
@@ -86,12 +91,12 @@ const RUNTIME = {
   opencodeUsagePlugin: path.join(INSTALL_ROOT, "dist", "usage", "opencode-plugin.mjs"),
   opencodeUsageTui: path.join(INSTALL_ROOT, "dist", "usage", "opencode-tui.mjs"),
 };
-const ALL_CAPS = ["statusline", "usage", "vision"];
+const ALL_CAPS = ["statusline", "usage", "vision", "log"];
 const ALL_AGENTS = ["claude", "codex", "opencode"];
 const AGENT_CAPS = {
-  claude: ["statusline", "usage", "vision"],
-  codex: ["usage", "vision"],
-  opencode: ["usage", "vision"],
+  claude: ["statusline", "usage", "vision", "log"],
+  codex: ["usage", "vision", "log"],
+  opencode: ["usage", "vision", "log"],
 };
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
@@ -231,6 +236,13 @@ function installRuntimeAssets(opts) {
   if (wants(opts, "statusline")) {
     addFile(SOURCE.claudeStatusline, RUNTIME.claudeStatusline);
     addFile(SOURCE.usageScript, RUNTIME.usageScript);
+    addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
+  }
+  if (wants(opts, "log")) {
+    addFile(SOURCE.logHook, RUNTIME.logHook);
+    if (opts.agents.includes("opencode")) {
+      addFile(SOURCE.logOpencodePlugin, RUNTIME.logOpencodePlugin);
+    }
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (wants(opts, "usage")) {
@@ -444,6 +456,74 @@ function applyProviderUsage(cfg, { remove }) {
     cfg.hooks[event].push(usageEntry({ silent: event === "UserPromptSubmit" }));
   }
   if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
+}
+
+// ---- Log capability: agent hooks running dist/log/hook.mjs, identified by
+// command signature (no meta key, mirroring the codex usage hooks). ----
+
+const LOG_EVENTS = [
+  ["UserPromptSubmit", ""],
+  ["PreToolUse", "Write|Edit|MultiEdit"],
+  ["PostToolUse", "Write|Edit|MultiEdit|Bash"],
+  ["Stop", ""],
+];
+
+// Exact match against the command this installer writes: anything else, even a
+// user's own .../dist/log/hook.mjs, is not ours and must survive uninstall.
+function isOurLogEntry(entry) {
+  const expected = nodeCmd(RUNTIME.logHook);
+  return (
+    entry &&
+    Array.isArray(entry.hooks) &&
+    entry.hooks.some((h) => h?.command === expected)
+  );
+}
+
+// Claude filters tool events via matchers; Codex hooks.json has no matcher
+// concept, so there the hook filters by tool name itself.
+function applyLogHooks(cfg, { remove, matchers }) {
+  cfg.hooks = cfg.hooks || {};
+  for (const [event, matcher] of LOG_EVENTS) {
+    const entries = (cfg.hooks[event] || []).filter((entry) => !isOurLogEntry(entry));
+    if (!remove) {
+      const entry = {
+        hooks: [{ type: "command", command: nodeCmd(RUNTIME.logHook), timeout: 30 }],
+      };
+      if (matchers && matcher) entry.matcher = matcher;
+      entries.push(entry);
+    }
+    if (entries.length > 0) cfg.hooks[event] = entries;
+    else delete cfg.hooks[event];
+  }
+  if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
+}
+
+function runClaudeLog(opts) {
+  const settings = opts.settings || path.join(os.homedir(), ".claude", "settings.json");
+  console.log(`claude log: ${settings}`);
+  const cfg = readJson(settings);
+  applyLogHooks(cfg, { remove: opts.uninstall, matchers: true });
+  writeJson(settings, cfg, opts.dryRun);
+  console.log(opts.uninstall ? "  - log" : "  + log (session work log hooks)");
+}
+
+function runCodexLog(opts) {
+  const file = opts.codexHooks || path.join(os.homedir(), ".codex", "hooks.json");
+  console.log(`codex log: ${file}`);
+  const cfg = readJson(file);
+  applyLogHooks(cfg, { remove: opts.uninstall, matchers: false });
+  if (opts.uninstall && Object.keys(cfg).length === 0 && fs.existsSync(file)) {
+    removeFile(file, opts.dryRun);
+  } else {
+    writeJson(file, cfg, opts.dryRun);
+  }
+  console.log(opts.uninstall ? "  - log" : "  + log (session work log hooks)");
+  if (!opts.uninstall && !opts.dryRun) {
+    console.log(
+      "  NOTE: Codex will not run this hook until you trust it — run `/hooks` " +
+        "inside Codex and approve the agent-tools hooks."
+    );
+  }
 }
 
 // ---- Vision capability helpers. ----
@@ -828,6 +908,7 @@ function runClaudeVision(opts) {
 
 function runClaude(opts) {
   if (wants(opts, "vision")) runClaudeVision(opts);
+  if (wants(opts, "log")) runClaudeLog(opts);
   if (wants(opts, "usage")) {
     const skillsDir = opts.claudeSkillsDir || path.join(os.homedir(), ".claude", "skills");
     console.log(`claude usage: ${skillsDir}`);
@@ -891,6 +972,7 @@ function runCodexVision(opts) {
 
 function runCodex(opts) {
   if (wants(opts, "vision")) runCodexVision(opts);
+  if (wants(opts, "log")) runCodexLog(opts);
   if (!wants(opts, "usage")) {
     return;
   }
@@ -933,6 +1015,26 @@ function runCodex(opts) {
 // usage after a session goes idle. A TUI plugin displays the shared snapshot. ----
 
 const OPENCODE_STUB_NAME = "agent-tools-usage.js";
+const OPENCODE_LOG_STUB_NAME = "agent-tools-log.js";
+
+function runOpencodeLog(opts) {
+  const configDir = opencodeConfigDir(opts);
+  const stub = path.join(configDir, "plugins", OPENCODE_LOG_STUB_NAME);
+  console.log(`opencode log: ${stub}`);
+  if (opts.uninstall) {
+    if (fs.existsSync(stub)) removeFile(stub, opts.dryRun);
+    else console.log("  no agent-tools log plugin found; nothing to remove.");
+    console.log("  - log");
+    return;
+  }
+  const target = pathToFileURL(RUNTIME.logOpencodePlugin).href;
+  const contents =
+    "// Generated by agent-tools installer; do not edit.\n" +
+    `export { AgentToolsLog } from ${JSON.stringify(target)};\n`;
+  writeText(stub, contents, opts.dryRun);
+  console.log("  + log (session work log plugin)");
+  if (!opts.dryRun) console.log("  NOTE: restart opencode to load the agent-tools log plugin.");
+}
 
 function opencodeConfigDir(opts) {
   return (
@@ -993,6 +1095,7 @@ function runOpencodeVision(opts) {
 
 function runOpencode(opts) {
   if (wants(opts, "vision")) runOpencodeVision(opts);
+  if (wants(opts, "log")) runOpencodeLog(opts);
   if (!wants(opts, "usage")) {
     return;
   }

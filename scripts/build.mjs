@@ -35,6 +35,12 @@ const TARGETS = {
       cli: path.join(ROOT, "integrations", "vision", "lib", "cli.mjs"),
     },
   },
+  log: {
+    entryPoints: {
+      hook: path.join(ROOT, "integrations", "log", "hook.mjs"),
+      "opencode-plugin": path.join(ROOT, "integrations", "log", "opencode-plugin.mjs"),
+    },
+  },
 };
 
 // Repo-shipped usage routes (a fork can commit integrations/usage/routes/*.mjs

@@ -57,8 +57,13 @@ Git jargon. Do not show commit counts or a generic source line.
 ## Optional logs
 
 A pasted daily/weekly log or explicit file path provides business context. If neither is
-supplied, optionally read `dailyLog.output` from config. Explicit conversation input
-always wins; a missing log is non-fatal.
+supplied, optionally read `dailyLog.output` and `log.output` (an automatically recorded
+AI session log; a dated markdown file, or a directory of per-day `<date>.md` reports,
+of which read the dates inside the window; entries under `log.projects` may add their
+own `output` paths, check those too) from `~/.agent-tools/config.jsonc`; the
+latter also captures work that never produced commits,
+such as troubleshooting or research sessions. Explicit conversation input always wins;
+a missing key or file is non-fatal.
 
 Commit-backed items may be summarized directly. Keep log-only work separate for user
 confirmation; include it only after confirmation, using only dates stated in the log or

@@ -18,13 +18,13 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 - `/at-self-eval 统计 C:\projects\project-a 和 C:\projects\project-b 的 7 月工作` — 只统计指定项目
 - `/at-self-eval 另外包含 C:\projects\project-c` — 在默认范围上追加
 - 可粘贴日报或周报文本, 也可提供文件路径补充业务背景
-- `/at-self-eval 只根据 C:\projects\daily-log.md 总结` — 只凭日志生成, 不读 Git
+- `/at-self-eval 只根据 C:\logs\daily-log.md 总结` — 只凭日志生成, 不读 Git
 
 生成的结果请人工核对.
 
 ## at-daily-log
 
-按天汇总各项目的 Git 活动, 生成工作日报.
+按天把各项目的 Git 提交提炼成工作日报, 调用时生成.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -38,17 +38,96 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 - `/at-daily-log 统计 C:\projects\project-a 今天的工作` — 只统计指定项目
 - `/at-daily-log 另外包含 C:\projects\project-c` — 在默认范围上追加
 - `/at-daily-log 记录日报` — 记录到配置的文件; 同一天重复执行只更新生成的部分
-- `/at-daily-log 记录到 C:\projects\daily-log.md` — 记录到指定文件
+- `/at-daily-log 记录到 C:\logs\daily-log.md` — 记录到指定文件
 - `/at-daily-log 每天 18:00 自动记录` — 引导搭建系统定时任务; 没有提交的日子不会写入
 
+记录到文件的示例:
+
+```markdown
++ 2026-08-03
+<!-- daily-log:2026-08-03:start 5,a1b2c3d -->
+  1. project-a: 完成登录模块重构, 覆盖回归用例.
+  2. project-b: 修复导出报表的时区偏移.
+<!-- daily-log:2026-08-03:end -->
+```
+
+`<!-- ... -->` 注释是边界标记: 更新只重写两个标记之间的内容, 文件里的其他部分
+(比如你手写的备注)不会被碰.
+
+搭配下方的 `log` 使用时, 排查问题这类没提交代码的工作也能进日报.
 生成的结果请人工核对.
 
-## 可选配置
+## log
+
+按天把各项目的 AI 会话记录成工作日志, 安装后自动运行.
+
+和上面的 `at-daily-log` 独立互补, 可一起使用或单独使用.
+
+```bash
+npx -y @kairyou/agent-tools@latest log -a claude codex opencode
+```
+
+- `format: "daily"` (默认): 单一 md 文件, 每天一个日期条目, 每轮对话总结成一行
+- `format: "detailed"`: 每天一份详细报告, 含每轮的请求与结果, 改动的文件和近似的增删行数(多轮改同一文件时按当前文件计算)
+- Codex 安装后运行 `/hooks` 批准一次; opencode 安装或更新后需要重启
+
+`daily` 输出示例:
+
+```markdown
++ 2026-08-03
+<!-- log:2026-08-03:start -->
+  1. project-a: 排查登录超时, 定位到会话缓存没有续期.
+  2. project-a: 修复登录超时, 补充回归用例.
+  3. project-b: 定位报表导出为空的问题, 原因是权限过滤条件写反.
+<!-- log:2026-08-03:end -->
+```
+
+每轮一行, 内容是那一轮结束时 AI 自己写的总结, 不做跨轮归纳; 同样只重写标记之间
+的部分, 文件里的其他内容不会被碰.
+
+`detailed` 输出示例(节选):
+
+```markdown
+# AI 日报 - 2026-08-03
+
+## 今日概览
+
+- 请求次数: 5
+- 变更文件数: 3
+- 总行变更: +120/-30
+
+## 会话记录
+
+- Time: 2026-08-03 10:12:01 -> 2026-08-03 10:20:45
+- Project: project-a
+
+Request
+(请求原文摘录)
+
+Outcome
+(结果摘要)
+
+Changes
+- src/auth/session.ts | 变更 +42/-8 | 操作 3 次
+```
+
+## 配置
 
 都在 `~/.agent-tools/config.jsonc`:
 
 ```jsonc
 {
+  // log capability: AI 会话日志
+  "log": {
+    "enabled": true,                // false: 临时停止记录, 不用卸载
+    "output": "C:\\logs\\ai-log.md",  // daily: 单一文件; detailed: 目录
+    "language": "zh",                 // zh | en
+    "format": "daily",                // daily | detailed
+    "projects": [                     // 可选: 只记录这些目录, 条目可覆盖上面的键
+      "C:\\projects\\project-a",
+      { "path": "C:\\projects\\project-b", "format": "detailed", "output": "C:\\logs\\project-b" }
+    ]
+  },
   // at-self-eval, at-daily-log: 默认统计的项目(不配则只统计当前项目);
   // prompt: 该项目的提示词, 用来优化生成的日报和总结
   "workProjects": [
@@ -58,7 +137,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
   ],
   // at-daily-log: 记录日报的默认文件; 未提供日志时 at-self-eval 也读它作补充
   "dailyLog": {
-    "output": "C:\\projects\\daily-log.md"
+    "output": "C:\\logs\\daily-log.md"
   }
 }
 ```

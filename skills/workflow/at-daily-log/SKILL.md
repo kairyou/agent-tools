@@ -54,6 +54,15 @@ their dates are unverifiable, and a project left dirty for weeks would reappear 
 progress every day. User-provided non-code work must remain clearly identified as user
 context.
 
+`~/.agent-tools/config.jsonc` may also carry `log.output`, an automatically recorded
+AI session log, separate from `dailyLog.output`. It is a markdown file with dated
+entries, or a directory holding one `<date>.md` report per day; entries under
+`log.projects` may route their sessions to their own `output`, so check those paths
+too. Read the day's content as supplementary evidence, as it captures work that
+produced no commits, such as troubleshooting or research sessions. Merge, do not
+duplicate, work already backed by commits; when the key or the day's content is
+absent, skip this entirely.
+
 ## Output
 
 Match the user's language:
@@ -85,7 +94,7 @@ write request, writes after previewing the entry. Resolve the destination in ord
 3. no destination: return the draft without writing.
 
 Read the destination before editing. Wrap each date's generated content in that date's
-own markers, `<!-- log:2026-07-31:start 5,a1b2c3d -->` / `<!-- log:2026-07-31:end -->`,
+own markers, `<!-- daily-log:2026-07-31:start 5,a1b2c3d -->` / `<!-- daily-log:2026-07-31:end -->`,
 where the start marker stores the day's commit count and newest commit hash across the
 scanned projects; the date line and every line outside the markers belong to the user.
 Refresh an existing block when either value changed or the user explicitly asks;
@@ -96,9 +105,9 @@ user's lines instead of editing them. Do not duplicate the date. Insert a new da
 among the existing dated entries at its date-order position, inferring ascending or
 descending from the dates already present (ascending when that is ambiguous); content
 above or below the dated entries, such as notes or todo lists, stays where it is. On duplicate or
-unpaired markers, stop and propose the edit instead of writing. When Git shows no
-activity, leave the file unchanged and say so; the user can add a manual entry
-themselves. Recording a range applies these rules to each day's block independently.
+unpaired markers, stop and propose the edit instead of writing. When neither Git nor
+the session log shows activity for the day, leave the file unchanged and say so; the
+user can add a manual entry themselves. Recording a range applies these rules to each day's block independently.
 
 Scheduling is separate; set it up only when the user asks. Prefer the OS scheduler
 (Task Scheduler, cron, launchd) over agent-internal timers, which stop with the agent:

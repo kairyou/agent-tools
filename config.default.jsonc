@@ -15,19 +15,28 @@
   "providerUsage": {
     "days": 30,     // recent days of spend to count
     "debug": false  // true: log probes to ~/.agent-tools/logs/usage-debug.log
+  },
+  // log capability: AI session work log; see the extras doc for details.
+  "log": {
+    "enabled": true,                            // false: pause recording without uninstalling
+    "output": "~/.agent-tools/logs/ai-log.md",  // daily: one file; detailed: a directory
+    "language": "zh",                           // zh | en (detailed report headings)
+    "format": "daily",                          // daily | detailed
+    "projects": [                               // record only these; empty: record everything
+      // "C:\\projects\\project-a"
+    ]
   }
 
   // Optional blocks below: uncomment every line of a block, including its leading comma.
 
   // at-self-eval, at-daily-log: default projects (otherwise just the current repo).
-  // Optional prompt: free text that tunes how that project is summarized.
   // , "workProjects": [
   //   "C:\\projects\\project-a",
-  //   { "path": "C:\\projects\\project-b", "prompt": "refer to `phoenix` as `Shop App` in the output; skip commits starting with `test:`" }
+  //   "C:\\projects\\project-b"
   // ]
 
   // at-daily-log: default file when asked to record; at-self-eval reads it as fallback
   // , "dailyLog": {
-  //   "output": "C:\\projects\\daily-log.md"
+  //   "output": "C:\\logs\\daily-log.md"
   // }
 }
