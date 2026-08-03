@@ -70,7 +70,7 @@ async function main() {
   await cleanupCache(day);
 
   const state = await loadState(statePath, day);
-  await handleEvent(state, hookInput, { now, snapshotsRoot, effective, scopeKey });
+  await handleEvent(state, hookInput, { now, snapshotsRoot, effective, scopeKey, scopePath: scope?.path || "" });
   await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
 
   if (effective.format === "detailed") {
@@ -174,12 +174,12 @@ async function handleEvent(state, input, context) {
     // let this prompt's Stop overwrite the previous result summary. Trivial
     // turns are filtered at render time instead.
     session.turns.push(
-      createTurn(session, timestamp, getPromptText(input), resolveProjectLabel(input), context.scopeKey)
+      createTurn(session, timestamp, getPromptText(input), resolveProjectLabel(input, context.scopePath), context.scopeKey)
     );
     return;
   }
 
-  const turn = ensureCurrentTurn(session, timestamp, resolveProjectLabel(input), context.scopeKey);
+  const turn = ensureCurrentTurn(session, timestamp, resolveProjectLabel(input, context.scopePath), context.scopeKey);
   turn.last_time = timestamp;
 
   if (eventName === "PreToolUse") {
@@ -202,14 +202,24 @@ async function handleEvent(state, input, context) {
   recordToolUse(turn, input, { timestamp });
 }
 
-function resolveProjectLabel(input) {
+function resolveProjectLabel(input, scopePath) {
   const cwd = eventCwd(input);
   const result = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], {
     encoding: "utf8",
     windowsHide: true,
   });
-  const root = result.status === 0 ? result.stdout.trim() : "";
-  return path.basename(root || cwd);
+  const base = (result.status === 0 && result.stdout.trim()) || cwd;
+  // A scope deeper than the repo (a monorepo team dir such as src/webfront)
+  // labels entries better than the repo name; a scope broader than the repo
+  // (a directory holding many repos) keeps the repo name.
+  if (scopePath) {
+    const baseKey = pathKey(base);
+    const scopeKey = pathKey(scopePath);
+    if (scopeKey === baseKey || scopeKey.startsWith(`${baseKey}/`)) {
+      return path.basename(scopePath);
+    }
+  }
+  return path.basename(base);
 }
 
 async function cleanupCache(day) {

@@ -242,6 +242,33 @@ test("projects allowlist scopes recording and per-project format", () => {
   assert.equal(report.includes("outside"), false, "unlisted session must not leak into reports");
 });
 
+test("a scope deeper than the repo labels items with the scope directory", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  // ROOT is a git repo; scoping to its tests/ dir mimics a monorepo team dir.
+  const teamDir = join(ROOT, "tests");
+  writeFileSync(
+    join(home, "config.jsonc"),
+    `${JSON.stringify({ log: { output, projects: [teamDir] } }, null, 2)}\n`
+  );
+
+  fireEvent(home, {
+    hook_event_name: "UserPromptSubmit",
+    session_id: "mono",
+    cwd: teamDir,
+    prompt: SUBSTANTIVE_PROMPT,
+  });
+  fireEvent(home, {
+    hook_event_name: "Stop",
+    session_id: "mono",
+    cwd: teamDir,
+    last_assistant_message: SUBSTANTIVE_OUTCOME,
+  });
+
+  const text = readFileSync(output, "utf8");
+  assert.ok(text.includes("1. tests:"), text);
+});
+
 test("detailed format writes a per-day report with language strings", () => {
   const home = makeHome({});
   const outputDir = join(home, "reports");
