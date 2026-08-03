@@ -34,7 +34,7 @@ user can provide other author names if needed.
 ## Project evidence
 
 Read optional `workProjects` from `~/.agent-tools/config.jsonc`. An entry is a path
-or `{ "path", "rules" }`, where the rules are free text this skill follows for that
+or `{ "path", "prompt" }`, where the prompt is free text this skill follows for that
 project, such as how to label items or which commits to skip.
 
 - No project named: current Git repository plus configured projects.

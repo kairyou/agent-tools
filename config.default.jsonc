@@ -20,10 +20,10 @@
   // Optional blocks below: uncomment every line of a block, including its leading comma.
 
   // at-self-eval, at-daily-log: default projects (otherwise just the current repo).
-  // Optional rules: how to summarize and word a project, in plain language.
+  // Optional prompt: free text that tunes how that project is summarized.
   // , "workProjects": [
   //   "C:\\projects\\project-a",
-  //   { "path": "C:\\projects\\project-b", "rules": "write codename phoenix as Shop App; skip commits starting with test:" }
+  //   { "path": "C:\\projects\\project-b", "prompt": "refer to `phoenix` as `Shop App` in the output; skip commits starting with `test:`" }
   // ]
 
   // at-daily-log: default file when asked to record; at-self-eval reads it as fallback
