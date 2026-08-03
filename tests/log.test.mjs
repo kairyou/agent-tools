@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -164,6 +164,62 @@ test("zero config writes to the default location", () => {
   const output = join(home, "logs", "ai-log.md");
   assert.ok(existsSync(output), "default output file should exist");
   assert.ok(readFileSync(output, "utf8").includes("已完成导入模块重构"));
+});
+
+test("concurrent sessions across agents all reach the log", async () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+
+  function fire(event) {
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [HOOK], {
+        cwd: ROOT,
+        env: { ...process.env, AGENT_TOOLS_HOME: home },
+        stdio: ["pipe", "ignore", "pipe"],
+      });
+      let stderr = "";
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      child.on("exit", () => resolve(stderr));
+      child.on("error", () => resolve(stderr));
+      child.stdin.write(JSON.stringify(event));
+      child.stdin.end();
+    });
+  }
+
+  // Mirrors reality: each agent serializes its own session's events, while
+  // sessions from different agents run concurrently against one day state.
+  const SESSIONS = 10;
+  const sessions = [];
+  for (let i = 0; i < SESSIONS; i += 1) {
+    sessions.push(
+      (async () => {
+        const first = await fire({
+          hook_event_name: "UserPromptSubmit",
+          session_id: `s${i}`,
+          cwd: ROOT,
+          prompt: `重构模块${i}的数据解析流程, 补充回归测试覆盖新字段映射`,
+        });
+        const second = await fire({
+          hook_event_name: "Stop",
+          session_id: `s${i}`,
+          cwd: ROOT,
+          last_assistant_message: `已完成模块${i}的重构, 新增回归用例并全部通过验证.`,
+        });
+        return [first, second].filter(Boolean);
+      })()
+    );
+  }
+
+  const failures = (await Promise.all(sessions)).flat();
+  assert.deepEqual(failures, [], "no hook run may fail under concurrency");
+
+  const text = readFileSync(output, "utf8");
+  const missing = [];
+  for (let i = 0; i < SESSIONS; i += 1) {
+    if (!text.includes(`已完成模块${i}的重构`)) missing.push(i);
+  }
+  assert.deepEqual(missing, [], `sessions missing from the log: ${missing.join(", ")}\n${text}`);
 });
 
 test("enabled: false pauses recording without uninstalling", () => {

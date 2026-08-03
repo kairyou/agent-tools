@@ -13,12 +13,10 @@
 //             recorded, and an entry may override format/output/language
 //
 // State and diff snapshots live in ~/.agent-tools/cache/log/ and only the
-// current day is kept. Concurrent sessions share the day state without a lock,
-// last-writer-wins: a simultaneous write from another session can drop that
-// event's update, up to a whole turn with its outcome and file records.
-// Accepted as best effort — the log is generated data, never user content.
-// The opencode adapter serializes its own sends, so single-session events
-// there never race each other.
+// current day is kept. Sessions across agents share that state, so each run
+// takes ~/.agent-tools/cache/log/<date>.lock for the whole read-update-render
+// cycle; an event that cannot get the lock within seconds is dropped rather
+// than corrupting the day.
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
@@ -67,22 +65,89 @@ async function main() {
   const snapshotsRoot = path.join(CACHE_ROOT, `${day}.snapshots`);
 
   await fs.mkdir(CACHE_ROOT, { recursive: true });
-  await cleanupCache(day);
 
-  const state = await loadState(statePath, day);
-  await handleEvent(state, hookInput, { now, snapshotsRoot, effective, scopeKey, scopePath: scope?.path || "" });
-  await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
-
-  if (effective.format === "detailed") {
-    const report = await renderDetailedReport(state, {
+  // Read, update and render under one lock: concurrent sessions across agents
+  // otherwise overwrite each other's turns, and on Windows their simultaneous
+  // renames fail outright with EPERM.
+  const release = await acquireLock(path.join(CACHE_ROOT, `${day}.lock`));
+  if (!release) {
+    await debugLog(`dropped ${eventName}: could not acquire ${day}.lock`);
+    return;
+  }
+  try {
+    await cleanupCache(day);
+    const state = await loadState(statePath, day);
+    await handleEvent(state, hookInput, {
+      now,
       snapshotsRoot,
-      language: effective.language,
+      effective,
       scopeKey,
+      scopePath: scope?.path || "",
     });
-    await fs.mkdir(effective.output, { recursive: true });
-    await writeFileAtomic(path.join(effective.output, `${day}.md`), report);
-  } else {
-    await updateDailyFile(effective.output, day, buildDailyItems(state, scopeKey));
+    await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+    if (effective.format === "detailed") {
+      const report = await renderDetailedReport(state, {
+        snapshotsRoot,
+        language: effective.language,
+        scopeKey,
+      });
+      await fs.mkdir(effective.output, { recursive: true });
+      await writeFileAtomic(path.join(effective.output, `${day}.md`), report);
+    } else {
+      await updateDailyFile(effective.output, day, buildDailyItems(state, scopeKey));
+    }
+  } finally {
+    await release();
+  }
+}
+
+// ---- Cross-process lock. ----
+
+const LOCK_TIMEOUT_MS = 5_000;
+const LOCK_RETRY_MS = 25;
+// A hook run is short; a lock older than this belongs to a process that died.
+const LOCK_STALE_MS = 30_000;
+
+async function acquireLock(lockPath) {
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      await handle.close();
+      return async () => {
+        try {
+          await fs.unlink(lockPath);
+        } catch {
+          // Already reclaimed as stale by another process.
+        }
+      };
+    } catch (error) {
+      if (error?.code !== "EEXIST") return null;
+      const age = await fs
+        .stat(lockPath)
+        .then(({ mtimeMs }) => Date.now() - mtimeMs)
+        .catch(() => 0);
+      if (age > LOCK_STALE_MS) {
+        await fs.unlink(lockPath).catch(() => {});
+        continue;
+      }
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
+  return null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function debugLog(message) {
+  if (process.env.AGENT_TOOLS_LOG_DEBUG !== "1") return;
+  try {
+    await fs.appendFile(path.join(CACHE_ROOT, "debug.log"), `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // Diagnostics must never break logging.
   }
 }
 
@@ -170,9 +235,16 @@ async function handleEvent(state, input, context) {
   session.last_time = timestamp;
 
   if (eventName === "UserPromptSubmit") {
-    // Always start a turn, even for greetings: reusing the previous turn would
-    // let this prompt's Stop overwrite the previous result summary. Trivial
-    // turns are filtered at render time instead.
+    const last = session.turns[session.turns.length - 1];
+    // A Stop that arrived before its prompt left a turn holding only an
+    // outcome; fill this prompt in rather than splitting one exchange in two.
+    if (last && !last.request_text && last.result_summary) {
+      last.request_text = excerptMultiline(getPromptText(input), 1600);
+      return;
+    }
+    // Otherwise always start a turn, even for greetings: reusing the previous
+    // turn would let this prompt's Stop overwrite the previous result summary.
+    // Trivial turns are filtered at render time instead.
     session.turns.push(
       createTurn(session, timestamp, getPromptText(input), resolveProjectLabel(input, context.scopePath), context.scopeKey)
     );
@@ -231,7 +303,7 @@ async function cleanupCache(day) {
   }
   await Promise.all(
     entries.map(async (entry) => {
-      const isState = entry.isFile() && /^\d{4}-\d{2}-\d{2}\.state\.json$/.test(entry.name);
+      const isState = entry.isFile() && /^\d{4}-\d{2}-\d{2}\.(state\.json|lock)$/.test(entry.name);
       const isSnapshots = entry.isDirectory() && /^\d{4}-\d{2}-\d{2}\.snapshots$/.test(entry.name);
       if ((!isState && !isSnapshots) || entry.name.startsWith(day)) return;
       try {
@@ -862,10 +934,23 @@ function getShellCommand(input) {
 
 // ---- Small helpers. ----
 
+// Windows fails the rename with EPERM when another process holds the target
+// open, so a lost race retries briefly instead of dropping the write.
 async function writeFileAtomic(file, text) {
   const temp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(temp, text, "utf8");
-  await fs.rename(temp, file);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await fs.rename(temp, file);
+      return;
+    } catch (error) {
+      if (attempt >= 5 || !["EPERM", "EACCES", "EBUSY"].includes(error?.code)) {
+        await fs.unlink(temp).catch(() => {});
+        throw error;
+      }
+      await sleep(20 * (attempt + 1));
+    }
+  }
 }
 
 function excerptMultiline(text, limit) {

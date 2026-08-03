@@ -78,14 +78,15 @@ npx -y @kairyou/agent-tools@latest log -a claude codex opencode
 ```markdown
 + 2026-08-03
 <!-- log:2026-08-03:start -->
-  1. project-a: traced the login timeout to sessions never renewing.
-  2. project-a: fixed the login timeout, added regression tests.
-  3. project-b: traced empty report exports to an inverted permission filter.
+  1. project-a: Found the cause of the login timeout: the renewal branch never updated the cache expiry, so the second request still read the old value. Patched session.ts and verified...
+  2. project-a: Fix is in, with 3 regression tests covering the renewal path; all passing.
+  3. project-b: Empty report exports came from an inverted permission filter, now corrected and confirmed working.
 <!-- log:2026-08-03:end -->
 ```
 
-One line per turn, written from the AI's own summary at the end of that turn; no
-cross-turn consolidation. Updates likewise rewrite only what sits between the markers.
+One line per turn, taken verbatim from the closing text of that turn's AI reply
+(truncated when long); no distilling, no cross-turn consolidation. Updates likewise
+rewrite only what sits between the markers.
 
 `detailed` output example (excerpt):
 
