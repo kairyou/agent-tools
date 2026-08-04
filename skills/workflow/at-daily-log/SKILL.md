@@ -26,13 +26,23 @@ Resolve paths to Git roots and deduplicate them. Report invalid paths; a non-Git
 directory does not block other valid projects. Do not clone remote URLs without consent.
 
 For each repository, resolve the author with `git -C <root> config user.name`; never
-infer aliases or use the remote login as the author. Filter commits by comparing `%an`
-literally, not via an `--author` regex. Inspect all local branches, current
-HEAD, user-named branches, and configured upstreams. Unless the user requests local-only
-data, refresh only the configured upstream branches, grouped into one best-effort
-`git fetch --no-tags <remote> <branch...>` per involved remote. Fetch failure is
-non-fatal. Do not change the working tree or local branch history. Deduplicate commits
-by hash.
+infer aliases or use the remote login as the author.
+
+Inspect all local branches, current HEAD, user-named branches, and configured
+upstreams. Unless the user requests local-only data, refresh only the configured
+upstream branches, grouped into one best-effort `git fetch --no-tags <remote>
+<branch...>` per involved remote. Fetch failure is non-fatal. Do not change the
+working tree or local branch history.
+
+Then list candidates with `git -C <root> log --no-merges --since=<from>
+--until=<to+1day> --format=%H%x09%an --branches HEAD <upstream refs>`, taking the
+upstream refs from `git -C <root> for-each-ref --format=%(upstream) refs/heads/`.
+Passing no ref walks only the current branch, so work on an unmerged branch reads as
+no activity; `--all` reaches past the scope above into remote branches nobody tracks.
+Keep the rows whose `%an` equals the resolved name exactly. Never pass `--author`: it
+matches the whole `Name <email>` header, so anchored patterns silently match nothing.
+When the window holds commits but none carry that name, report the names actually
+found instead. Deduplicate commits by hash.
 
 ## Build work items
 
@@ -87,7 +97,9 @@ first, and skip empty days.
 ## Draft or record
 
 "Generate" / `生成日报` returns a draft. "Record" / `记录日报`, or an explicit
-write request, writes after previewing the entry. Resolve the destination in order:
+write request, writes after previewing the entry. A draft may close with one short
+line offering to record it; treat any affirmative reply to that offer as the go-ahead,
+and keep the suggested word short (`记录` / `record`). Resolve the destination in order:
 
 1. a path supplied in conversation;
 2. optional `dailyLog.output` in `~/.agent-tools/config.jsonc`;
@@ -112,9 +124,10 @@ user can add a manual entry themselves. Recording a range applies these rules to
 
 Scheduling is separate; set it up only when the user asks. Prefer the OS scheduler
 (Task Scheduler, cron, launchd) over agent-internal timers, which stop with the agent:
-schedule a headless run of the CLI this skill is executing in, invoking the skill with
-the recording request the user asked for (in Claude Code,
-`claude -p "/at-daily-log record the log"`; other CLIs have their own headless form).
+schedule a headless run of the CLI this skill is executing in — `claude -p <prompt>`,
+`codex exec <prompt>`, `opencode run <prompt>` — invoking the skill with the recording
+request the user asked for, as in `claude -p "/at-daily-log record the log"`. How a
+skill is addressed varies per CLI, so the test run below is what confirms it.
 Keep projects and output in config so the command stays stable. Before registering,
 confirm the schedule, make sure the output file is resolvable, and run the exact
 command once; register only after that test run records correctly, and show how to

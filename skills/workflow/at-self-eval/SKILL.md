@@ -27,8 +27,15 @@ Always exclude merge commits.
 
 Use an explicit author when supplied; otherwise resolve it independently per repository
 with `git -C <root> config user.name`. Never infer aliases or use the remote login as
-the author. Filter commits by comparing `%an` literally, not via an `--author` regex. If no commits match, report that and suggest listing known commit authors;
-do not try spelling or language variants. When results exist, mention once that the
+the author. List candidates with `git -C <root> log --no-merges --since=<from>
+--until=<to+1day> --format=%H%x09%an --branches HEAD <upstream refs>`, taking the
+upstream refs from `git -C <root> for-each-ref --format=%(upstream) refs/heads/`;
+passing no ref walks only the current branch, so work on an unmerged branch reads as
+no activity, while `--all` reaches into remote branches nobody tracks. Keep the rows
+whose `%an` equals that name exactly. Never pass `--author`: it matches the whole
+`Name <email>` header, so anchored patterns silently match nothing. If no commits
+match, report that together with the author names the window actually holds; do not
+try spelling or language variants. When results exist, mention once that the
 user can provide other author names if needed.
 
 ## Project evidence
