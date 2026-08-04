@@ -103,8 +103,9 @@ the current block and the regenerated one before writing, then replace only that
 date's block. If the date exists without markers, append a marked block below the
 user's lines instead of editing them. Do not duplicate the date. Insert a new date
 among the existing dated entries at its date-order position, inferring ascending or
-descending from the dates already present (ascending when that is ambiguous); content
-above or below the dated entries, such as notes or todo lists, stays where it is. On duplicate or
+descending from the dates already present (ascending when that is ambiguous). A date
+that sorts last goes right after the final dated entry, not at the end of the file:
+notes, comment blocks and todo lists kept below the log stay below it. On duplicate or
 unpaired markers, stop and propose the edit instead of writing. When neither Git nor
 the session log shows activity for the day, leave the file unchanged and say so; the
 user can add a manual entry themselves. Recording a range applies these rules to each day's block independently.

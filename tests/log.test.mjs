@@ -235,6 +235,143 @@ test("enabled: false pauses recording without uninstalling", () => {
   assert.equal(existsSync(output), false);
 });
 
+test("a new date lands after the last entry, not after unrelated tail content", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+  writeFileSync(
+    output,
+    [
+      "+ 2020-01-30",
+      "<!-- log:2020-01-30:start -->",
+      "  1. project-a: 旧记录.",
+      "<!-- log:2020-01-30:end -->",
+      "",
+      "<!--",
+      "  长期保留的注释块",
+      "-->",
+      "",
+      "------",
+      "- [ ] 待办事项",
+      "",
+    ].join("\n")
+  );
+
+  fireTurn(home);
+
+  const lines = readFileSync(output, "utf8").split("\n");
+  const newDate = lines.findIndex((line) => line.trim() === `+ ${today()}`);
+  const commentStart = lines.findIndex((line) => line.trim() === "<!--");
+  const todo = lines.findIndex((line) => line.includes("待办事项"));
+  assert.ok(newDate !== -1, "the new date should be written");
+  assert.ok(newDate < commentStart, "the new entry belongs above the comment block");
+  assert.ok(newDate < todo, "the new entry belongs above the todo list");
+  assert.ok(lines.some((line) => line.includes("旧记录")), "existing entries survive");
+});
+
+test("an unpaired marker still records and never swallows user text", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+  const day = today();
+  // A damaged block (start without end) followed by text only the user can own.
+  writeFileSync(
+    output,
+    [`+ ${day}`, `<!-- log:${day}:start -->`, "  1. 损坏的旧块.", "USER NOTE MUST SURVIVE", ""].join("\n")
+  );
+
+  fireTurn(home);
+  assert.ok(readFileSync(output, "utf8").includes("已完成导入模块重构"), "first write must land");
+
+  fireTurn(home, {
+    sessionId: "session-2",
+    prompt: "排查 statusline 在 Windows 下的乱码问题并修复编码处理",
+    outcome: "定位到编码问题出在 BOM 处理, 已修复并验证 Windows 下显示正常.",
+  });
+
+  const text = readFileSync(output, "utf8");
+  assert.ok(text.includes("USER NOTE MUST SURVIVE"), `user text must survive\n${text}`);
+  assert.ok(text.includes("已完成导入模块重构") && text.includes("BOM 处理"), text);
+  // The second update refreshed its own block instead of adding another one.
+  assert.equal(text.split(`<!-- log:${day}:end -->`).length, 2, text);
+});
+
+test("a shared file keeps the log block with its date, above tail content", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+  const day = today();
+  // at-daily-log already wrote today; unrelated content sits at the tail.
+  writeFileSync(
+    output,
+    [
+      `+ ${day}`,
+      `<!-- daily-log:${day}:start 5,a1b2c3d -->`,
+      "  1. project-a: git 侧的成果.",
+      `<!-- daily-log:${day}:end -->`,
+      "",
+      "<!--",
+      "  长期保留的注释块",
+      "-->",
+      "",
+      "------",
+      "- [ ] 待办事项",
+      "",
+    ].join("\n")
+  );
+
+  fireTurn(home);
+
+  const lines = readFileSync(output, "utf8").split("\n");
+  const logStart = lines.findIndex((line) => line.trim() === `<!-- log:${day}:start -->`);
+  const dailyEnd = lines.findIndex((line) => line.trim() === `<!-- daily-log:${day}:end -->`);
+  const comment = lines.findIndex((line) => line.trim() === "<!--");
+  assert.ok(logStart > dailyEnd, "the log block goes after at-daily-log's block");
+  assert.ok(logStart < comment, `the log block stays above the tail content\n${lines.join("\n")}`);
+  assert.ok(lines.some((line) => line.includes("git 侧的成果")), "the other tool's block survives");
+});
+
+test("a new date lands after a daily-log block, not between it and its date", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+  writeFileSync(
+    output,
+    [
+      "+ 2020-01-30",
+      "<!-- daily-log:2020-01-30:start 3,abc1234 -->",
+      "  1. project-a: 旧的 git 日报.",
+      "<!-- daily-log:2020-01-30:end -->",
+      "",
+    ].join("\n")
+  );
+
+  fireTurn(home);
+
+  const lines = readFileSync(output, "utf8").split("\n");
+  const oldDate = lines.findIndex((line) => line.trim() === "+ 2020-01-30");
+  const oldBlockEnd = lines.findIndex((line) => line.trim() === "<!-- daily-log:2020-01-30:end -->");
+  const newDate = lines.findIndex((line) => line.trim() === `+ ${today()}`);
+  assert.ok(oldBlockEnd > oldDate, "the old block stays under its own date");
+  assert.ok(newDate > oldBlockEnd, `the new date goes after it\n${lines.join("\n")}`);
+});
+
+test("a BOM file is updated in place without duplicating the date", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+  const day = today();
+  writeFileSync(output, `﻿+ ${day}\n  手写备注\n`);
+
+  fireTurn(home);
+
+  const raw = readFileSync(output, "utf8");
+  assert.equal(raw.charCodeAt(0), 0xfeff, "the BOM is preserved");
+  assert.equal(raw.split(`+ ${day}`).length, 2, `the date must not be duplicated\n${raw}`);
+  assert.ok(raw.includes("手写备注"), "hand-written lines survive");
+  assert.ok(raw.includes("已完成导入模块重构"), raw);
+});
+
 test("trivial prompts are not recorded", () => {
   const home = makeHome({});
   const output = join(home, "work-log.md");

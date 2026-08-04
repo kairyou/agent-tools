@@ -520,34 +520,61 @@ async function updateDailyFile(outputFile, day, items) {
   );
   const block = [`<!-- log:${day}:start -->`, ...lines, `<!-- log:${day}:end -->`];
 
-  let current = "";
+  let raw = "";
   try {
-    current = await fs.readFile(outputFile, "utf8");
+    raw = await fs.readFile(outputFile, "utf8");
   } catch {
     // First write creates the file.
   }
+  // Windows editors and PowerShell write a BOM; strip it for parsing and put
+  // it back on write so the file keeps the encoding its author chose.
+  const hadBom = raw.charCodeAt(0) === 0xfeff;
+  const current = hadBom ? raw.slice(1) : raw;
   const eol = current.includes("\r\n") ? "\r\n" : "\n";
   const fileLines = current ? current.split(/\r?\n/) : [];
 
   const startMarker = `<!-- log:${day}:start -->`;
   const endMarker = `<!-- log:${day}:end -->`;
-  const startIndex = fileLines.findIndex((line) => line.trim() === startMarker);
-  const endIndex = fileLines.findIndex((line) => line.trim() === endMarker);
+  // Pair with the LAST start: an earlier damaged start must not swallow
+  // whatever the user wrote between it and our block.
+  const startIndex = fileLines.findLastIndex((line) => line.trim() === startMarker);
+  const endIndex = fileLines.findIndex(
+    (line, index) => index > startIndex && line.trim() === endMarker
+  );
 
   let nextLines;
   if (startIndex !== -1 && endIndex > startIndex) {
     nextLines = [...fileLines.slice(0, startIndex), ...block, ...fileLines.slice(endIndex + 1)];
-  } else if (startIndex !== -1 || endIndex !== -1) {
-    // Unpaired markers: refuse to guess an edit range in an unattended run.
-    console.error(`[agent-tools log] Unpaired markers for ${day} in ${outputFile}; skipped.`);
-    return;
   } else {
+    // Also covers an unpaired marker: never guess its range, just add an
+    // intact block. Recording must not stop because one block got damaged;
+    // the stray marker stays visible for the user to clean up.
     nextLines = insertDatedBlock(fileLines, day, block);
   }
 
-  const text = nextLines.join(eol).replace(/(\r?\n)*$/, eol);
+  const body = nextLines.join(eol).replace(/(\r?\n)*$/, eol);
+  const text = hadBom ? "﻿" + body : body;
   await fs.mkdir(path.dirname(outputFile), { recursive: true });
   await writeFileAtomic(outputFile, text);
+}
+
+// Where a dated entry stops: markers and indented items belong to it, anything
+// else below (headings, comment blocks, separators, todo lists) does not. Both
+// marker namespaces count, since at-daily-log may share this file.
+const ENTRY_MARKER_RE = /^<!--\s*(?:daily-)?log:\d{4}-\d{2}-\d{2}:(?:start|end)\b/;
+
+function datedSectionEnd(fileLines, dateIndex) {
+  let end = dateIndex + 1;
+  for (let i = dateIndex + 1; i < fileLines.length; i += 1) {
+    const line = fileLines[i];
+    if (!line.trim()) continue;
+    if (ENTRY_MARKER_RE.test(line.trim()) || /^\s/.test(line)) {
+      end = i + 1;
+      continue;
+    }
+    break;
+  }
+  return end;
 }
 
 function insertDatedBlock(fileLines, day, block) {
@@ -560,18 +587,10 @@ function insertDatedBlock(fileLines, day, block) {
 
   const existing = dates.find((entry) => entry.date === day);
   if (existing) {
-    // Date line exists without markers (user-written): append the block below
-    // that date's lines. The dated section ends at the next date line or the
-    // next heading (notes and todo lists after the entries stay untouched).
-    const boundaryRe = /^(\+ \d{4}-\d{2}-\d{2}\s*$|#{1,6}\s)/;
-    let insertAt = fileLines.length;
-    for (let i = existing.index + 1; i < fileLines.length; i += 1) {
-      if (boundaryRe.test(fileLines[i])) {
-        insertAt = i;
-        break;
-      }
-    }
-    while (insertAt - 1 > existing.index && fileLines[insertAt - 1].trim() === "") insertAt -= 1;
+    // The date exists but carries no block of ours yet (user-written, or only
+    // at-daily-log's). Append below that date's own lines, never past the
+    // notes and todo lists that live further down the file.
+    const insertAt = datedSectionEnd(fileLines, existing.index);
     const trailing = fileLines.slice(insertAt);
     const inserted = [...block];
     if (trailing.length > 0 && trailing[0].trim() !== "") inserted.push("");
@@ -579,8 +598,12 @@ function insertDatedBlock(fileLines, day, block) {
   }
 
   // Insert a new date at its date-order position; ascending when ambiguous.
+  // Falling off the end means this date sorts last, so it goes at the end of
+  // the dated section rather than the end of the file: notes, comment blocks
+  // and todo lists kept below the log must stay below it.
   const ascending = dates.length < 2 || dates[0].date <= dates[dates.length - 1].date;
-  let insertAt = fileLines.length;
+  let insertAt =
+    dates.length > 0 ? datedSectionEnd(fileLines, dates[dates.length - 1].index) : fileLines.length;
   for (const entry of dates) {
     if (ascending ? entry.date > day : entry.date < day) {
       insertAt = entry.index;
