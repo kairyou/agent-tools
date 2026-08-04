@@ -1,0 +1,5 @@
+interface:
+  display_name: "Simplify Changes"
+  short_description: "Refactor changed code for clarity and efficiency"
+policy:
+  allow_implicit_invocation: false

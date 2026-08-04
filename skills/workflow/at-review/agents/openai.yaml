@@ -1,0 +1,5 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review changes for bugs and regressions"
+policy:
+  allow_implicit_invocation: false
