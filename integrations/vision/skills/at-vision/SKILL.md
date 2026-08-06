@@ -1,15 +1,17 @@
 ---
 name: at-vision
-description: "Inspect an image, screenshot, photo, diagram, file path, or image URL for a non-vision main model. Prefer the inspect_image MCP tool; if MCP namespace tools are unsupported, use the installed local vision CLI fallback."
+description: "Inspect screenshots, photos, diagrams, image paths, and image URLs when the task depends on visible content. Use when the prompt lacks actual image content, native inspection fails, or the user requests inspect_image; prefer the MCP tool, then the installed CLI."
 ---
 
 # Visual Reasoning Policy
 
-You cannot see images directly. The `inspect_image` MCP tool (server `agent-tools-vision`) sends one image plus narrow factual questions to a vision model and returns per-question answers. You stay in charge of reasoning and the final answer; the vision model only reports observations.
+If the prompt already contains actual image content, or a host image viewer returned that content, inspect it directly and do not call `inspect_image`. A file path or URL alone is not image content.
+
+When only a file path or URL is available, direct inspection fails, or the user explicitly requests the provider, the `inspect_image` MCP tool (server `agent-tools-vision`) sends one image plus narrow factual questions to a configured vision model. You stay in charge of reasoning and the final answer; the vision model only reports observations.
 
 `inspect_image` is a callable MCP tool, not an MCP resource. Call the tool directly. Never call `list_mcp_resources` or `read_mcp_resource` for images, and never use `inspect_image` as a resource URI.
 
-Prefer `inspect_image`. If it is not exposed as a callable tool, or the host/model gateway cannot invoke MCP namespace tools, use the host's shell/command execution tool to run the installed fallback.
+When fallback inspection is needed, prefer `inspect_image`. If it is not exposed as a callable tool, or the host/model gateway cannot invoke MCP namespace tools, use the host's shell/command execution tool to run the installed fallback.
 
 First use a structured file-write capability to create a temporary JSON request; do not construct it with shell interpolation. Use the same shape as the MCP input:
 
@@ -32,7 +34,10 @@ Use only this installed CLI: never run `npx`, install a package, or use MCP reso
 
 ## When to call — and when not to
 
-- Call `inspect_image` only when your answer depends on what the image actually shows.
+- Call `inspect_image` when your answer depends on visible content and the prompt contains only a local path or image URL, direct inspection failed, or the user explicitly requested the provider. Never infer image content from a file name or URL.
+- A bare path or URL without a task that depends on visible content is not a reason to call it.
+- Do not call it when the prompt already contains actual image content or a host image viewer returned that content, unless the user explicitly requested the provider.
+- Never call it when the user says not to send the image to the provider.
 - Do NOT call it when the task merely involves an image file without needing its content: renaming, moving, deleting, uploading, listing, or referencing a file path.
 - Before calling, decide the minimum visual facts you are missing and ask exactly those. Never request a general description of the whole image.
 
