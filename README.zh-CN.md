@@ -242,6 +242,8 @@ cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx 
 - `at-commit` 借鉴了 [OpenCommit](https://github.com/di-sukharev/opencommit) 和
   [GitLens](https://github.com/gitkraken/vscode-gitlens) 的提交消息生成思路,
   并针对 Agent Skill 工作流重新实现.
-- `at-review` 和 `at-simplify` 参考了
-  [claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts)
-  中对应工作流的设计.
+- `at-review` 和 `at-simplify` 基于 Claude Code 内置的 `code-review` 和
+  `simplify` 工作流提示词整理并适配为可安装的 Agent Skill. 自动上游跟踪使用
+  [tweakcc](https://github.com/Piebald-AI/tweakcc) 的版本化
+  prompt 数据; 人工审查历史来自
+  [claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts).

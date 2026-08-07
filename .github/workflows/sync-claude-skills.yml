@@ -1,0 +1,76 @@
+name: Sync Claude skill upstream
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional Claude Code version
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-claude-skills
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check for an existing manual-review PR
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh pr list --head automation/claude-skill-sync --state open --json number --jq length)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch pending upstream
+        if: steps.existing.outputs.count == '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          args=()
+          if [ -n "$REQUESTED_VERSION" ]; then
+            args+=(--version "$REQUESTED_VERSION")
+          fi
+          npm run claude-skills:fetch -- "${args[@]}"
+
+      - name: Create draft review PR
+        if: steps.existing.outputs.count == '0'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676
+        with:
+          branch: automation/claude-skill-sync
+          delete-branch: true
+          draft: true
+          commit-message: "chore: fetch latest Claude Code skill prompts"
+          title: "chore: fetch latest Claude Code skill prompts"
+          body: |
+            This draft PR only fetches and normalizes upstream prompt data. It does not modify installable skills.
+
+            Review `tools/claude-skill-sync/upstream/pending-report.md`, then run:
+
+            ```sh
+            npm run claude-skills:inspect
+            npm run claude-skills:apply -- --dry-run
+            npm run claude-skills:apply -- --write
+            npm run build
+            npm test
+            ```
+
+            Commit the manually reviewed result to this branch before marking the PR ready.

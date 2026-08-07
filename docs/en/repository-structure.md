@@ -16,5 +16,6 @@ agent-tools/
 │   └── integrations/  # Skills that integrate external systems.
 │       └── at-zentao/   # ZenTao bug/task fixing workflow.
 ├── docs/              # Advanced guides and contributor reference.
+├── tools/             # Maintainer-only upstream sync and repository tooling.
 └── scripts/           # Install, sync, validation, and maintenance scripts.
 ```

@@ -40,7 +40,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 
 Usage:
 
-- `/at-review [--fix] [<pr|branch|path>]` — reports findings; `--fix` also applies them
+- `/at-review [--fix] [<pr|branch|path>]` — reports review findings; `--fix` also applies them
 
 ### at-simplify
 
@@ -249,5 +249,10 @@ See the [repository structure](docs/en/repository-structure.md).
   [OpenCommit](https://github.com/di-sukharev/opencommit) and
   [GitLens](https://github.com/gitkraken/vscode-gitlens), reimplemented for an
   Agent Skill workflow.
-- `at-review` and `at-simplify` draw on the corresponding workflows in
+- `at-review` and `at-simplify` are installable Agent Skills derived and
+  adapted from Claude Code's built-in `code-review` and `simplify` workflow
+  prompts.
+  Automated upstream tracking uses versioned prompt data from
+  [tweakcc](https://github.com/Piebald-AI/tweakcc); human-readable prompt
+  history comes from
   [claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts).

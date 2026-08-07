@@ -16,5 +16,6 @@ agent-tools/
 │   └── integrations/  # 对接外部系统的 skills.
 │       └── at-zentao/   # 禅道 bug/task 修复工作流.
 ├── docs/              # 高级指南和贡献者参考.
+├── tools/             # 仅供维护者使用的上游同步和仓库工具.
 └── scripts/           # 安装, 同步, 校验和仓库维护脚本.
 ```

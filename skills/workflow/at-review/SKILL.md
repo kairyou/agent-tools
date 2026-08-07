@@ -68,7 +68,21 @@ Keep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.
 
 ## Output
 
-Return findings as a JSON array of at most 10 objects:
+Unless `--json` was explicitly passed, the main agent's final answer is a Markdown report, nothing else. Structure it exactly:
+
+**Summary** - 1-2 sentences on the review scope and what was found. If the diff was empty, write exactly "No changes to review." and stop. If nothing survived verification, write exactly "No findings survived verification." and stop.
+
+**Findings** - one numbered block per finding, most-severe first, at most 10. Assign each finding `High`, `Medium`, or `Low` from its concrete impact and likelihood:
+
+```text
+1. High|Medium|Low: summary
+   file:line
+   Failure: <failure_scenario>
+```
+
+### JSON mode
+
+Only when `--json` was explicitly passed, return findings as a JSON array of at most 10 objects:
 
 ```json
 [
@@ -81,7 +95,7 @@ Return findings as a JSON array of at most 10 objects:
 ]
 ```
 
-Ranked most-severe first. If more than 10 survive, keep the 10 most severe. If nothing survives verification, return `[]`.
+Ranked most-severe first. If more than 10 survive, keep the 10 most severe. If nothing survives verification, return `[]`. Do not use a host-specific findings-reporting tool even if one is available.
 
 ## Applying fixes (--fix)
 
