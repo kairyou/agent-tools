@@ -19,9 +19,9 @@
   // log capability: AI session work log; see the extras doc for details.
   "log": {
     "enabled": true,                            // false: pause recording without uninstalling
-    "output": "~/.agent-tools/logs/ai-log.md",  // daily: one file; detailed: a directory
+    "output": "~/.agent-tools/logs/ai-log",     // detailed: one <date>.md file per day; daily: one file
     "language": "zh",                           // zh | en (detailed report headings)
-    "format": "daily",                          // daily | detailed
+    "format": "detailed",                       // detailed | daily
     "projects": [                               // record only these; empty: record everything
       // "C:\\projects\\project-a"
     ]

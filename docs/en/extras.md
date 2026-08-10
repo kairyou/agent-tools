@@ -69,8 +69,8 @@ Independent of and complementary to `at-daily-log` above; use them together or a
 npx -y @kairyou/agent-tools@latest log -a claude codex opencode
 ```
 
-- `format: "daily"` (default): a single markdown file, one dated entry per day, each turn summarized into one line
-- `format: "detailed"`: one full report per day with each turn's request and outcome, the files changed, and approximate lines added/removed (measured against the current file when several turns touch one)
+- `format: "detailed"` (default): one detailed report per day with each turn's request and outcome, the files changed, and estimated lines added and removed
+- `format: "daily"`: writes to a single Markdown file grouped by date; each completed answer with substantive results is recorded as one line, while pending prompts are omitted; content may be truncated by the length limit, so use it only as a lightweight activity index
 - Codex: run `/hooks` once after installing to approve it; opencode: restart after installing or updating
 
 `daily` output example:
@@ -123,9 +123,9 @@ All in `~/.agent-tools/config.jsonc`:
   // log capability: AI session log
   "log": {
     "enabled": true,                // false: pause recording without uninstalling
-    "output": "C:\\logs\\ai-log.md",  // daily: one file; detailed: a directory
+    "output": "C:\\logs\\ai-log",     // detailed: one <date>.md per day; daily: one file
     "language": "zh",                 // zh | en
-    "format": "daily",                // daily | detailed
+    "format": "detailed",             // detailed | daily
     "projects": [                     // optional: record only these; entries may override the keys above
       "C:\\projects\\project-a",
       { "path": "C:\\projects\\project-b", "format": "detailed", "output": "C:\\logs\\project-b" }

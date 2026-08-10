@@ -67,8 +67,12 @@ A pasted daily/weekly log or explicit file path provides business context. If ne
 supplied, optionally read `dailyLog.output` and `log.output` (an automatically recorded
 AI session log; a dated markdown file, or a directory of per-day `<date>.md` reports,
 of which read the dates inside the window; entries under `log.projects` may add their
-own `output` paths, check those too) from `~/.agent-tools/config.jsonc`; the
-latter also captures work that never produced commits,
+own `output` paths, check those too) from `~/.agent-tools/config.jsonc`; when
+`log.format` is `daily`, its single-line results may be truncated and are not
+standalone proof of an outcome. When it is `detailed`, the per-day reports are stronger evidence;
+use them as supplementary material, not as a replacement for Git or user
+confirmation. If the `log` block or its output is absent, skip this source. The latter
+also captures work that never produced commits,
 such as troubleshooting or research sessions. Explicit conversation input always wins;
 a missing key or file is non-fatal.
 

@@ -68,10 +68,12 @@ context.
 AI session log, separate from `dailyLog.output`. It is a markdown file with dated
 entries, or a directory holding one `<date>.md` report per day; entries under
 `log.projects` may route their sessions to their own `output`, so check those paths
-too. Read the day's content as supplementary evidence, as it captures work that
-produced no commits, such as troubleshooting or research sessions. Merge, do not
-duplicate, work already backed by commits; when the key or the day's content is
-absent, skip this entirely.
+too. When `log.format` is `daily`, read its single-line results only as activity
+leads: they may be truncated and omit important context. Do not state a log-only
+item as a confirmed outcome from a daily entry alone. When `log.format` is `detailed`, its
+per-day reports are stronger supplementary evidence, but still do not replace Git
+or user confirmation. If the `log` block or its output is absent, skip this entirely.
+Merge, do not duplicate, work already backed by commits.
 
 ## Output
 

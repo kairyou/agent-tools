@@ -26,7 +26,8 @@ import { parse as parseJsonc } from "jsonc-parser";
 
 const MAX_SNAPSHOT_BYTES = 512 * 1024;
 const MIN_RESULT_SUMMARY_LENGTH = 24;
-const DAILY_ITEM_MAX_CHARS = 160;
+const DAILY_ITEM_TARGET_CHARS = 160;
+const DAILY_ITEM_HARD_MAX_CHARS = 320;
 
 const INSTALL_ROOT = process.env.AGENT_TOOLS_HOME || path.join(os.homedir(), ".agent-tools");
 const CACHE_ROOT = path.join(INSTALL_ROOT, "cache", "log");
@@ -167,7 +168,15 @@ async function loadLogConfig() {
   }
   const section = isPlainObject(parsed.log) ? parsed.log : {};
   const enabled = section.enabled !== false;
-  const format = pickFormat(section.format, "daily");
+  // Keep existing file-based configurations on daily while new installs use
+  // detailed by default. Explicit format always wins.
+  const inferredFormat =
+    section.format === undefined &&
+    typeof section.output === "string" &&
+    section.output.trim().toLowerCase().endsWith(".md")
+      ? "daily"
+      : "detailed";
+  const format = pickFormat(section.format, inferredFormat);
   const language = pickLanguage(section.language, "zh");
   const output = pickOutput(section.output, format, defaultOutput(format));
 
@@ -497,8 +506,11 @@ function buildDailyItems(state, scopeKey) {
 function dailyItemText(turn) {
   const request = String(turn.request_text || "");
   const outcome = String(turn.result_summary || "");
-  if (!hasSubstantiveTurn(request, outcome) || isTrivialTurn(request, outcome)) return "";
-  const source = outcome || request;
+  // Daily is an outcome index, not a prompt inbox. Keep request-only turns in
+  // detailed reports, but do not present an unfinished question as completed
+  // work in the compact daily file.
+  if (!outcome || !hasSubstantiveTurn(request, outcome) || isTrivialTurn(request, outcome)) return "";
+  const source = outcome;
   // Flattened rather than first-line: a structured summary often opens with a
   // preamble line, and the substance sits in the lines after it.
   const flattened = source
@@ -507,9 +519,23 @@ function dailyItemText(turn) {
     .filter(Boolean)
     .join(" ");
   if (!flattened) return "";
-  return flattened.length > DAILY_ITEM_MAX_CHARS
-    ? `${flattened.slice(0, DAILY_ITEM_MAX_CHARS - 3)}...`
-    : flattened;
+  return truncateDailyItem(flattened);
+}
+
+function truncateDailyItem(text) {
+  if (text.length <= DAILY_ITEM_HARD_MAX_CHARS) return text;
+  const limit = DAILY_ITEM_HARD_MAX_CHARS - 3;
+  const prefix = text.slice(0, limit);
+  // Prefer the longest complete sentence within the hard cap. The target is a
+  // soft guide: retaining more complete context is better when the next
+  // sentence ends before the hard limit.
+  const boundaries = [...prefix.matchAll(/[。！？；;]|[.!?](?=\s|$)/g)];
+  const boundary = boundaries.at(-1)?.index;
+  if (boundary !== undefined && boundary + 1 >= Math.floor(DAILY_ITEM_TARGET_CHARS * 0.6)) {
+    return `${prefix.slice(0, boundary + 1)}...`;
+  }
+  const targetPrefix = text.slice(0, DAILY_ITEM_TARGET_CHARS - 3);
+  return `${targetPrefix}...`;
 }
 
 async function updateDailyFile(outputFile, day, items) {

@@ -161,9 +161,45 @@ test("zero config writes to the default location", () => {
 
   fireTurn(home);
 
-  const output = join(home, "logs", "ai-log.md");
-  assert.ok(existsSync(output), "default output file should exist");
+  const output = join(home, "logs", "ai-log", `${today()}.md`);
+  assert.ok(existsSync(output), "default detailed report should exist");
   assert.ok(readFileSync(output, "utf8").includes("已完成导入模块重构"));
+});
+
+test("daily format excludes turns that have no outcome yet", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+
+  fireEvent(home, {
+    hook_event_name: "UserPromptSubmit",
+    session_id: "pending",
+    cwd: ROOT,
+    prompt: "请检查这个问题, 但当前还没有结果",
+  });
+
+  assert.equal(existsSync(output), false, "a request without Stop must not create a daily work item");
+
+  fireTurn(home, { sessionId: "completed" });
+  const text = readFileSync(output, "utf8");
+  assert.ok(text.includes("已完成导入模块重构"), text);
+  assert.equal(text.includes("请检查这个问题"), false, text);
+});
+
+test("daily format prefers a nearby sentence boundary when truncating", () => {
+  const home = makeHome({});
+  const output = join(home, "work-log.md");
+  writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
+
+  fireTurn(home, {
+    outcome: "已修复锁竞争问题, 并补充回归测试覆盖过期锁抢占。后续仍需观察多进程运行时的日志行为, 这段内容应被截断并用于验证句末截取策略。".repeat(8),
+  });
+
+  const text = readFileSync(output, "utf8");
+  const item = text.split("\n").find((line) => line.includes("已修复锁竞争问题"));
+  assert.ok(item, text);
+  assert.match(item, /\.\.\.$/);
+  assert.ok(item.length <= 2 + 10 + 3 + 320, item);
 });
 
 test("concurrent sessions across agents all reach the log", async () => {
@@ -617,7 +653,7 @@ test("opencode adapter baselines files so the detailed diff is not unknown", asy
   }
 });
 
-test("opencode adapter does not reuse the previous turn's text as the next result", async () => {
+test("opencode adapter does not reuse the previous turn's text or log an unfinished next turn", async () => {
   const home = makeHome({});
   const output = join(home, "work-log.md");
   writeFileSync(join(home, "config.jsonc"), `${JSON.stringify({ log: { output } }, null, 2)}\n`);
@@ -657,11 +693,8 @@ test("opencode adapter does not reuse the previous turn's text as the next resul
     );
     await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_r" } } });
 
-    const second = await waitFor(
-      () => existsSync(output) && readFileSync(output, "utf8").includes("排查 statusline")
-    );
-    assert.ok(second, readFileSync(output, "utf8"));
     const text = readFileSync(output, "utf8");
+    assert.equal(text.includes("排查 statusline"), false, text);
     assert.equal(
       text.split("已完成导入模块重构").length,
       2,

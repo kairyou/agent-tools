@@ -67,8 +67,8 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 npx -y @kairyou/agent-tools@latest log -a claude codex opencode
 ```
 
-- `format: "daily"` (默认): 单一 md 文件, 每天一个日期条目, 每轮对话总结成一行
-- `format: "detailed"`: 每天一份详细报告, 含每轮的请求与结果, 改动的文件和近似的增删行数(多轮改同一文件时按当前文件计算)
+- `format: "detailed"` (默认): 每天生成一份详细报告, 记录每轮请求与结果, 修改的文件, 以及新增/删除代码行数的估算
+- `format: "daily"`: 写入单个 Markdown 文件, 并按日期归档; 每个已完成且有实质结果的回答记录为一行, 不记录未完成的提问; 内容可能因长度限制被截断, 因此仅适合作为轻量活动索引
 - Codex 安装后运行 `/hooks` 批准一次; opencode 安装或更新后需要重启
 
 `daily` 输出示例:
@@ -120,9 +120,9 @@ Changes
   // log capability: AI 会话日志
   "log": {
     "enabled": true,                // false: 临时停止记录, 不用卸载
-    "output": "C:\\logs\\ai-log.md",  // daily: 单一文件; detailed: 目录
+    "output": "C:\\logs\\ai-log",     // detailed: 每天一个 <date>.md; daily: 单一文件
     "language": "zh",                 // zh | en
-    "format": "daily",                // daily | detailed
+    "format": "detailed",             // detailed | daily
     "projects": [                     // 可选: 只记录这些目录, 条目可覆盖上面的键
       "C:\\projects\\project-a",
       { "path": "C:\\projects\\project-b", "format": "detailed", "output": "C:\\logs\\project-b" }
