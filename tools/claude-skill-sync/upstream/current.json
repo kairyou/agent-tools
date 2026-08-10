@@ -1,12 +1,11 @@
 {
   "schemaVersion": 1,
-  "claudeCodeVersion": "2.1.223",
-  "fetchedAt": "2026-08-07T04:13:57.941Z",
+  "claudeCodeVersion": "2.1.226",
   "source": {
     "repository": "Piebald-AI/tweakcc",
-    "commit": "b9610912d9f0c8f8ab1df6d23fd59d771c4d7561",
-    "path": "data/prompts/prompts-2.1.223.json",
-    "sha256": "45f7458e623ed21aa5aae7228148bfeb28c509159134e8c2592ca545bc703799"
+    "commit": "726b940a5928a6f5fc9f22d9f9e8b7a7902d0568",
+    "path": "data/prompts/prompts-2.1.226.json",
+    "sha256": "8566d6bdc589cc19f09c71602c5e54fd2b376077b157f9b3fbbf0f7c83d5faf9"
   },
   "prompts": [
     {
@@ -179,6 +178,7 @@
         "?",
         ":\"\"}${",
         "}${",
+        "}${",
         "}"
       ],
       "identifiers": [
@@ -200,7 +200,8 @@
         12,
         13,
         14,
-        15
+        15,
+        16
       ],
       "identifierMap": {
         "0": "CODE_REVIEW_ROUTING_NOTICE",
@@ -218,9 +219,10 @@
         "12": "IS_MINIMAL_REVIEW_MODE",
         "13": "FINDINGS_REREPORT_INSTRUCTIONS_BLOCK",
         "14": "ARTIFACT_PUBLISHING_INSTRUCTIONS_BLOCK",
-        "15": "EMPTY_STRING"
+        "15": "EMPTY_STRING",
+        "16": "ULTRAREVIEW_TIP_INSTRUCTIONS_BLOCK"
       },
-      "version": "2.1.219"
+      "version": "2.1.224"
     },
     {
       "name": "Agent Prompt: /simplify slash command",
