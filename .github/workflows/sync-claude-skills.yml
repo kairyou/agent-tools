@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  fetch:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -51,26 +51,38 @@ jobs:
           fi
           npm run claude-skills:fetch -- "${args[@]}"
 
-      - name: Create draft review PR
+      - name: Render and verify final candidate
+        id: candidate
         if: steps.existing.outputs.count == '0'
+        run: |
+          if [ ! -f tools/claude-skill-sync/upstream/pending.json ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          cat tools/claude-skill-sync/upstream/pending-report.md >> "$GITHUB_STEP_SUMMARY"
+          npm run claude-skills:apply -- --write
+          npm run claude-skills:check
+          npm run build
+          npm test
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft review PR
+        if: steps.candidate.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           branch: automation/claude-skill-sync
           delete-branch: true
           draft: true
-          commit-message: "chore: fetch latest Claude Code skill prompts"
-          title: "chore: fetch latest Claude Code skill prompts"
+          commit-message: "chore: sync latest Claude Code skill prompts"
+          title: "chore: sync latest Claude Code skill prompts"
           body: |
-            This draft PR only fetches and normalizes upstream prompt data. It does not modify installable skills.
+            This draft PR contains the final generated candidate for the latest mirrored Claude Code prompts.
 
-            Review `tools/claude-skill-sync/upstream/pending-report.md`, then run:
+            Review:
 
-            ```sh
-            npm run claude-skills:inspect
-            npm run claude-skills:apply -- --dry-run
-            npm run claude-skills:apply -- --write
-            npm run build
-            npm test
-            ```
+            - `tools/claude-skill-sync/upstream/current.json` for source provenance and the accepted baseline.
+            - Generated changes to `skills/workflow/at-review/SKILL.md` and `skills/workflow/at-simplify/SKILL.md`.
+            - Monitored host-specific prompt changes in the workflow run summary; they are intentionally excluded from the portable skills.
 
-            Commit the manually reviewed result to this branch before marking the PR ready.
+            The workflow ran `claude-skills:check`, `npm run build`, and `npm test` before opening this PR. If neither skill changed, merging only advances the reviewed upstream baseline. Merge remains the manual acceptance step; publishing remains separate.

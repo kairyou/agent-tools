@@ -31,6 +31,15 @@ npm latest. If npm is ahead, the command reports the lag and still processes
 the newest available mirror. An explicit `--version` remains strict: a missing
 matching JSON is reported as `mirror pending` without writing files.
 
+The scheduled GitHub Action runs the same fetch and apply pipeline in its
+runner, then runs `claude-skills:check`, the build, and the full test suite. It
+opens a draft PR containing the final candidate: the promoted `current.json`
+and any generated skill changes. The pending files are transient and never
+belong in that PR. A renderer or patch-anchor failure stops the workflow before
+PR creation. Merging the reviewed PR accepts the upstream baseline; publishing
+remains a separate manual step. While a sync PR is open, later scheduled runs
+leave its branch untouched so manual review edits are never overwritten.
+
 GitHub comment posting, workflow routing, Artifact publishing, host-specific
 `ReportFindings` output, and no-Agent fallback prompts are monitored but are
 not composed into the portable skills.
