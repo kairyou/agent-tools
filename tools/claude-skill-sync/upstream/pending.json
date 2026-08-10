@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "claudeCodeVersion": "2.1.226",
+  "source": {
+    "repository": "Piebald-AI/tweakcc",
+    "commit": "726b940a5928a6f5fc9f22d9f9e8b7a7902d0568",
+    "path": "data/prompts/prompts-2.1.226.json",
+    "sha256": "8566d6bdc589cc19f09c71602c5e54fd2b376077b157f9b3fbbf0f7c83d5faf9"
+  },
+  "prompts": [
+    {
+      "name": "Agent Prompt: /code-review part 10 ReportFindings output format",
+      "id": "agent-prompt-code-review-part-10-reportfindings-output-format",
+      "description": "Output-format instructions for /code-review runs that report verified findings once through the ReportFindings tool with capped, severity-ranked findings",
+      "pieces": [
+        "## Output\n\nCall the ${",
+        "} tool once to report this review's results\nwith \\`{level, findings}\\`. \\`findings\\` is at most ${",
+        "} entries ranked\nmost-severe first; each entry has \\`file\\`, \\`line\\`, \\`summary\\`,\n\\`short_summary\\` — the claim compressed to ≤60 characters, no rationale\nor consequence clause — \\`failure_scenario\\`, and \\`category\\` — a short kebab-case slug for the angle\nthat produced it (\\`correctness\\`, \\`simplification\\`, \\`efficiency\\`,\n\\`reuse\\`, \\`altitude\\`, \\`conventions\\`, or a more specific slug like\n\\`test-coverage\\` when one fits better) — plus \\`verdict\\` when a verify pass\nproduced one. If more than ${",
+        "} survive, keep the ${",
+        "} most severe. If\nnothing survives verification, call it with an empty array. Do not also print\nthe findings as text, and do not create or publish an artifact of the review -\nthe tool call is the report.\n"
+      ],
+      "identifiers": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "identifierMap": {
+        "0": "REPORT_FINDINGS_TOOL_NAME",
+        "1": "MAX_FINDINGS"
+      },
+      "version": "2.1.216"
+    },
+    {
+      "name": "Agent Prompt: /code-review part 5 recall-biased verification phase",
+      "id": "agent-prompt-code-review-part-5-recall-biased-verification-phase",
+      "description": "Recall-biased /code-review verification phase that treats realistic uncertain findings as plausible unless code refutes them",
+      "pieces": [
+        "**PLAUSIBLE by default** — do not refute a candidate for being \"speculative\" or\n\"depends on runtime state\" when the state is realistic: concurrency races,\nnil/undefined on a rare-but-reachable path (error handler, cold cache, missing\noptional field), falsy-zero treated as missing, off-by-one on a boundary the\ncode does not exclude, retry storms / partial failures, regex/allowlist that\nlost an anchor. These are PLAUSIBLE.\n\n**REFUTED** only when constructible from the code: factually wrong (quote the\nactual line); provably impossible (type/constant/invariant — show it); already\nhandled in this diff (cite the guard); or pure style with no observable effect."
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.160"
+    },
+    {
+      "name": "Agent Prompt: /code-review part 7 high effort mode",
+      "id": "agent-prompt-code-review-part-7-high-effort-mode",
+      "description": "High-effort /code-review prompt that favors recall with three finder angles, recall-biased verification, and up to ten JSON findings",
+      "pieces": [
+        "\\`high effort → 3+5 angles × 6 candidates → 1-vote verify (recall-biased) → ≤10 findings\\`\n\nYou are reviewing for **recall** at high effort: catch every real bug a careful\nreviewer would catch in one sitting. At this level, catching real bugs matters\nmore than avoiding false positives. Err on the side of surfacing.\n\n${",
+        "}\n## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)\n\nRun **8 independent finder angles** via the ${",
+        "} tool. Each\nsurfaces **up to 6 candidate findings** with \\`file\\`, \\`line\\`, a one-line\n\\`summary\\`, and a concrete \\`failure_scenario\\`. ${",
+        "}\n\n${",
+        "}\n${",
+        "}\nPass every candidate with a nameable failure scenario through — finders that\nsilently drop half-believed candidates bypass the verify step and are the\ndominant cause of misses.\n\n${",
+        "}\n${",
+        "(10)}"
+      ],
+      "identifiers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "identifierMap": {
+        "0": "DIFF_GATHERING_PHASE",
+        "1": "AGENT_TOOL_NAME",
+        "2": "AGENT_UNAVAILABLE_INSTRUCTIONS",
+        "3": "BASE_FINDER_ANGLES_BLOCK",
+        "4": "CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE",
+        "5": "RECALL_BIASED_VERIFY_PHASE",
+        "6": "OUTPUT_FORMAT_FN"
+      },
+      "version": "2.1.218"
+    },
+    {
+      "name": "Agent Prompt: /code-review part 8 GitHub comment posting",
+      "id": "agent-prompt-code-review-part-8-github-comment-posting",
+      "description": "Optional /code-review instructions for posting findings as GitHub inline PR comments when --comment is passed",
+      "pieces": [
+        "\n\n## Posting to GitHub (--comment)\n\nThe \\`--comment\\` flag was passed. After producing the findings list, if the\nreview target is a GitHub PR, post each finding as an inline PR comment via\n\\`mcp__github_inline_comment__create_inline_comment\\` (one call per finding;\ninclude a suggestion block only when it fully fixes the issue). If that tool\nis not available in this session, fall back to \\`gh api\\` (repos/{owner}/{repo}/pulls/{pr}/comments)\nor print the findings instead. If the target is not a PR, print the findings\nto the terminal and note that \\`--comment\\` was ignored.\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.147"
+    },
+    {
+      "name": "Agent Prompt: /code-review part 9 fix application",
+      "id": "agent-prompt-code-review-part-9-fix-application",
+      "description": "Optional /code-review instructions for applying findings to the working tree when --fix is passed",
+      "pieces": [
+        "\n\n## Applying fixes (--fix)\n\nThe \\`--fix\\` flag was passed. After producing the findings list, apply the\nfindings to the working tree instead of stopping at the report: fix each one\ndirectly — correctness bugs and reuse/simplification/efficiency cleanups alike.\nSkip any finding whose fix would change intended behavior, require changes well\noutside the reviewed diff, or that you judge to be a false positive — note the\nskip rather than arguing with it. ${",
+        "?`Then ${",
+        "}; after the call, give one line per skipped finding saying why.`:`Finish with a brief summary of what was fixed\nand what was skipped.`}\n"
+      ],
+      "identifiers": [
+        0,
+        1
+      ],
+      "identifierMap": {
+        "0": "HAS_REPORT_FINDINGS_TOOL",
+        "1": "REPORT_FINDINGS_TOOL_NAME"
+      },
+      "version": "2.1.206"
+    },
+    {
+      "name": "Agent Prompt: /code-review unavailable-agent inline mode",
+      "id": "agent-prompt-code-review-unavailable-agent-inline-mode",
+      "description": "Builds a single-pass inline code-review prompt that gathers a diff, evaluates configured angles, deduplicates findings, optionally sweeps gaps, and reports capped results when the Agent tool is unavailable",
+      "pieces": [
+        "\\`${",
+        "}\\`\n\n${",
+        "}\n\n${",
+        "}\n${",
+        "}## Phase 1 — Find candidates (${",
+        "} angles, single pass)\n\nWork through **${",
+        "} angles** yourself, in sequence, in this same\ncontext — do not spawn subagents. Each surfaces candidate findings with\n\\`file\\`, \\`line\\`, a one-line \\`summary\\`, and a concrete \\`failure_scenario\\`.\n\n${",
+        "}\n${",
+        "}\n## Phase 2 — Dedup and self-check (no subagent verify)\n\nDedup near-duplicates (same defect, same location, same reason → keep one).\nRe-check each remaining candidate yourself against the diff before keeping it.\n${",
+        "}\n${",
+        "(",
+        ")}${",
+        "}"
+      ],
+      "identifiers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "identifierMap": {
+        "0": "REVIEW_MODE_TAG",
+        "1": "REVIEW_LEAD_IN",
+        "2": "AGENT_UNAVAILABLE_INSTRUCTIONS",
+        "3": "DIFF_GATHERING_PHASE",
+        "4": "ANGLE_COUNT",
+        "5": "FINDER_ANGLES_BLOCK",
+        "6": "CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE",
+        "7": "GAP_SWEEP_PHASE",
+        "8": "OUTPUT_FORMAT_FN",
+        "9": "MAX_FINDINGS",
+        "10": "INLINE_REVIEW_DISCLOSURE"
+      },
+      "version": "2.1.213"
+    },
+    {
+      "name": "Agent Prompt: /code-review workflow routing",
+      "id": "agent-prompt-code-review-workflow-routing",
+      "description": "Routes eligible /code-review runs through the background code-review workflow and conditionally adds findings reporting, GitHub commenting, fix application, and artifact publishing",
+      "pieces": [
+        "${",
+        "}Run the workflow-backed code review at ${",
+        "} effort instead of reviewing inline.\n\nInvoke: ${",
+        "}({ name: ${",
+        "(",
+        ")}, args: ${",
+        "(",
+        ")} })\n\nEverything after the level in the args string is passed to the workflow as the review target / instructions. If the user gave additional instructions for this review elsewhere in the conversation (a scope restriction, files to focus on, things to skip), append them to the args string so the workflow honors them.\n\nThe workflow runs the same finder angles and verify pass as the inline review, in the background; the verified findings arrive as a task notification. When they arrive, ${",
+        "?`call ${",
+        "} once with {level, findings} from the result payload (most-severe first; empty array if nothing survived). Give each finding a \\`short_summary\\`: the claim compressed to ≤60 characters, no rationale or consequence clause. Do not also print the findings as text.`:\"present the findings ranked most-severe first (or note that nothing survived verification).\"}${",
+        "?",
+        ":\"\"}${",
+        "?",
+        "(",
+        "):\"\"}${",
+        "&&!",
+        "?",
+        ":\"\"}${",
+        "}${",
+        "}${",
+        "}"
+      ],
+      "identifiers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        6,
+        6,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "identifierMap": {
+        "0": "CODE_REVIEW_ROUTING_NOTICE",
+        "1": "CODE_REVIEW_EFFORT_LEVEL",
+        "2": "WORKFLOW_TOOL_NAME",
+        "3": "JSON_STRINGIFY_FN",
+        "4": "CODE_REVIEW_WORKFLOW_NAME",
+        "5": "CODE_REVIEW_WORKFLOW_ARGS",
+        "6": "HAS_REPORT_FINDINGS_TOOL",
+        "7": "REPORT_FINDINGS_TOOL_NAME",
+        "8": "HAS_COMMENT_FLAG",
+        "9": "COMMENT_POSTING_INSTRUCTIONS_BLOCK",
+        "10": "HAS_FIX_FLAG",
+        "11": "FIX_APPLICATION_INSTRUCTIONS_FN",
+        "12": "IS_MINIMAL_REVIEW_MODE",
+        "13": "FINDINGS_REREPORT_INSTRUCTIONS_BLOCK",
+        "14": "ARTIFACT_PUBLISHING_INSTRUCTIONS_BLOCK",
+        "15": "EMPTY_STRING",
+        "16": "ULTRAREVIEW_TIP_INSTRUCTIONS_BLOCK"
+      },
+      "version": "2.1.224"
+    },
+    {
+      "name": "Agent Prompt: /simplify slash command",
+      "id": "agent-prompt-simplify-slash-command",
+      "description": "Instructions for the /simplify slash command that reviews changed code for reuse, simplification, efficiency, and altitude cleanups, then applies the fixes",
+      "pieces": [
+        "\\`/simplify → 4 cleanup agents in parallel → apply the fixes\\`\n\nYou are improving the quality of the changed code, not hunting for bugs. Review\nit for reuse, simplification, efficiency, and altitude issues, then fix what you\nfind. Do not look for correctness bugs — that is what \\`/code-review\\` is for.\n\n${",
+        "}\n## Phase 1 — Review (4 cleanup agents in parallel)\n\nLaunch **4 independent review agents** via the ${",
+        "} tool, all in a\nsingle message so they run concurrently. Pass each agent the diff and one of\nthe four angles below. Each returns its findings with \\`file\\`, \\`line\\`, a\none-line \\`summary\\`, and the concrete cost (what is duplicated, wasted, or\nharder to maintain).\n\n### Reuse\n\n${",
+        "}\n${",
+        "}\n${",
+        "}\n${",
+        "}\n## Phase 2 — Apply the fixes\n\nWait for all four agents to complete, dedup findings that point at the same\nline or mechanism, and fix each remaining one directly. Skip any finding whose\nfix would change intended behavior, require changes well outside the reviewed\ndiff, or that you judge to be a false positive — note the skip rather than\narguing with it. Finish with a brief summary of what was fixed and what was\nskipped (or confirm the code was already clean).\n"
+      ],
+      "identifiers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "identifierMap": {
+        "0": "DIFF_GATHERING_PHASE",
+        "1": "AGENT_TOOL_NAME",
+        "2": "REUSE_FINDER_ANGLE_BLOCK",
+        "3": "SIMPLIFICATION_FINDER_ANGLE_BLOCK",
+        "4": "EFFICIENCY_FINDER_ANGLE_BLOCK",
+        "5": "ALTITUDE_FINDER_ANGLE_BLOCK"
+      },
+      "version": "2.1.154"
+    },
+    {
+      "name": "Agent Prompt: /simplify unavailable-agent inline mode",
+      "id": "agent-prompt-simplify-unavailable-agent-inline-mode",
+      "description": "Runs the /simplify cleanup workflow inline across reuse, simplification, efficiency, and altitude angles when the Agent tool is unavailable",
+      "pieces": [
+        "\\`/simplify → ${",
+        "} tool unavailable → single-pass inline cleanup → apply the fixes\\`\n\nYou are improving the quality of the changed code, not hunting for bugs. Review\nit for reuse, simplification, efficiency, and altitude issues, then fix what you\nfind. Do not look for correctness bugs — that is what \\`/code-review\\` is for.\n\nThe ${",
+        "} tool isn't available in this context, so the usual\n4-agent fan-out can't run. Work through all four angles below yourself, in\nthis same context, in one pass — do not skip an angle for lack of fan-out.\n\n${",
+        "}\n## Phase 1 — Review (4 cleanup angles, single pass)\n\nReview the diff against each angle below in turn. For each, note findings with\n\\`file\\`, \\`line\\`, a one-line \\`summary\\`, and the concrete cost (what is\nduplicated, wasted, or harder to maintain).\n\n### Reuse\n\n${",
+        "}\n${",
+        "}\n${",
+        "}\n${",
+        "}\n## Phase 2 — Apply the fixes\n\nDedup findings that point at the same line or mechanism, and fix each\nremaining one directly. Skip any finding whose fix would change intended\nbehavior, require changes well outside the reviewed diff, or that you judge to\nbe a false positive — note the skip rather than arguing with it. Finish with a\nbrief summary of what was fixed and what was skipped (or confirm the code was\nalready clean). State clearly in your summary that this was a single-pass\nreview done without the ${",
+        "} tool, not the full 4-agent\nfan-out, so whoever reads it isn't misled about what actually ran.\n"
+      ],
+      "identifiers": [
+        0,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        0
+      ],
+      "identifierMap": {
+        "0": "AGENT_TOOL_NAME",
+        "1": "DIFF_GATHERING_PHASE",
+        "2": "REUSE_GUIDANCE",
+        "3": "SIMPLIFICATION_GUIDANCE",
+        "4": "EFFICIENCY_GUIDANCE",
+        "5": "ALTITUDE_GUIDANCE"
+      },
+      "version": "2.1.213"
+    },
+    {
+      "name": "Skill: Code Review (altitude dimension)",
+      "id": "skill-code-review-altitude",
+      "description": "Code-review dimension: check whether each change is implemented at the right depth rather than as a fragile special case",
+      "pieces": [
+        "### Altitude\n\nCheck that each change is implemented at the right depth, not as a fragile\nbandaid. Special cases layered on shared infrastructure are a sign the fix\nisn't deep enough — prefer generalizing the underlying mechanism over adding\nspecial cases.\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.173"
+    },
+    {
+      "name": "Skill: Code Review (conventions dimension)",
+      "id": "skill-code-review-conventions",
+      "description": "Code-review dimension: flag diff lines that break a rule stated in an applicable CLAUDE.md (user, repo-root, or ancestor-directory), quoting the exact rule and offending line, and emit nothing when no CLAUDE.md governs the change",
+      "pieces": [
+        "### Conventions (CLAUDE.md)\n\nFind the CLAUDE.md files that govern the changed code: the user-level\n~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or\nCLAUDE.local.md in a directory that is an ancestor of a changed file (a\ndirectory's CLAUDE.md only applies to files at or below it). Read each one\nthat exists, then check the diff for clear violations of the rules they state.\n\nOnly flag a violation when you can quote the exact rule and the exact line\nthat breaks it — no style preferences, no vague \"spirit of the doc\"\ninferences. In the finding, name the CLAUDE.md path and quote the rule so the\nreport can cite it. If no CLAUDE.md applies, return nothing for this angle.\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.178"
+    },
+    {
+      "name": "Skill: Code Review correctness finder angles",
+      "id": "skill-code-review-correctness-finder-angles",
+      "description": "Shared /code-review finder-angle block covering line-by-line diff scanning, removed-behavior auditing, and cross-file tracing",
+      "pieces": [
+        "### Angle A — line-by-line diff scan\n\nRead every hunk in the diff, line by line. Then Read the enclosing function for\neach hunk — bugs in unchanged lines of a touched function are in scope (the PR\nre-exposes or fails to fix them). For every line ask: what input, state, timing,\nor platform makes this line wrong? Look for inverted/wrong conditions,\noff-by-one, null/undefined deref, missing \\`await\\`, falsy-zero checks,\nwrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.\n\n### Angle B — removed-behavior auditor\n\nFor every line the diff DELETES or replaces, name the invariant or behavior it\nenforced, then search the new code for where that invariant is re-established.\nIf you can't find it, that's a candidate: a removed guard, a dropped error\npath, a narrowed validation, a deleted test that was covering a real case.\n\n### Angle C — cross-file tracer\n\nFor each function the diff changes, find its callers (Grep for the symbol) and\ncheck whether the change breaks any call site: a new precondition, a changed\nreturn shape, a new exception, a timing/ordering dependency. Also check callees:\ndoes a parallel change in the same PR make a call unsafe?\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.206"
+    },
+    {
+      "name": "Skill: /code-review efficiency dimension",
+      "id": "skill-code-review-efficiency",
+      "description": "Code-review pass that surfaces wasted effort the diff adds — duplicate computation or I/O, avoidable serialization, large scopes held by closures — and points to the cheaper option",
+      "pieces": [
+        "### Efficiency\n\nFlag wasted work the diff introduces: redundant computation or repeated I/O,\nindependent operations run sequentially, blocking work added to startup or\nhot paths. Also flag long-lived objects built from closures or captured\nenvironments — they keep the entire enclosing scope alive for the object's\nlifetime (a memory leak when that scope holds large values); prefer a\nclass/struct that copies only the fields it needs. Name the cheaper\nalternative.\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.173"
+    },
+    {
+      "name": "Skill: Code Review (Output — findings JSON array)",
+      "id": "skill-code-review-output-findings-json-array",
+      "description": "Defines the code-review skill's result shape: a JSON array of findings carrying file, line, summary, and failure_scenario",
+      "pieces": [
+        "## Output\n\nReturn findings as a JSON array of at most ${",
+        "} objects:\n\n\\`\\`\\`json\n[\n  {\n    \"file\": \"path/to/file.ext\",\n    \"line\": 123,\n    \"summary\": \"one-sentence statement of the bug\",\n    \"failure_scenario\": \"concrete inputs/state → wrong output/crash\"\n  }\n]\n\\`\\`\\`\n\nRanked most-severe first. If more than ${",
+        "} survive, keep the ${",
+        "} most\nsevere. If nothing survives verification, return \\`[]\\`. Do not call the\n${",
+        "} tool even if it is available - this review's\noutput contract is the JSON block above.\n"
+      ],
+      "identifiers": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "identifierMap": {
+        "0": "MAX_FINDINGS",
+        "1": "REPORT_FINDINGS_TOOL_NAME"
+      },
+      "version": "2.1.216"
+    },
+    {
+      "name": "Skill: Code Review (Phase 0 — gather the diff)",
+      "id": "skill-code-review-phase-0-gather-diff",
+      "description": "Opening step of the code-review skill: assemble the unified diff to review with git diff",
+      "pieces": [
+        "## Phase 0 — Gather the diff\n\nRun `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`\nif there's no upstream) to get the unified diff under review. If there are\nuncommitted changes, or the range diff is empty, also run `git diff HEAD` and\ninclude the working-tree changes in scope — the review often runs before the\ncommit. If a PR number, branch name, or file path was passed as an argument,\nreview that target instead. Treat this diff as the review scope.\n"
+      ],
+      "identifiers": [],
+      "identifierMap": {},
+      "version": "2.1.173"
+    },
+    {
+      "name": "Skill: Code Review (Phase 2 — verify, recall-biased)",
+      "id": "skill-code-review-phase-2-verify-recall-biased",
+      "description": "Recall-tier verification step: one verifier per candidate finding, biased toward keeping anything plausible",
+      "pieces": [
+        "## Phase 2 — Verify (1-vote, recall-biased)\n\nDedup near-duplicates (same defect, same location, same reason → keep one). For\neach remaining candidate, run **one verifier** via the ${",
+        "} tool:\ngive it the diff, the relevant file(s), and the candidate; it returns exactly\none of **CONFIRMED / PLAUSIBLE / REFUTED**.\n\n${",
+        "}\n\nKeep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.\n"
+      ],
+      "identifiers": [
+        0,
+        1
+      ],
+      "identifierMap": {
+        "0": "AGENT_TOOL_NAME",
+        "1": "RECALL_BIASED_RUBRIC"
+      },
+      "version": "2.1.173"
+    },
+    {
+      "name": "System Prompt: Code review artifact publishing instructions",
+      "id": "system-prompt-code-review-artifact-publishing-instructions",
+      "description": "Instructions for publishing code review findings as a shareable artifact after review results are produced",
+      "pieces": [
+        "\n\n## Publishing a shareable review (Artifact)\n\nAfter the findings are produced, also publish them as an artifact so they can\nbe shared and iterated on outside the terminal:\n\n1. Load the \\`${",
+        "}\\` skill (utilitarian treatment —\n   this is a document).\n2. Write the findings to an HTML file: one section per finding with the file\n   path and line, the one-line summary, the concrete failure scenario, and the\n   relevant code snippet. If nothing survived verification, the page says so\n   in one line.\n3. Call the ${",
+        "} tool with that file path.\n4. End the page body with this line verbatim:\n\n   > ${",
+        "}\n\nSkip this step if the review was invoked only to feed another tool (e.g. a\nworkflow step whose caller handles its own output).\n"
+      ],
+      "identifiers": [
+        0,
+        1,
+        2
+      ],
+      "identifierMap": {
+        "0": "ARTIFACT_DESIGN_SKILL_NAME",
+        "1": "ARTIFACT_TOOL_NAME",
+        "2": "ARTIFACT_ITERATION_FOOTER"
+      },
+      "version": "2.1.198"
+    }
+  ]
+}
