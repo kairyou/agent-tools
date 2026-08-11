@@ -11,7 +11,7 @@ agent-tools/
 ├── skills/            # Reusable Agent Skills.
 │   ├── workflow/      # Workflow-oriented skills.
 │   │   ├── at-commit/   # Conventional Commit message skill.
-│   │   ├── at-review/   # Review changes for bugs and regressions.
+│   │   ├── at-review/   # Review local or hosted changes for bugs and regressions.
 │   │   └── at-simplify/ # Reduce complexity and duplication in changes.
 │   └── integrations/  # Skills that integrate external systems.
 │       └── at-zentao/   # ZenTao bug/task fixing workflow.

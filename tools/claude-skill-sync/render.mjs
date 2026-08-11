@@ -7,6 +7,10 @@ import {
 
 const REUSE_GUIDANCE = LOCAL_FRAGMENTS.reuseGuidance.text;
 const SIMPLIFICATION_BLOCK = LOCAL_FRAGMENTS.simplificationBlock.text;
+const REVIEW_TARGET_GUIDANCE = `If the argument is a hosted pull/merge request URL or a numeric PR/MR identifier,
+read \`references/review-targets.md\` from this skill directory before running
+commands. Follow its read-only resolution and authentication fallback rules;
+do not switch the user's working tree or write to the hosting service.`;
 
 export const LOCAL_LOCKED_HASHES = {
   reuse: sha256(REUSE_GUIDANCE),
@@ -78,6 +82,16 @@ function renderFix(prompts) {
   return applyTextRule(text, "at-review/fix-guard");
 }
 
+function renderReviewGatherDiff(prompts) {
+  const phase = requirePrompt(prompts, "skill-code-review-phase-0-gather-diff");
+  return replaceOnce(
+    phase,
+    "## Phase 0 — Gather the diff\n\n",
+    `## Phase 0 — Gather the diff\n\n${REVIEW_TARGET_GUIDANCE}\n\n`,
+    "at-review/review-target-guidance"
+  );
+}
+
 function renderReview(snapshot) {
   const prompts = promptMap(snapshot);
   let body = requirePrompt(prompts, "agent-prompt-code-review-part-7-high-effort-mode");
@@ -88,7 +102,7 @@ function renderReview(snapshot) {
     "Cleanup, altitude, and conventions candidates use the same\n`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete\ncost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule\nis broken) instead of a crash. Correctness bugs always outrank cleanup,\naltitude, and conventions findings when the output cap forces a cut.",
   ].join("\n\n");
   body = body
-    .replace("${DIFF_GATHERING_PHASE}", `${requirePrompt(prompts, "skill-code-review-phase-0-gather-diff")}\n`)
+    .replace("${DIFF_GATHERING_PHASE}", `${renderReviewGatherDiff(prompts)}\n`)
     .replace("${AGENT_TOOL_NAME}", "Agent")
     .replace("${AGENT_UNAVAILABLE_INSTRUCTIONS}", "")
     .replace(
@@ -112,8 +126,8 @@ function renderReview(snapshot) {
   body = compactMarkdownProse(body);
   return `---
 name: at-review
-description: "Review code changes for bugs, regressions, convention violations, and high-value cleanup opportunities. Use for diffs, commit ranges, PRs, paths, staged changes, or working-tree changes."
-argument-hint: "[--fix] [<pr|branch|path>]"
+description: "Review code changes for bugs, regressions, convention violations, and high-value cleanup opportunities. Use for diffs, commit ranges, hosted PR/MR URLs, branches, paths, staged changes, or working-tree changes."
+argument-hint: "[--fix] [<pr-or-mr-url|branch|path>]"
 ---
 
 # Code Review

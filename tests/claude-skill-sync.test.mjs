@@ -85,6 +85,9 @@ test("accepted Claude prompt snapshot reproduces the installable skills", () => 
 
 test("portable review excludes monitored Claude-only routing", () => {
   const review = renderSkills(readJson(CURRENT_FILE))["at-review"];
+  assert.match(review, /hosted pull\/merge request URL/);
+  assert.match(review, /references\/review-targets\.md/);
+  assert.match(review, /\[--fix\] \[<pr-or-mr-url\|branch\|path>\]/);
   assert.match(review, /host-specific findings-reporting tool/);
   assert.match(review, /main agent's final answer is a Markdown report/);
   assert.match(review, /1\. High\|Medium\|Low: summary/);
@@ -95,6 +98,19 @@ test("portable review excludes monitored Claude-only routing", () => {
   assert.match(review, /Only apply anything when `--fix` was passed/);
   assert.doesNotMatch(review, /GitHub comment|workflow-backed|publish an artifact|ReportFindings/);
   assert.doesNotMatch(review, /Agent tool is not available|single-pass inline/);
+});
+
+test("hosted review target guidance stays read-only and supports private-host fallbacks", () => {
+  const reference = fs.readFileSync(
+    path.join(ROOT, "skills/workflow/at-review/references/review-targets.md"),
+    "utf8"
+  );
+  assert.match(reference, /GitHub commonly exposes/);
+  assert.match(reference, /GitLab commonly exposes/);
+  assert.match(reference, /pasted\s+private URL does not grant access/);
+  assert.match(reference, /Do not comment, approve, merge/);
+  assert.match(reference, /Do not run checkout commands/);
+  assert.match(reference, /Do not guess that the default branch/);
 });
 
 test("manifest targets stay inside the two workflow skill directories", () => {

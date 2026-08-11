@@ -11,7 +11,7 @@ agent-tools/
 ├── skills/            # 可复用的 Agent Skills.
 │   ├── workflow/      # 工作流类 skills.
 │   │   ├── at-commit/   # 生成 Conventional Commits message.
-│   │   ├── at-review/   # 审查改动中的 bug 与回归风险.
+│   │   ├── at-review/   # 审查本地或托管改动中的 bug 与回归风险.
 │   │   └── at-simplify/ # 减少改动中的冗余和复杂度.
 │   └── integrations/  # 对接外部系统的 skills.
 │       └── at-zentao/   # 禅道 bug/task 修复工作流.

@@ -32,7 +32,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
 
 ### at-review
 
-审查改动中的正确性 bug, 回归风险, 约定违规和高价值清理项.
+审查本地改动或托管的 PR/MR 中的正确性 bug, 回归风险, 约定违规和高价值清理项.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
@@ -40,7 +40,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 
 用法:
 
-- `/at-review [--fix] [<pr|分支|路径>]` — 输出审查结果; 加 `--fix` 则同时应用修复
+- `/at-review [--fix] [<PR/MR-URL|分支|路径>]` — 输出审查结果; 私有托管目标需要本地已有只读访问权限, `--fix` 仅对匹配的工作树应用修复
 
 ### at-simplify
 

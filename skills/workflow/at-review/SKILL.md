@@ -1,7 +1,7 @@
 ---
 name: at-review
-description: "Review code changes for bugs, regressions, convention violations, and high-value cleanup opportunities. Use for diffs, commit ranges, PRs, paths, staged changes, or working-tree changes."
-argument-hint: "[--fix] [<pr|branch|path>]"
+description: "Review code changes for bugs, regressions, convention violations, and high-value cleanup opportunities. Use for diffs, commit ranges, hosted PR/MR URLs, branches, paths, staged changes, or working-tree changes."
+argument-hint: "[--fix] [<pr-or-mr-url|branch|path>]"
 ---
 
 # Code Review
@@ -11,6 +11,8 @@ argument-hint: "[--fix] [<pr|branch|path>]"
 You are reviewing for **recall** at high effort: catch every real bug a careful reviewer would catch in one sitting. At this level, catching real bugs matters more than avoiding false positives. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
+
+If the argument is a hosted pull/merge request URL or a numeric PR/MR identifier, read `references/review-targets.md` from this skill directory before running commands. Follow its read-only resolution and authentication fallback rules; do not switch the user's working tree or write to the hosting service.
 
 Run `git diff "@{upstream}...HEAD"` (or `git diff main...HEAD` / `git diff HEAD~1` if there's no upstream) to get the unified diff under review. If there are uncommitted changes, or the range diff is empty, also run `git diff HEAD` and include the working-tree changes in scope — the review often runs before the commit. If a PR number, branch name, or file path was passed as an argument, review that target instead. Treat this diff as the review scope.
 

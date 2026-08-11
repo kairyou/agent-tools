@@ -32,7 +32,7 @@ Usage:
 
 ### at-review
 
-Review changes for correctness bugs, regressions, convention violations, and high-value cleanup findings.
+Review local changes or a hosted PR/MR for correctness bugs, regressions, convention violations, and high-value cleanup findings.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
@@ -40,7 +40,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 
 Usage:
 
-- `/at-review [--fix] [<pr|branch|path>]` — reports review findings; `--fix` also applies them
+- `/at-review [--fix] [<pr-or-mr-url|branch|path>]` — reports review findings; private hosted targets require locally available read access, and `--fix` applies fixes only to a matching working tree
 
 ### at-simplify
 

@@ -26,6 +26,7 @@ every Claude Code runtime.
 | output format | Put the local Markdown report first, with explicit `High`, `Medium`, or `Low` findings; preserve the upstream JSON schema for the low-frequency `--json` mode |
 | `REPORT_FINDINGS_TOOL_NAME` | Host-specific placeholder; the portable output rule forbids using it |
 | `HAS_REPORT_FINDINGS_TOOL` | False branch because host-specific structured reporting is excluded |
+| hosted PR/MR target guidance | Local Phase 0 instruction that loads `references/review-targets.md`; it resolves an exact base/head pair without remote writes or worktree switching |
 | `REUSE_FINDER_ANGLE_BLOCK` | Local-locked Reuse fragment |
 | `SIMPLIFICATION_FINDER_ANGLE_BLOCK` | Local-locked Simplification fragment |
 | `EFFICIENCY_FINDER_ANGLE_BLOCK` | Upstream Efficiency object |
@@ -59,6 +60,7 @@ The rules cover:
 - The optional `--fix` guard.
 - PowerShell-safe quoting for `@{upstream}`.
 - Portable skill names and frontmatter.
+- Read-only hosted PR/MR target resolution through a bundled reference.
 
 ## Local-locked fragments
 
