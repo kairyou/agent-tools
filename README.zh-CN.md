@@ -69,7 +69,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 - `/at-zentao bug <id>` — 直接处理指定 bug
 - `/at-zentao task <id>` — 直接处理指定 task
 
-配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 首次使用会引导; `password` 自己填进文件(或设环境变量 `ZENTAO_PASSWORD`), 不要发在对话里.
+配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 密码可以直接填写, 也可以使用 `"password": { "env": "ZENTAO_PASSWORD" }` 引用环境变量; 不要在对话中粘贴凭据或 token.
 
 ## Integrations
 

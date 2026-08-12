@@ -10,14 +10,20 @@ after touching anything under `integrations/`.
 
 ## Layout
 
-- One directory per installable capability: `integrations/<capability>/`, with
-  per-agent adapters named `<agent>-<form>.mjs`.
-- Every executable file copied into `~/.agent-tools` comes from `dist/`; the
-  sources stay in `integrations/`. `config.default.jsonc` is the exception: the
-  installer merges it in from the repo root.
-- Capability-bound skills live in `integrations/<cap>/skills/`, never in
-  `skills/`: those templates hold unrendered `{{TOKENS}}` and must not ship
-  through `npx skills add`.
+- Self-contained capabilities that work when copied by a Skill installer live
+  in `skills/`. They may bundle `scripts/`, `references/`, and `assets/` in the
+  same Skill directory.
+- Capabilities that require independent installation, hooks, shared runtimes,
+  generated bundles, or Agent configuration live in
+  `integrations/<capability>/`, with per-agent adapters named
+  `<agent>-<form>.mjs`.
+- Every executable installed into `~/.agent-tools` by the integration installer
+  comes from `dist/`; sources stay in `integrations/`. Bundled scripts inside a
+  self-contained Skill are installed with that Skill instead.
+- Integration-owned Skill templates that contain unrendered `{{TOKENS}}` live
+  in `integrations/<capability>/skills/` and must not ship through
+  `npx skills add`. `config.default.jsonc` remains the installer-merged
+  exception from the repo root.
 
 ## Settled decisions
 

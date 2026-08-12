@@ -69,7 +69,7 @@ Usage:
 - `/at-zentao bug <id>` — work a specific bug
 - `/at-zentao task <id>` — work a specific task
 
-Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. First run guides you; fill `password` in the file yourself (or env `ZENTAO_PASSWORD`), never in chat.
+Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. The password can be entered directly or referenced with `"password": { "env": "ZENTAO_PASSWORD" }`; never paste credentials or tokens into chat.
 
 ## Integrations
 
