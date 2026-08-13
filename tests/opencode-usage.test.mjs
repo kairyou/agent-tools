@@ -8,8 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname } from "node:path";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SERVER_PLUGIN = join(ROOT, "integrations", "usage", "opencode-plugin.mjs");
-const TUI_PLUGIN = join(ROOT, "integrations", "usage", "opencode-tui.mjs");
+const SERVER_PLUGIN = join(ROOT, "capabilities", "usage", "opencode-plugin.mjs");
+const TUI_PLUGIN = join(ROOT, "capabilities", "usage", "opencode-tui.mjs");
 
 function withServer(handler, run) {
   return new Promise((resolvePromise, reject) => {

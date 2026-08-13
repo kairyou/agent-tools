@@ -11,9 +11,9 @@ import {
   isMainModule,
   parseJsonc,
   sanitize,
-} from "../skills/integrations/at-zentao/scripts/zentao-cli.mjs";
+} from "../skills/systems/at-zentao/scripts/zentao-cli.mjs";
 
-const CLI = resolve("skills/integrations/at-zentao/scripts/zentao-cli.mjs");
+const CLI = resolve("skills/systems/at-zentao/scripts/zentao-cli.mjs");
 const ACCOUNT = "private-user";
 const PASSWORD = "private-password";
 const TOKEN = "private-token";
@@ -120,7 +120,7 @@ test("sanitize masks secret values and secret-shaped object fields", () => {
 });
 
 test("Skill delegates authentication to the bundled CLI", () => {
-  const skill = readFileSync(resolve("skills/integrations/at-zentao/SKILL.md"), "utf8");
+  const skill = readFileSync(resolve("skills/systems/at-zentao/SKILL.md"), "utf8");
   assert.match(skill, /scripts\/zentao-cli\.mjs/);
   assert.match(skill, /Never read `~\/\.agent-tools\/config\.jsonc`/);
   assert.match(skill, /Never bypass the bundled CLI/);

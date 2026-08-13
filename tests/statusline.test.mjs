@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const STATUSLINE_SCRIPT = join(ROOT, "integrations", "statusline", "claude-statusline.mjs");
+const STATUSLINE_SCRIPT = join(ROOT, "capabilities", "statusline", "claude-statusline.mjs");
 
 test("Claude statusline renders configured fields in configured order", () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));

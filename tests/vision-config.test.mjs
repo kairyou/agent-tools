@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CONFIG_DEFAULTS, loadVisionConfig, resolveSecret } from "../integrations/vision/lib/config.mjs";
+import { CONFIG_DEFAULTS, loadVisionConfig, resolveSecret } from "../capabilities/vision/lib/config.mjs";
 
 function writeConfig(vision) {
   const dir = mkdtempSync(join(tmpdir(), "at-vision-config-"));

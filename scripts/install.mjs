@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // agent-tools installer: wires statusline / usage into each agent's config.
 // Runtime-dependent skills are installed with their capability. Standalone
-// workflow/integration skills are still handled by `npx skills add`.
+// Standalone skills are still handled by `npx skills add`.
 //
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
@@ -68,7 +68,7 @@ const PACKAGE_VERSION = (() => {
   }
 })();
 // Everything copied into ~/.agent-tools is built output from dist/ (see
-// scripts/build.mjs); integrations/ holds the sources.
+// scripts/build.mjs); capabilities/ holds the sources.
 const SOURCE = {
   logHook: path.join(REPO_ROOT, "dist", "log", "hook.mjs"),
   logOpencodePlugin: path.join(REPO_ROOT, "dist", "log", "opencode-plugin.mjs"),
@@ -100,12 +100,12 @@ const AGENT_CAPS = {
 };
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
-// The at-vision skill ships inside the vision capability dir (integrations/vision),
+// The at-vision skill ships inside the vision capability dir (capabilities/vision),
 // not skills/: it is unusable without the MCP server, so it must not surface
 // as an independently installable skill.
-const VISION_SKILL_SRC = path.join(REPO_ROOT, "integrations", "vision", "skills", VISION_SKILL_NAME);
+const VISION_SKILL_SRC = path.join(REPO_ROOT, "capabilities", "vision", "skills", VISION_SKILL_NAME);
 const USAGE_SKILL_NAME = "at-usage";
-const USAGE_SKILL_SRC = path.join(REPO_ROOT, "integrations", "usage", "skills", USAGE_SKILL_NAME);
+const USAGE_SKILL_SRC = path.join(REPO_ROOT, "capabilities", "usage", "skills", USAGE_SKILL_NAME);
 const VISION_BUNDLED_MCP_SERVER = path.join(REPO_ROOT, "dist", "vision", "mcp-server.mjs");
 const VISION_BUNDLED_CLI = path.join(REPO_ROOT, "dist", "vision", "cli.mjs");
 const INSTALL_STATE_PATH = path.join(INSTALL_ROOT, "install-state.json");
@@ -292,7 +292,7 @@ function syncUsageRoutesDir(dryRun) {
 function parseArgs(argv) {
   const opts = {
     agents: [],
-    integrations: [],
+    capabilities: [],
     settings: null,
     codexHooks: null,
     opencodeConfigDir: null,
@@ -343,15 +343,15 @@ function parseArgs(argv) {
           console.error(`Unknown option: ${a}`);
           process.exit(2);
         }
-        opts.integrations.push(a);
+        opts.capabilities.push(a);
     }
   }
   if (opts.agents.length === 0) opts.agents = ["claude"];
-  if (!opts.help && opts.integrations.length === 0) {
+  if (!opts.help && opts.capabilities.length === 0) {
     console.error(`Missing capability (available: ${ALL_CAPS.join(", ")})`);
     process.exit(2);
   }
-  for (const name of opts.integrations) {
+  for (const name of opts.capabilities) {
     if (!ALL_CAPS.includes(name)) {
       console.error(`Unknown capability: ${name} (available: ${ALL_CAPS.join(", ")})`);
       process.exit(2);
@@ -361,14 +361,14 @@ function parseArgs(argv) {
 }
 
 function wants(opts, cap) {
-  return opts.integrations.length === 0 || opts.integrations.includes(cap);
+  return opts.capabilities.length === 0 || opts.capabilities.includes(cap);
 }
 
 function validateAgentCapabilities(opts) {
   const invalid = [];
   for (const agent of opts.agents) {
     const supported = AGENT_CAPS[agent] || [];
-    for (const cap of opts.integrations) {
+    for (const cap of opts.capabilities) {
       if (!supported.includes(cap)) invalid.push(`${cap} -a ${agent}`);
     }
   }
@@ -1181,7 +1181,7 @@ function cleanupVisionRuntimeIfUnused(opts) {
     try {
       fs.rmdirSync(path.dirname(VISION_RATE_LIMIT_STATE));
     } catch {
-      // The shared cache directory may contain state for other integrations.
+      // The shared cache directory may contain state for other capabilities.
     }
   }
   console.log(`  removed unused vision runtime ${VISION_RUNTIME_DIR}`);
@@ -1218,7 +1218,7 @@ function main() {
 }
 
 // Standalone vision commands dispatch before capability parsing so image
-// paths and questions are never mistaken for integrations.
+// paths and questions are never mistaken for capabilities.
 const subcommand = process.argv[2];
 if (subcommand === "inspect-image") {
   const { runInspectImageCli } = await import(

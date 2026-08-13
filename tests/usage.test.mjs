@@ -8,10 +8,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PROVIDER_SCRIPT = join(ROOT, "integrations", "usage", "core.mjs");
-const USAGE_CLI = join(ROOT, "integrations", "usage", "cli.mjs");
+const PROVIDER_SCRIPT = join(ROOT, "capabilities", "usage", "core.mjs");
+const USAGE_CLI = join(ROOT, "capabilities", "usage", "cli.mjs");
 const DIST_USAGE_CLI = join(ROOT, "dist", "usage", "cli.mjs");
-const CODEX_USAGE_HOOK = join(ROOT, "integrations", "usage", "codex-hook.mjs");
+const CODEX_USAGE_HOOK = join(ROOT, "capabilities", "usage", "codex-hook.mjs");
 
 async function withServer(handler, fn) {
   const server = http.createServer(handler);
@@ -657,7 +657,7 @@ test("hook refreshes a missing snapshot in a detached process", async () => {
 const LOCK_TEST_HOME = mkdtempSync(join(tmpdir(), "agent-tools-refresh-lock-"));
 async function lockApi() {
   process.env.AGENT_TOOLS_HOME = LOCK_TEST_HOME;
-  return await import("../integrations/usage/lib/cache.mjs");
+  return await import("../capabilities/usage/lib/cache.mjs");
 }
 
 test("refresh locks are per relay, not global", async () => {

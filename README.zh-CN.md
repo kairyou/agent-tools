@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-可复用的 Agent Skills, 以及可装入 Codex, Claude Code 与 opencode 的 integrations: statusline, provider usage 与跨模型识图.
+可复用的 Agent Skills, 以及适用于 Codex, Claude Code 与 opencode 的 runtime capabilities: statusline, provider usage 与跨模型识图.
 
 需要 Node.js >= 22.
 
@@ -71,7 +71,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 密码可以直接填写, 也可以使用 `"password": { "env": "ZENTAO_PASSWORD" }` 引用环境变量; 不要在对话中粘贴凭据或 token.
 
-## Integrations
+## Capabilities
 
 Runtime capability, 按 agent 选装:
 
@@ -80,7 +80,7 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 # npx -y github:kairyou/agent-tools <capability> -a <agent...>  # 或用 GitHub 上的最新代码(需 Git)
 ```
 
-`--dry-run` 预览, `--uninstall` 解除对应集成, 重新执行安装命令即为更新.
+`--dry-run` 预览, `--uninstall` 移除对应 capability, 重新执行安装命令即为更新.
 安装器只改动自己写入的配置项, 更新 `config.jsonc` 时只补充缺失的默认键,
 不会动你的修改和注释.
 

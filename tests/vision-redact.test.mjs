@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { redactDeep, redactSecrets } from "../integrations/vision/lib/redact.mjs";
+import { redactDeep, redactSecrets } from "../capabilities/vision/lib/redact.mjs";
 
 test("redactSecrets masks every occurrence of each secret", () => {
   const out = redactSecrets("Bearer sk-abc123 then sk-abc123 again, plus other-key", [

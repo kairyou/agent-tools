@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { QUESTION_LIMITS } from "../integrations/vision/lib/inspect.mjs";
+import { QUESTION_LIMITS } from "../capabilities/vision/lib/inspect.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_SCRIPT = join(ROOT, "scripts", "install.mjs");

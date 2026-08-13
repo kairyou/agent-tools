@@ -6,22 +6,24 @@ inferred from the code, and getting them wrong costs a round of rework.
 ## Build and test
 
 Tests exercise the bundles in `dist/`, so run `npm run build` before `npm test`
-after touching anything under `integrations/`.
+after touching anything under `capabilities/`.
 
 ## Layout
 
 - Self-contained capabilities that work when copied by a Skill installer live
   in `skills/`. They may bundle `scripts/`, `references/`, and `assets/` in the
   same Skill directory.
+- Skills centered on a specific external or business system live in
+  `skills/systems/`.
 - Capabilities that require independent installation, hooks, shared runtimes,
   generated bundles, or Agent configuration live in
-  `integrations/<capability>/`, with per-agent adapters named
+  `capabilities/<capability>/`, with per-agent adapters named
   `<agent>-<form>.mjs`.
-- Every executable installed into `~/.agent-tools` by the integration installer
-  comes from `dist/`; sources stay in `integrations/`. Bundled scripts inside a
+- Every executable installed into `~/.agent-tools` by the capability installer
+  comes from `dist/`; sources stay in `capabilities/`. Bundled scripts inside a
   self-contained Skill are installed with that Skill instead.
-- Integration-owned Skill templates that contain unrendered `{{TOKENS}}` live
-  in `integrations/<capability>/skills/` and must not ship through
+- Capability-owned Skill templates that contain unrendered `{{TOKENS}}` live
+  in `capabilities/<capability>/skills/` and must not ship through
   `npx skills add`. `config.default.jsonc` remains the installer-merged
   exception from the repo root.
 

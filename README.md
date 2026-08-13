@@ -1,6 +1,6 @@
 # Agent Tools
 
-Reusable Agent Skills, plus integrations (statusline, provider usage, vision) that install into Codex, Claude Code, and opencode.
+Reusable Agent Skills, plus runtime capabilities (statusline, provider usage, vision) for Codex, Claude Code, and opencode.
 
 Requires Node.js >= 22.
 
@@ -71,7 +71,7 @@ Usage:
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. The password can be entered directly or referenced with `"password": { "env": "ZENTAO_PASSWORD" }`; never paste credentials or tokens into chat.
 
-## Integrations
+## Capabilities
 
 Runtime capabilities, installed per agent:
 
@@ -80,7 +80,7 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 # npx -y github:kairyou/agent-tools <capability> -a <agent...>  # Or the latest code from GitHub (needs Git)
 ```
 
-`--dry-run` previews, `--uninstall` unwires the integration from the agent, and
+`--dry-run` previews, `--uninstall` removes the capability from the agent, and
 re-running the install command updates. The installer only touches config
 entries it wrote itself, and `config.jsonc` updates only add missing default
 keys without touching your edits or comments.

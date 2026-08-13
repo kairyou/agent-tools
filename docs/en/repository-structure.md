@@ -4,7 +4,7 @@
 agent-tools/
 ├── .claude-plugin/    # Claude Code/plugin ecosystem manifest.
 ├── .codex-plugin/     # Codex plugin manifest.
-├── integrations/      # Installable capabilities, one directory each.
+├── capabilities/      # Runtime capabilities, one directory each.
 │   ├── statusline/    # Agent status line: branch, model, usage.
 │   ├── usage/         # Provider balance / quota display.
 │   └── vision/        # Cross-model image understanding.
@@ -13,7 +13,7 @@ agent-tools/
 │   │   ├── at-commit/   # Conventional Commit message skill.
 │   │   ├── at-review/   # Review local or hosted changes for bugs and regressions.
 │   │   └── at-simplify/ # Reduce complexity and duplication in changes.
-│   └── integrations/  # Skills that integrate external systems.
+│   └── systems/       # Self-contained Skills for external systems.
 │       └── at-zentao/   # Self-contained ZenTao workflow and secure API script.
 ├── docs/              # Advanced guides and contributor reference.
 ├── tools/             # Maintainer-only upstream sync and repository tooling.

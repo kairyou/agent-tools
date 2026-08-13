@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CLI = join(ROOT, "integrations", "vision", "lib", "cli.mjs");
+const CLI = join(ROOT, "capabilities", "vision", "lib", "cli.mjs");
 const DIST_CLI = join(ROOT, "dist", "vision", "cli.mjs");
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(8)]);
 
