@@ -35,16 +35,19 @@ every Claude Code runtime.
 Every variable in an included wrapper must be resolved. Generation fails if a
 `${...}` expression remains.
 
-## Excluded but monitored
+## Reference-only upstream prompts
 
-The manifest fetches and diffs these prompt objects but never composes them
-into the portable skills:
+These prompts are not fetched or diffed. Re-check their latest upstream
+equivalents only when implementing the corresponding portable feature:
 
-- GitHub comment posting.
-- Workflow-backed review routing.
-- Artifact publishing.
-- Claude Code `ReportFindings` UI output.
-- Agent-unavailable inline review and simplify modes.
+- `agent-prompt-code-review-part-8-github-comment-posting` — reference for a
+  future opt-in hosted-review comment workflow.
+- `agent-prompt-code-review-unavailable-agent-inline-mode` — reference for a
+  future single-agent review fallback.
+- `agent-prompt-simplify-unavailable-agent-inline-mode` — reference for a
+  future single-agent simplify fallback.
+
+These IDs are discovery hints, not stable upstream contracts.
 
 ## Portability rules
 

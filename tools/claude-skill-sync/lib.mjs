@@ -197,9 +197,6 @@ export function compareSnapshots(current, pending) {
       use: Object.entries(SKILLS)
         .filter(([, skill]) => skill.includedPromptIds.includes(prompt.id))
         .map(([name]) => name),
-      monitoredBy: Object.entries(SKILLS)
-        .filter(([, skill]) => skill.monitoredPromptIds.includes(prompt.id))
-        .map(([name]) => name),
     }));
 }
 
@@ -217,12 +214,11 @@ export function renderReport(current, pending) {
     "## Selected prompt changes",
     "",
   ];
-  if (!changes.length) lines.push("No selected or monitored prompt changed.");
+  if (!changes.length) lines.push("No selected prompt changed.");
   for (const change of changes) {
-    const disposition = change.use.length
-      ? `included by ${change.use.join(", ")}`
-      : `monitored and excluded by ${change.monitoredBy.join(", ")}`;
-    lines.push(`- ${change.id} (${change.status}, source ${change.promptVersion}) — ${disposition}`);
+    lines.push(
+      `- ${change.id} (${change.status}, source ${change.promptVersion}) — included by ${change.use.join(", ")}`
+    );
   }
   lines.push(
     "",

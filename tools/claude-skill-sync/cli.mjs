@@ -117,7 +117,7 @@ async function main() {
     }
     const { changes, wrote } = writePending(snapshot);
     console.log(`Fetched Claude Code ${version} from ${snapshot.source.repository}@${snapshot.source.commit}`);
-    console.log(`${changes.length} selected or monitored prompt(s) differ from current.`);
+    console.log(`${changes.length} selected prompt(s) differ from current.`);
     console.log(wrote ? path.relative(ROOT, REPORT_FILE) : "No pending update was written.");
     return;
   }

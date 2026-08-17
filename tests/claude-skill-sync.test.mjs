@@ -83,7 +83,7 @@ test("accepted Claude prompt snapshot reproduces the installable skills", () => 
   }
 });
 
-test("portable review excludes monitored Claude-only routing", () => {
+test("portable review excludes Claude-only host behavior", () => {
   const review = renderSkills(readJson(CURRENT_FILE))["at-review"];
   assert.match(review, /hosted pull\/merge request URL/);
   assert.match(review, /references\/review-targets\.md/);
@@ -123,17 +123,16 @@ test("manifest targets stay inside the two workflow skill directories", () => {
   );
 });
 
-test("snapshot comparison reports monitored prompt changes", () => {
+test("snapshot comparison reports included prompt changes", () => {
   const current = readJson(CURRENT_FILE);
   const pending = structuredClone(current);
-  const monitored = pending.prompts.find(
-    ({ id }) => id === "agent-prompt-code-review-part-8-github-comment-posting"
+  const included = pending.prompts.find(
+    ({ id }) => id === "skill-code-review-efficiency"
   );
-  monitored.pieces[0] += " changed";
+  included.pieces[0] += " changed";
   const changes = compareSnapshots(current, pending);
   assert.equal(changes.length, 1);
-  assert.deepEqual(changes[0].use, []);
-  assert.deepEqual(changes[0].monitoredBy, ["at-review"]);
+  assert.deepEqual(changes[0].use, ["at-review", "at-simplify"]);
 });
 
 test("renderer fails closed when an expected patch anchor changes", () => {

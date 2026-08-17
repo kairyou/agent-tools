@@ -40,9 +40,8 @@ PR creation. Merging the reviewed PR accepts the upstream baseline; publishing
 remains a separate manual step. While a sync PR is open, later scheduled runs
 leave its branch untouched so manual review edits are never overwritten.
 
-GitHub comment posting, workflow routing, Artifact publishing, host-specific
-`ReportFindings` output, and no-Agent fallback prompts are monitored but are
-not composed into the portable skills.
+Only prompt objects composed into the portable skills are fetched and diffed.
+Host-specific and reference-only prompts do not participate in automated sync.
 
 Piebald does not expose the Reuse and Simplification interpolation values as
 standalone prompt objects. Their text is therefore local-locked in
