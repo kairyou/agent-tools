@@ -1,7 +1,7 @@
 ---
 name: at-zentao
-description: "Work ZenTao bugs/tasks end to end: fetch details, confirm understanding, fix, verify, stage with git add, then ask before committing and before writing status back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs or tasks."
-argument-hint: "bug <id> | task <id> | bugs | tasks | export bug|task <id>"
+description: "Work ZenTao bugs/tasks end to end, log task hours, or read a linked story as development context: fetch details, handle the user's request, verify changes, and ask before committing or writing back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs, tasks, stories, requirements, or task hours."
+argument-hint: "bug <id> [request] | task <id> [request] | story <id> | bugs | tasks | export bug|task <id>"
 ---
 
 # ZenTao Bug/Task Workflow
@@ -70,6 +70,7 @@ node <skill-root>/scripts/zentao-cli.mjs list bugs
 node <skill-root>/scripts/zentao-cli.mjs list tasks
 node <skill-root>/scripts/zentao-cli.mjs get bug <id>
 node <skill-root>/scripts/zentao-cli.mjs get task <id>
+node <skill-root>/scripts/zentao-cli.mjs get story <id>
 node <skill-root>/scripts/zentao-cli.mjs get bug <id> --download-dir <path>
 ```
 
@@ -84,6 +85,7 @@ confirmation steps below:
 node <skill-root>/scripts/zentao-cli.mjs comment bug <id>
 node <skill-root>/scripts/zentao-cli.mjs comment task <id>
 node <skill-root>/scripts/zentao-cli.mjs resolve bug <id>
+node <skill-root>/scripts/zentao-cli.mjs log-hours task <id>
 node <skill-root>/scripts/zentao-cli.mjs finish task <id>
 ```
 
@@ -92,27 +94,42 @@ Input shapes:
 ```json
 {"comment":"Root cause and result."}
 {"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause and result, commit abc1234."}
+{"date":"2026-08-11","consumed":2,"left":14,"work":"Implemented the first part of the task."}
 {"currentConsumed":1.5,"realStarted":"2026-08-11 09:00:00","finishedDate":"2026-08-11 10:30:00"}
 ```
 
 For `duplicate`, also pass `"duplicateBug": <id>`. Send JSON through stdin,
 not as a command-line argument. The CLI handles UTF-8 form encoding and
 computes a task's total consumed hours from its current ZenTao value.
+`log-hours` defaults `date` to today, requires positive remaining hours,
+and keeps the task open. Use `finish` when the task is complete.
 
 ## Usage
 
 - `/at-zentao bug <id>` — handle a single bug.
 - `/at-zentao task <id>` — handle a single task.
+- `/at-zentao story <id>` — read requirement scope and acceptance context.
+  This mode is read-only; do not implement a Story status or comment workflow.
 - `/at-zentao bugs` — list bugs assigned to the configured account; let the
   user select one or more.
 - `/at-zentao tasks` — list assigned tasks and let the user select.
 - `/at-zentao export bug <id>` or `export task <id>` — create a read-only,
   self-contained handoff bundle.
 
+Treat text after an item id as a natural-language request. Phrases such as
+`填工时`, `记录工时`, `log hours`, and `worklog` enter task time-entry mode;
+users do not need to know the internal `log-hours` CLI command. Reuse any date,
+hours, or work description already supplied instead of asking twice.
+
 If a list response includes pager data showing more items than returned, tell
 the user the shown and total counts. Do not silently imply the list is complete.
 Do not browse through products/projects; start from assigned lists or an
 explicit item id.
+
+When a fetched Bug or Task has a positive `story` id, fetch that Story before
+planning the implementation. Use its `spec` and `verify` fields to identify
+scope, acceptance criteria, constraints, and non-goals. Keep the Bug or Task as
+the unit of work: never change, close, activate, or comment on the Story.
 
 ## Per-item workflow
 
@@ -147,10 +164,16 @@ Bug resolutions are `fixed`, `notrepro`, `duplicate`, `bydesign`, `external`,
 write-back comment is one sentence containing root cause, change summary, and
 the commit hash when committed.
 
-For tasks, default to comment only. Offer `finish` only for a simple task
-completed in one sitting, and ask the user for `currentConsumed`; never invent
-hours. For multi-day work or per-day time records, comment and direct the user
-to ZenTao's web UI.
+For tasks, ask whether to record the current work after the verified result.
+For an incomplete task, collect the actual `consumed` hours and work date. When
+the task has a numeric current `left`, suggest the new `left` by subtracting the
+current entry and make that estimate editable in the confirmation; ask only
+when no reliable suggestion is possible. Draft `work` from the verified result
+when context is available. It is optional, so mention the omission without
+blocking the write when there is nothing useful to add. For a completed task,
+collect `currentConsumed` and draft a `finish` write. Never infer consumed
+hours. Show all submitted values and require the same explicit ZenTao
+confirmation before either write.
 
 ## Export mode
 

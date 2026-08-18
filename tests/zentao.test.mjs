@@ -173,6 +173,7 @@ test("list returns only review-safe item fields", async (t) => {
             title: "Cannot save",
             severity: 2,
             status: "active",
+            story: 99,
             assignedTo: ACCOUNT,
             password: PASSWORD,
             token: TOKEN,
@@ -190,8 +191,131 @@ test("list returns only review-safe item fields", async (t) => {
   assert.equal(result.code, 0, result.stderr);
   assertNoSecrets(result.stdout + result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.items, [{ id: 42, title: "Cannot save", severity: 2, status: "active" }]);
+  assert.deepEqual(output.items, [{ id: 42, title: "Cannot save", severity: 2, status: "active", story: 99 }]);
   assert.equal(output.pager.recTotal, 1);
+});
+
+test("task reads expose effort and actual-date fields without unsafe data", async (t) => {
+  const task = {
+    id: 7,
+    name: "Multi-day task",
+    status: "doing",
+    story: 99,
+    estimate: 16,
+    consumed: 2,
+    left: 14,
+    realStarted: "2026-08-11 09:00:00",
+    finishedDate: null,
+    assignedTo: ACCOUNT,
+    password: PASSWORD,
+  };
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/my-work-task.json") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ tasks: [task] }),
+      });
+    }
+    if (req.url === "/api.php/v1/tasks/7") return json(res, 200, task);
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const env = { AGENT_TOOLS_HOME: tempConfig(fixture.url) };
+  const listed = await runCli(["list", "tasks"], { env });
+  const detail = await runCli(["get", "task", "7"], { env });
+  assert.equal(listed.code, 0, listed.stderr);
+  assert.equal(detail.code, 0, detail.stderr);
+  assertNoSecrets(listed.stdout + listed.stderr + detail.stdout + detail.stderr);
+  assert.deepEqual(JSON.parse(listed.stdout).items, [{
+    id: 7,
+    name: "Multi-day task",
+    status: "doing",
+    story: 99,
+    estimate: 16,
+    consumed: 2,
+    left: 14,
+    realStarted: "2026-08-11 09:00:00",
+    finishedDate: null,
+  }]);
+  assert.deepEqual(JSON.parse(detail.stdout).item, {
+    id: 7,
+    name: "Multi-day task",
+    status: "doing",
+    story: 99,
+    estimate: 16,
+    consumed: 2,
+    left: 14,
+    realStarted: "2026-08-11 09:00:00",
+    finishedDate: null,
+  });
+});
+
+test("story reads expose only development context and download story attachments", async (t) => {
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/api.php/v1/stories/99") {
+      return json(res, 200, {
+        id: 99,
+        title: "Support approval flow",
+        status: "active",
+        stage: "developing",
+        pri: 2,
+        estimate: 8,
+        spec: '<p>Managers can approve requests. <img src="/file-read-88.png"></p>',
+        verify: "Approved requests are immutable.",
+        openedBy: ACCOUNT,
+        password: PASSWORD,
+        token: TOKEN,
+      });
+    }
+    if (req.url === "/file-read-88.png") {
+      assert.equal(req.headers.token, TOKEN);
+      res.writeHead(200, { "content-type": "image/png" });
+      return res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const download = mkdtempSync(join(tmpdir(), "at-zentao-story-"));
+  const result = await runCli(["get", "story", "99", "--download-dir", download], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.item, {
+    id: 99,
+    title: "Support approval flow",
+    status: "active",
+    pri: 2,
+    stage: "developing",
+    estimate: 8,
+    spec: '<p>Managers can approve requests. <img src="/file-read-88.png"></p>',
+    verify: "Approved requests are immutable.",
+  });
+  assert.equal(output.attachments.length, 1);
+  assert.ok(existsSync(output.attachments[0].path));
+  assert.deepEqual([...readFileSync(output.attachments[0].path)], [0x89, 0x50, 0x4e, 0x47]);
+});
+
+test("story support remains read-only", async () => {
+  const result = await runCli(["comment", "story", "99"], {
+    env: {
+      AGENT_TOOLS_HOME: mkdtempSync(join(tmpdir(), "at-zentao-story-write-")),
+      ZENTAO_URL: "http://127.0.0.1:1",
+      ZENTAO_TOKEN: TOKEN,
+    },
+    input: JSON.stringify({ comment: "Do not write this." }),
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stderr).error, "usage_error");
 });
 
 test("get downloads token-gated images and returns local paths", async (t) => {
@@ -286,6 +410,168 @@ test("finish computes total consumed time inside the CLI", async (t) => {
   assert.equal(submitted.get("consumed"), "3.5");
   assert.equal(submitted.get("realStarted"), "2026-08-11 09:00:00");
   assert.equal(submitted.get("finishedDate"), "2026-08-11 10:30:00");
+});
+
+test("log-hours uses recordWorkhour on modern ZenTao", async (t) => {
+  let submitted;
+  let legacyCalls = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/task-recordworkhour-7.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ task: { id: 7 } }),
+      });
+    }
+    if (req.url === "/task-recordworkhour-7.json" && req.method === "POST") {
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ result: "success" }),
+      });
+    }
+    if (req.url === "/task-recordestimate-7.json") legacyCalls += 1;
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const input = JSON.stringify({
+    date: "2026-08-17",
+    consumed: 2,
+    left: 14,
+    work: "完成第一部分实现.",
+  });
+  const result = await runCli(["log-hours", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input,
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  assert.equal(legacyCalls, 0);
+  assert.equal(submitted.get("id[1]"), null);
+  assert.equal(submitted.get("date[1]"), "2026-08-17");
+  assert.equal(submitted.get("consumed[1]"), "2");
+  assert.equal(submitted.get("left[1]"), "14");
+  assert.equal(submitted.get("work[1]"), "完成第一部分实现.");
+});
+
+test("log-hours falls back to recordEstimate before writing on legacy ZenTao", async (t) => {
+  let submitted;
+  let postCount = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/task-recordworkhour-7.json") {
+      res.writeHead(200, { "content-type": "text/plain" });
+      return res.end("the module task has no recordworkhour method");
+    }
+    if (req.url === "/task-recordestimate-7.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ task: { id: 7 } }),
+      });
+    }
+    if (req.url === "/task-recordestimate-7.json" && req.method === "POST") {
+      postCount += 1;
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ result: "success" }),
+      });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["log-hours", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: JSON.stringify({
+      date: "2026-08-17",
+      consumed: 2,
+      left: 14,
+      work: "完成第一部分实现.",
+    }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  assert.equal(postCount, 1);
+  assert.equal(submitted.get("id[1]"), "1");
+  assert.equal(submitted.get("dates[1]"), "2026-08-17");
+  assert.equal(submitted.get("date[1]"), null);
+  assert.equal(submitted.get("consumed[1]"), "2");
+  assert.equal(submitted.get("left[1]"), "14");
+  assert.equal(submitted.get("work[1]"), "完成第一部分实现.");
+});
+
+test("log-hours stops without writing when neither workhour route exists", async (t) => {
+  let postCount = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.method === "POST" && req.url.startsWith("/task-")) postCount += 1;
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["log-hours", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: JSON.stringify({ consumed: 2, left: 14, work: "No route." }),
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stderr).error, "unsupported_version");
+  assert.equal(postCount, 0);
+});
+
+test("log-hours allows an omitted work description", async (t) => {
+  let submitted;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/task-recordworkhour-7.json" && req.method === "GET") {
+      return json(res, 200, { status: "success", data: JSON.stringify({ task: { id: 7 } }) });
+    }
+    if (req.url === "/task-recordworkhour-7.json" && req.method === "POST") {
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["log-hours", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: JSON.stringify({ consumed: 2, left: 14 }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(submitted.get("work[1]"), null);
+});
+
+test("log-hours rejects values that would be invalid or finish the task", async () => {
+  const env = {
+    AGENT_TOOLS_HOME: mkdtempSync(join(tmpdir(), "at-zentao-effort-validation-")),
+    ZENTAO_URL: "http://127.0.0.1:1",
+    ZENTAO_TOKEN: TOKEN,
+  };
+  const cases = [
+    { consumed: 0, left: 2, work: "No time." },
+    { consumed: 2, left: 0, work: "Would finish." },
+    { consumed: 2, left: 2, work: 42 },
+    { date: "2026-02-30", consumed: 2, left: 2, work: "Invalid date." },
+    { date: "2999-01-01", consumed: 2, left: 2, work: "Future date." },
+  ];
+  for (const input of cases) {
+    const result = await runCli(["log-hours", "task", "7"], {
+      env,
+      input: JSON.stringify(input),
+    });
+    assert.equal(result.code, 1);
+    assert.equal(JSON.parse(result.stderr).error, "usage_error");
+  }
 });
 
 test("authentication and API failures never echo server-provided secrets", async (t) => {

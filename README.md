@@ -56,7 +56,7 @@ Usage:
 
 ### at-zentao
 
-Work ZenTao (禅道) bugs/tasks end to end: fix, verify, stage; asks before committing and before writing status back.
+Work ZenTao (禅道) bugs/tasks end to end, read linked story context, or log task hours; asks before committing and before writing back.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
@@ -67,7 +67,8 @@ Usage:
 - `/at-zentao bugs` — list bugs assigned to you (the configured account); pick one or several (several = batch mode)
 - `/at-zentao tasks` — same, for tasks
 - `/at-zentao bug <id>` — work a specific bug
-- `/at-zentao task <id>` — work a specific task
+- `/at-zentao task <id> [request]` — work a specific task or log hours with a natural-language request
+- `/at-zentao story <id>` — read requirement scope and acceptance context without writing back
 
 Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. The password can be entered directly or referenced with `"password": { "env": "ZENTAO_PASSWORD" }`; never paste credentials or tokens into chat.
 

@@ -355,6 +355,13 @@ function itemKind(value) {
   return value;
 }
 
+function detailKind(value) {
+  if (value !== "bug" && value !== "task" && value !== "story") {
+    throw new CliError("usage_error", "detail type must be bug, task, or story");
+  }
+  return value;
+}
+
 function pick(source, keys) {
   const output = {};
   for (const key of keys) if (source?.[key] !== undefined) output[key] = source[key];
@@ -367,7 +374,7 @@ function normalizeDetail(kind, response) {
   if (!detail || typeof detail !== "object") {
     throw new CliError("response_error", `ZenTao response has no ${kind} detail`);
   }
-  return { raw: detail, safe: pick(detail, [
+  const fields = [
     "id",
     "title",
     "name",
@@ -380,15 +387,24 @@ function normalizeDetail(kind, response) {
     "product",
     "project",
     "execution",
+    "story",
     "type",
     "openedDate",
     "deadline",
-  ]) };
+  ];
+  if (kind === "task") {
+    fields.push("estimate", "consumed", "left", "realStarted", "finishedDate");
+  } else if (kind === "story") {
+    fields.push("stage", "category", "plan", "estimate", "spec", "verify", "source", "sourceNote");
+  }
+  return { raw: detail, safe: pick(detail, fields) };
 }
 
 function attachmentUrls(detail) {
   const found = new Set();
-  const html = [detail.steps, detail.desc].filter((entry) => typeof entry === "string").join("\n");
+  const html = [detail.steps, detail.desc, detail.spec, detail.verify]
+    .filter((entry) => typeof entry === "string")
+    .join("\n");
   for (const match of html.matchAll(/(?:src|href)=["']([^"']*\/file-(?:read|download)-\d+[^"']*)["']/gi)) {
     found.add(match[1].replaceAll("&amp;", "&"));
   }
@@ -461,18 +477,64 @@ function legacyResult(response) {
   return { ok: true, result, ...(typeof message === "string" ? { message: message.slice(0, 500) } : {}) };
 }
 
+async function workhourVariant(client, id) {
+  const variants = [
+    { route: `task-recordworkhour-${id}.json`, dateField: "date[1]", legacy: false },
+    { route: `task-recordestimate-${id}.json`, dateField: "dates[1]", legacy: true },
+  ];
+  for (const variant of variants) {
+    try {
+      decodeLegacy(await client.json(variant.route));
+      return variant;
+    } catch (error) {
+      const unavailable = error instanceof CliError && (
+        (error.code === "http_error" && error.status === 404) ||
+        error.code === "response_error"
+      );
+      if (!unavailable) throw error;
+    }
+  }
+  throw new CliError(
+    "unsupported_version",
+    "ZenTao exposes neither recordWorkhour nor recordEstimate for this task"
+  );
+}
+
 function localDateTime(date = new Date()) {
   const part = (value) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}:${part(date.getSeconds())}`;
+}
+
+function localDate(date = new Date()) {
+  return localDateTime(date).slice(0, 10);
+}
+
+function effortDate(value) {
+  const date = value === undefined ? localDate() : value;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new CliError("usage_error", "date must use YYYY-MM-DD");
+  }
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    throw new CliError("usage_error", "date must be a valid calendar date");
+  }
+  if (date > localDate()) throw new CliError("usage_error", "date cannot be in the future");
+  return date;
 }
 
 function help() {
   return `Usage:
   zentao-cli.mjs doctor
   zentao-cli.mjs list <bugs|tasks>
-  zentao-cli.mjs get <bug|task> <id> [--download-dir <path>]
+  zentao-cli.mjs get <bug|task|story> <id> [--download-dir <path>]
   zentao-cli.mjs resolve bug <id>          # JSON on stdin
   zentao-cli.mjs comment <bug|task> <id>   # {"comment":"..."} on stdin
+  zentao-cli.mjs log-hours task <id>       # JSON on stdin
   zentao-cli.mjs finish task <id>          # JSON on stdin`;
 }
 
@@ -497,20 +559,21 @@ export async function run(argv, { env = process.env } = {}) {
     const singular = plural.slice(0, -1);
     const data = decodeLegacy(await client.json(`my-work-${singular}.json`));
     const fields = singular === "bug"
-      ? ["id", "title", "severity", "pri", "status", "project", "product"]
-      : ["id", "name", "title", "pri", "status", "project", "execution", "module"];
+      ? ["id", "title", "severity", "pri", "status", "project", "product", "story"]
+      : ["id", "name", "title", "pri", "status", "project", "execution", "module", "story", "estimate", "consumed", "left", "realStarted", "finishedDate"];
     const items = Array.isArray(data?.[plural]) ? data[plural].map((item) => pick(item, fields)) : [];
     return { items, ...(data?.pager ? { pager: pick(data.pager, ["recTotal", "recPerPage", "pageID", "pageTotal"]) } : {}) };
   }
 
   if (command === "get") {
-    const kind = itemKind(args[0]);
+    const kind = detailKind(args[0]);
     const id = positiveId(args[1]);
     let directory;
     if (args[2] === "--download-dir" && args[3]) directory = path.resolve(args[3]);
     else if (args.length > 2) throw new CliError("usage_error", "get accepts only --download-dir <path>");
     else directory = fs.mkdtempSync(path.join(os.tmpdir(), `agent-tools-zentao-${kind}-${id}-`));
-    const detail = normalizeDetail(kind, await client.json(`api.php/v1/${kind}s/${id}`));
+    const resource = kind === "story" ? "stories" : `${kind}s`;
+    const detail = normalizeDetail(kind, await client.json(`api.php/v1/${resource}/${id}`));
     const attachments = await downloadAttachments(client, detail.raw, directory);
     return { item: detail.safe, attachments };
   }
@@ -547,6 +610,38 @@ export async function run(argv, { env = process.env } = {}) {
         duplicateBug: input.duplicateBug,
         comment: input.comment,
       }),
+    });
+    return legacyResult(response);
+  }
+
+  if (command === "log-hours") {
+    if (args[0] !== "task") throw new CliError("usage_error", "log-hours supports tasks only");
+    const id = positiveId(args[1]);
+    const input = await readInput();
+    const consumed = Number(input.consumed);
+    const left = Number(input.left);
+    if (!Number.isFinite(consumed) || consumed <= 0) {
+      throw new CliError("usage_error", "consumed must be positive");
+    }
+    if (!Number.isFinite(left) || left <= 0) {
+      throw new CliError("usage_error", "left must be positive; use finish to complete a task");
+    }
+    if (input.work !== undefined && typeof input.work !== "string") {
+      throw new CliError("usage_error", "work must be a string when provided");
+    }
+    const date = effortDate(input.date);
+    const variant = await workhourVariant(client, id);
+    const fields = {
+      [variant.dateField]: date,
+      "work[1]": input.work?.trim(),
+      "consumed[1]": consumed,
+      "left[1]": left,
+    };
+    if (variant.legacy) fields["id[1]"] = 1;
+    const response = await client.json(variant.route, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: formBody(fields),
     });
     return legacyResult(response);
   }
