@@ -56,7 +56,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
 
 ### at-zentao
 
-读取禅道 bug/task 并端到端处理, 补充关联 story 上下文, 或记录任务工时; 提交和回写前均需确认.
+读取禅道 bug/task 并端到端处理, 管理任务状态和工时, 或补充关联 story 上下文; 提交和回写前均需确认.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
@@ -67,7 +67,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 - `/at-zentao bugs` — 列出指派给你(配置的账号)的 bug, 挑一个或多个(多个 = 批量模式)
 - `/at-zentao tasks` — 同上, 任务清单
 - `/at-zentao bug <id>` — 直接处理指定 bug
-- `/at-zentao task <id> [请求]` — 处理指定 task, 或用自然语言记录工时
+- `/at-zentao task <id> [请求]` — 处理指定 task, 用自然语言开始/暂停/继续或记录工时
 - `/at-zentao story <id>` — 只读查看研发需求范围和验收信息
 
 配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 密码可以直接填写, 也可以使用 `"password": { "env": "ZENTAO_PASSWORD" }` 引用环境变量; 不要在对话中粘贴凭据或 token.

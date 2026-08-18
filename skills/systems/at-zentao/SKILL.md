@@ -1,6 +1,6 @@
 ---
 name: at-zentao
-description: "Work ZenTao bugs/tasks end to end, log task hours, or read a linked story as development context: fetch details, handle the user's request, verify changes, and ask before committing or writing back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs, tasks, stories, requirements, or task hours."
+description: "Work ZenTao bugs/tasks end to end, manage task lifecycle and hours, or read a linked story as development context: fetch details, handle the user's request, verify changes, and ask before committing or writing back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs, tasks, stories, requirements, task status, or task hours."
 argument-hint: "bug <id> [request] | task <id> [request] | story <id> | bugs | tasks | export bug|task <id>"
 ---
 
@@ -85,6 +85,9 @@ confirmation steps below:
 node <skill-root>/scripts/zentao-cli.mjs comment bug <id>
 node <skill-root>/scripts/zentao-cli.mjs comment task <id>
 node <skill-root>/scripts/zentao-cli.mjs resolve bug <id>
+node <skill-root>/scripts/zentao-cli.mjs start task <id>
+node <skill-root>/scripts/zentao-cli.mjs pause task <id>
+node <skill-root>/scripts/zentao-cli.mjs resume task <id>
 node <skill-root>/scripts/zentao-cli.mjs log-hours task <id>
 node <skill-root>/scripts/zentao-cli.mjs finish task <id>
 ```
@@ -94,6 +97,7 @@ Input shapes:
 ```json
 {"comment":"Root cause and result."}
 {"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause and result, commit abc1234."}
+{"realStarted":"2026-08-11 09:00:00","comment":"Started implementation."}
 {"date":"2026-08-11","consumed":2,"left":14,"work":"Implemented the first part of the task."}
 {"currentConsumed":1.5,"realStarted":"2026-08-11 09:00:00","finishedDate":"2026-08-11 10:30:00"}
 ```
@@ -101,6 +105,9 @@ Input shapes:
 For `duplicate`, also pass `"duplicateBug": <id>`. Send JSON through stdin,
 not as a command-line argument. The CLI handles UTF-8 form encoding and
 computes a task's total consumed hours from its current ZenTao value.
+`start`, `pause`, and `resume` accept an optional `comment`; `start` also
+accepts `realStarted` and otherwise uses the current time. The CLI preserves
+the task's current hours when starting or resuming it.
 `log-hours` defaults `date` to today, requires positive remaining hours,
 and keeps the task open. Use `finish` when the task is complete.
 
@@ -116,10 +123,11 @@ and keeps the task open. Use `finish` when the task is complete.
 - `/at-zentao export bug <id>` or `export task <id>` — create a read-only,
   self-contained handoff bundle.
 
-Treat text after an item id as a natural-language request. Phrases such as
-`填工时`, `记录工时`, `log hours`, and `worklog` enter task time-entry mode;
-users do not need to know the internal `log-hours` CLI command. Reuse any date,
-hours, or work description already supplied instead of asking twice.
+Treat text after an item id as a natural-language request. Recognize task
+lifecycle requests such as `开始`, `暂停`, `继续`, `start`, `pause`, and
+`resume`, and time-entry requests such as `填工时`, `记录工时`, `log hours`,
+and `worklog`. Users do not need to know the internal CLI commands. Reuse any
+date, hours, or work description already supplied instead of asking twice.
 
 If a list response includes pager data showing more items than returned, tell
 the user the shown and total counts. Do not silently imply the list is complete.
@@ -130,6 +138,14 @@ When a fetched Bug or Task has a positive `story` id, fetch that Story before
 planning the implementation. Use its `spec` and `verify` fields to identify
 scope, acceptance criteria, constraints, and non-goals. Keep the Bug or Task as
 the unit of work: never change, close, activate, or comment on the Story.
+
+For a Task in `wait`, offer `start` when the user is about to work on it. For a
+Task in `pause`, offer `resume`; the CLI maps this to ZenTao's `restart`
+operation. Invoke `pause` only when the user explicitly asks or confirms that
+the work itself is paused; the end of a session or workday is not enough. These
+are status writes, so show the transition and optional comment and obtain
+explicit confirmation before invoking the CLI. Starting or resuming preserves
+the current hours and never implies new consumed time.
 
 ## Per-item workflow
 
@@ -174,6 +190,10 @@ blocking the write when there is nothing useful to add. For a completed task,
 collect `currentConsumed` and draft a `finish` write. Never infer consumed
 hours. Show all submitted values and require the same explicit ZenTao
 confirmation before either write.
+
+When the user wants to record hours and pause, show both exact writes in one
+confirmation, then run `log-hours` before `pause`. Stop if the hour write fails.
+Do not add lifecycle support for `activate`, `cancel`, or `close`.
 
 ## Export mode
 

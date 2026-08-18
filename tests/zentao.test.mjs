@@ -412,6 +412,158 @@ test("finish computes total consumed time inside the CLI", async (t) => {
   assert.equal(submitted.get("finishedDate"), "2026-08-11 10:30:00");
 });
 
+test("start preserves current task hours and submits the chosen start time", async (t) => {
+  let submitted;
+  let postCount = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/task-start-7.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({
+          task: {
+            assignedTo: ACCOUNT,
+            consumed: 2,
+            left: 14,
+            realStarted: "0000-00-00 00:00:00",
+          },
+        }),
+      });
+    }
+    if (req.url === "/task-start-7.json" && req.method === "POST") {
+      postCount += 1;
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["start", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: JSON.stringify({
+      realStarted: "2026-08-18 09:30:00",
+      comment: "开始处理任务.",
+    }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  assert.equal(postCount, 1);
+  assert.equal(submitted.get("assignedTo"), ACCOUNT);
+  assert.equal(submitted.get("consumed"), "2");
+  assert.equal(submitted.get("left"), "14");
+  assert.equal(submitted.get("realStarted"), "2026-08-18 09:30:00");
+  assert.equal(submitted.get("comment"), "开始处理任务.");
+});
+
+test("pause submits only its optional comment after checking the route", async (t) => {
+  let submitted;
+  let getCount = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/task-pause-7.json" && req.method === "GET") {
+      getCount += 1;
+      return json(res, 200, { status: "success", data: JSON.stringify({ task: { id: 7 } }) });
+    }
+    if (req.url === "/task-pause-7.json" && req.method === "POST") {
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["pause", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: JSON.stringify({ comment: "等待外部依赖." }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(getCount, 1);
+  assert.deepEqual([...submitted.entries()], [["comment", "等待外部依赖."]]);
+});
+
+test("resume maps to restart and preserves current task fields", async (t) => {
+  let submitted;
+  let resumeRouteCalls = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url.startsWith("/task-resume-")) resumeRouteCalls += 1;
+    if (req.url === "/task-restart-7.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({
+          task: {
+            assignedTo: ACCOUNT,
+            consumed: 3.5,
+            left: 10,
+            realStarted: "2026-08-11 09:00:00",
+          },
+        }),
+      });
+    }
+    if (req.url === "/task-restart-7.json" && req.method === "POST") {
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["resume", "task", "7"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input: "{}",
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(resumeRouteCalls, 0);
+  assert.equal(submitted.get("assignedTo"), ACCOUNT);
+  assert.equal(submitted.get("consumed"), "3.5");
+  assert.equal(submitted.get("left"), "10");
+  assert.equal(submitted.get("realStarted"), "2026-08-11 09:00:00");
+  assert.equal(submitted.get("comment"), null);
+});
+
+test("task transitions reject unsafe input or missing current hours before writing", async (t) => {
+  let postCount = 0;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.method === "POST") postCount += 1;
+    if (req.url === "/task-start-7.json") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ task: { consumed: 2, left: null } }),
+      });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const env = { AGENT_TOOLS_HOME: tempConfig(fixture.url) };
+  const invalidComment = await runCli(["pause", "task", "7"], {
+    env,
+    input: JSON.stringify({ comment: 42 }),
+  });
+  const invalidStartTime = await runCli(["resume", "task", "7"], {
+    env,
+    input: JSON.stringify({ realStarted: "2026-08-18 09:30:00" }),
+  });
+  const missingHours = await runCli(["start", "task", "7"], { env, input: "{}" });
+  assert.equal(invalidComment.code, 1);
+  assert.equal(JSON.parse(invalidComment.stderr).error, "usage_error");
+  assert.equal(invalidStartTime.code, 1);
+  assert.equal(JSON.parse(invalidStartTime.stderr).error, "usage_error");
+  assert.equal(missingHours.code, 1);
+  assert.equal(JSON.parse(missingHours.stderr).error, "response_error");
+  assert.equal(postCount, 0);
+});
+
 test("log-hours uses recordWorkhour on modern ZenTao", async (t) => {
   let submitted;
   let legacyCalls = 0;

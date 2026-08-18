@@ -14,7 +14,7 @@ agent-tools/
 │   │   ├── at-review/   # Review local or hosted changes for bugs and regressions.
 │   │   └── at-simplify/ # Reduce complexity and duplication in changes.
 │   └── systems/       # Self-contained Skills for external systems.
-│       └── at-zentao/   # Self-contained ZenTao development and time-entry workflow.
+│       └── at-zentao/   # Self-contained ZenTao development and task-lifecycle workflow.
 ├── docs/              # Advanced guides and contributor reference.
 ├── tools/             # Maintainer-only upstream sync and repository tooling.
 └── scripts/           # Install, sync, validation, and maintenance scripts.

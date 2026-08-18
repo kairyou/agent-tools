@@ -534,6 +534,9 @@ function help() {
   zentao-cli.mjs get <bug|task|story> <id> [--download-dir <path>]
   zentao-cli.mjs resolve bug <id>          # JSON on stdin
   zentao-cli.mjs comment <bug|task> <id>   # {"comment":"..."} on stdin
+  zentao-cli.mjs start task <id>           # JSON on stdin
+  zentao-cli.mjs pause task <id>           # JSON on stdin
+  zentao-cli.mjs resume task <id>          # JSON on stdin
   zentao-cli.mjs log-hours task <id>       # JSON on stdin
   zentao-cli.mjs finish task <id>          # JSON on stdin`;
 }
@@ -610,6 +613,59 @@ export async function run(argv, { env = process.env } = {}) {
         duplicateBug: input.duplicateBug,
         comment: input.comment,
       }),
+    });
+    return legacyResult(response);
+  }
+
+  if (["start", "pause", "resume"].includes(command)) {
+    if (args[0] !== "task") throw new CliError("usage_error", `${command} supports tasks only`);
+    const id = positiveId(args[1]);
+    const input = await readInput();
+    if (input.comment !== undefined && typeof input.comment !== "string") {
+      throw new CliError("usage_error", "comment must be a string when provided");
+    }
+    if (input.realStarted !== undefined && (
+      command !== "start" ||
+      typeof input.realStarted !== "string" ||
+      !input.realStarted.trim()
+    )) {
+      throw new CliError("usage_error", "realStarted is accepted only for start and must be a non-empty string");
+    }
+
+    const method = command === "resume" ? "restart" : command;
+    const route = `task-${method}-${id}.json`;
+    const form = decodeLegacy(await client.json(route));
+    const task = form?.task || form;
+    const fields = { comment: input.comment?.trim() };
+
+    if (command !== "pause") {
+      const consumed = Number(task?.consumed);
+      const left = Number(task?.left);
+      if (!Number.isFinite(consumed) || consumed < 0 || !Number.isFinite(left) || left <= 0) {
+        throw new CliError("response_error", "ZenTao task has no safe current consumed/left values for this transition");
+      }
+      const assignedTo = typeof task.assignedTo === "string" && task.assignedTo
+        ? task.assignedTo
+        : config.account;
+      const existingStarted = typeof task.realStarted === "string" &&
+        task.realStarted.trim() &&
+        !task.realStarted.startsWith("0000-00-00")
+        ? task.realStarted
+        : null;
+      Object.assign(fields, {
+        assignedTo,
+        consumed,
+        left,
+        realStarted: command === "start"
+          ? input.realStarted?.trim() || localDateTime()
+          : existingStarted || localDateTime(),
+      });
+    }
+
+    const response = await client.json(route, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: formBody(fields),
     });
     return legacyResult(response);
   }
