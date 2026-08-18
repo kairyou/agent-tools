@@ -78,6 +78,18 @@ function assertNoSecrets(text) {
   assert.doesNotMatch(text, new RegExp(TOKEN));
 }
 
+async function authenticatedFixture(t, handler) {
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    return handler(req, res);
+  });
+  t.after(fixture.close);
+  return { AGENT_TOOLS_HOME: tempConfig(fixture.url) };
+}
+
 test("JSONC config supports comments, trailing commas, and env secret references", () => {
   const parsed = parseJsonc('{ /* x */ "zentao": { "url": "http://example.test", }, }');
   assert.equal(parsed.zentao.url, "http://example.test");
@@ -724,6 +736,193 @@ test("log-hours rejects values that would be invalid or finish the task", async 
     assert.equal(result.code, 1);
     assert.equal(JSON.parse(result.stderr).error, "usage_error");
   }
+});
+
+test("hours lists modern work-hour records with safe fields only", async (t) => {
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-recordworkhour-7.json") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({
+          efforts: {
+            11: { id: 11, date: "2026-08-17", consumed: 2, left: 14, work: "First.", account: ACCOUNT },
+            15: { id: 15, date: "2026-08-18", consumed: 1, left: 13, work: `Latest ${TOKEN}.` },
+          },
+        }),
+      });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["hours", "task", "7"], { env });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    records: [
+      { id: 11, date: "2026-08-17", consumed: 2, left: 14, work: "First." },
+      { id: 15, date: "2026-08-18", consumed: 1, left: 13, work: "Latest ***." },
+    ],
+  });
+});
+
+test("hours falls back to legacy estimate records", async (t) => {
+  let legacyCalls = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-recordworkhour-7.json") {
+      return json(res, 404, { message: "missing" });
+    }
+    if (req.url === "/task-recordestimate-7.json") {
+      legacyCalls += 1;
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ estimates: [{ id: 9, date: "2026-08-18", consumed: 1, left: 3, work: "Legacy." }] }),
+      });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["hours", "task", "7"], { env });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(legacyCalls, 1);
+  assert.deepEqual(JSON.parse(result.stdout).records, [
+    { id: 9, date: "2026-08-18", consumed: 1, left: 3, work: "Legacy." },
+  ]);
+});
+
+test("edit-hours updates a modern effort and preserves omitted fields", async (t) => {
+  let submitted;
+  let postCount = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-editeffort-15.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({
+          effort: { id: 15, objectType: "task", objectID: 7, date: "2026-08-18", consumed: 1, left: 13, work: "Wrong commit." },
+        }),
+      });
+    }
+    if (req.url === "/task-editeffort-15.json" && req.method === "POST") {
+      postCount += 1;
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["edit-hours", "task", "7", "15"], {
+    env,
+    input: JSON.stringify({ work: "Correct commit abc1234." }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(postCount, 1);
+  assert.deepEqual([...submitted.entries()], [
+    ["date", "2026-08-18"],
+    ["consumed", "1"],
+    ["left", "13"],
+    ["work", "Correct commit abc1234."],
+  ]);
+});
+
+test("edit-hours falls back to legacy editEstimate and can clear work", async (t) => {
+  let submitted;
+  let modernPosts = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-editeffort-9.json") {
+      if (req.method === "POST") modernPosts += 1;
+      return json(res, 404, { message: "missing" });
+    }
+    if (req.url === "/task-editestimate-9.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ estimate: { id: 9, objectType: "task", objectID: 7, date: "2026-08-17", consumed: 2, left: 4, work: "Remove me." } }),
+      });
+    }
+    if (req.url === "/task-editestimate-9.json" && req.method === "POST") {
+      submitted = new URLSearchParams(await body(req));
+      return json(res, 200, { status: "success", data: JSON.stringify({ result: "success" }) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["edit-hours", "task", "7", "9"], {
+    env,
+    input: JSON.stringify({ work: "" }),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(modernPosts, 0);
+  assert.equal(submitted.get("date"), "2026-08-17");
+  assert.equal(submitted.get("consumed"), "2");
+  assert.equal(submitted.get("left"), "4");
+  assert.equal(submitted.has("work"), true);
+  assert.equal(submitted.get("work"), "");
+});
+
+test("edit-hours stops before POST when effort ownership does not match", async (t) => {
+  let postCount = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-editeffort-15.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ effort: { id: 15, objectType: "task", objectID: 8, date: "2026-08-18", consumed: 1, left: 3, work: "Other task." } }),
+      });
+    }
+    if (req.method === "POST") postCount += 1;
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["edit-hours", "task", "7", "15"], {
+    env,
+    input: JSON.stringify({ work: "Do not write." }),
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stderr).error, "ownership_error");
+  assert.equal(postCount, 0);
+});
+
+test("edit-hours stops without POST when no native edit route exists", async (t) => {
+  let postCount = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.method === "POST") postCount += 1;
+    return json(res, 404, { message: "missing" });
+  });
+  const result = await runCli(["edit-hours", "task", "7", "15"], {
+    env,
+    input: JSON.stringify({ work: "Do not write." }),
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stderr).error, "unsupported_version");
+  assert.equal(postCount, 0);
+});
+
+test("edit-hours validates merged fields before POST", async (t) => {
+  let postCount = 0;
+  const env = await authenticatedFixture(t, async (req, res) => {
+    if (req.url === "/task-editeffort-15.json" && req.method === "GET") {
+      return json(res, 200, {
+        status: "success",
+        data: JSON.stringify({ effort: { id: 15, objectType: "task", objectID: 7, date: "2026-08-18", consumed: 1, left: 3, work: "Original." } }),
+      });
+    }
+    if (req.method === "POST") postCount += 1;
+    return json(res, 404, { message: "missing" });
+  });
+  for (const input of [
+    { date: "2026-02-30" },
+    { date: "2999-01-01" },
+    { consumed: 0 },
+    { left: -1 },
+  ]) {
+    const result = await runCli(["edit-hours", "task", "7", "15"], {
+      env,
+      input: JSON.stringify(input),
+    });
+    assert.equal(result.code, 1);
+    assert.equal(JSON.parse(result.stderr).error, "usage_error");
+  }
+  assert.equal(postCount, 0);
+});
+
+test("Skill requires fresh Git HEAD resolution before commit-based ZenTao writes", () => {
+  const skill = readFileSync(resolve("skills/systems/at-zentao/SKILL.md"), "utf8");
+  assert.match(skill, /git rev-parse HEAD/);
+  assert.match(skill, /git log -1 --format=%h/);
+  assert.match(skill, /never guess or call `log-hours` again/);
+  assert.match(skill, /call `edit-hours` once/);
 });
 
 test("authentication and API failures never echo server-provided secrets", async (t) => {

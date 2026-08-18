@@ -72,6 +72,7 @@ node <skill-root>/scripts/zentao-cli.mjs get bug <id>
 node <skill-root>/scripts/zentao-cli.mjs get task <id>
 node <skill-root>/scripts/zentao-cli.mjs get story <id>
 node <skill-root>/scripts/zentao-cli.mjs get bug <id> --download-dir <path>
+node <skill-root>/scripts/zentao-cli.mjs hours task <id>
 ```
 
 `get` downloads token-gated inline images and attachments into a temporary
@@ -89,6 +90,7 @@ node <skill-root>/scripts/zentao-cli.mjs start task <id>
 node <skill-root>/scripts/zentao-cli.mjs pause task <id>
 node <skill-root>/scripts/zentao-cli.mjs resume task <id>
 node <skill-root>/scripts/zentao-cli.mjs log-hours task <id>
+node <skill-root>/scripts/zentao-cli.mjs edit-hours task <id> <effort-id>
 node <skill-root>/scripts/zentao-cli.mjs finish task <id>
 ```
 
@@ -99,6 +101,7 @@ Input shapes:
 {"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause and result, commit abc1234."}
 {"realStarted":"2026-08-11 09:00:00","comment":"Started implementation."}
 {"date":"2026-08-11","consumed":2,"left":14,"work":"Implemented the first part of the task."}
+{"work":"Corrected work description, commit abc1234."}
 {"currentConsumed":1.5,"realStarted":"2026-08-11 09:00:00","finishedDate":"2026-08-11 10:30:00"}
 ```
 
@@ -109,7 +112,9 @@ computes a task's total consumed hours from its current ZenTao value.
 accepts `realStarted` and otherwise uses the current time. The CLI preserves
 the task's current hours when starting or resuming it.
 `log-hours` defaults `date` to today, requires positive remaining hours,
-and keeps the task open. Use `finish` when the task is complete.
+and keeps the task open. `hours` is read-only. `edit-hours` preserves omitted
+fields from the existing record and updates it through ZenTao's native effort
+workflow. Use `finish` when the task is complete.
 
 ## Usage
 
@@ -128,6 +133,9 @@ lifecycle requests such as `开始`, `暂停`, `继续`, `start`, `pause`, and
 `resume`, and time-entry requests such as `填工时`, `记录工时`, `log hours`,
 and `worklog`. Users do not need to know the internal CLI commands. Reuse any
 date, hours, or work description already supplied instead of asking twice.
+Recognize corrections to an existing time entry. Run `hours`, identify the
+record from returned ids and values, and ask when more than one record could
+match; never guess or call `log-hours` again to compensate for a mistake.
 
 If a list response includes pager data showing more items than returned, tell
 the user the shown and total counts. Do not silently imply the list is complete.
@@ -180,6 +188,11 @@ Bug resolutions are `fixed`, `notrepro`, `duplicate`, `bydesign`, `external`,
 write-back comment is one sentence containing root cause, change summary, and
 the commit hash when committed.
 
+Immediately before confirming any ZenTao write that cites the latest commit,
+run `git rev-parse HEAD` and `git log -1 --format=%h`. Do not reuse a hash from
+earlier conversation. If HEAD is not the item-specific commit, identify the
+relevant commit and tell the user instead of blindly citing HEAD.
+
 For tasks, ask whether to record the current work after the verified result.
 For an incomplete task, collect the actual `consumed` hours and work date. When
 the task has a numeric current `left`, suggest the new `left` by subtracting the
@@ -190,6 +203,15 @@ blocking the write when there is nothing useful to add. For a completed task,
 collect `currentConsumed` and draft a `finish` write. Never infer consumed
 hours. Show all submitted values and require the same explicit ZenTao
 confirmation before either write.
+
+To correct an existing time entry, use `hours` to select its effort id. Show
+the current and proposed `date`, `consumed`, `left`, and `work`, then obtain
+explicit confirmation and call `edit-hours` once. Preserve every field the
+user did not change. Stop when ownership cannot be verified or the edit route
+is unsupported. If the proposed `left` is zero, explicitly warn that ZenTao
+may change the task status as part of its native recalculation. Never edit an
+action comment as a substitute for correcting the underlying work-hour record,
+and never delete a record.
 
 When the user wants to record hours and pause, show both exact writes in one
 confirmation, then run `log-hours` before `pause`. Stop if the hour write fails.

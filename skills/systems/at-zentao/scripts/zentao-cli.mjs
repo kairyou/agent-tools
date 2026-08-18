@@ -459,10 +459,13 @@ async function readInput() {
   return value;
 }
 
-function formBody(fields) {
+function formBody(fields, includeEmpty = []) {
   const body = new URLSearchParams();
+  const keepEmpty = new Set(includeEmpty);
   for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined && value !== null && value !== "") body.set(key, String(value));
+    if (value !== undefined && value !== null && (value !== "" || keepEmpty.has(key))) {
+      body.set(key, String(value));
+    }
   }
   return body;
 }
@@ -484,8 +487,8 @@ async function workhourVariant(client, id) {
   ];
   for (const variant of variants) {
     try {
-      decodeLegacy(await client.json(variant.route));
-      return variant;
+      const form = decodeLegacy(await client.json(variant.route));
+      return { ...variant, form };
     } catch (error) {
       const unavailable = error instanceof CliError && (
         (error.code === "http_error" && error.status === 404) ||
@@ -498,6 +501,88 @@ async function workhourVariant(client, id) {
     "unsupported_version",
     "ZenTao exposes neither recordWorkhour nor recordEstimate for this task"
   );
+}
+
+function effortRecords(form) {
+  const candidates = [
+    form?.efforts,
+    form?.estimates,
+    form?.workhours,
+    form?.taskEfforts,
+    form?.task?.efforts,
+    form?.task?.estimates,
+  ];
+  const collection = candidates.find((value) => value && typeof value === "object");
+  if (!collection) return [];
+  const entries = Array.isArray(collection)
+    ? collection.map((value) => [null, value])
+    : Object.entries(collection);
+  const records = entries
+    .filter(([, value]) => value && typeof value === "object")
+    .map(([key, value]) => ({
+      ...(value.id === undefined && /^\d+$/.test(key || "") ? { id: Number(key) } : {}),
+      ...pick(value, ["id", "date", "consumed", "left", "work"]),
+    }));
+  return records;
+}
+
+function effortFromEditForm(form) {
+  const effort = form?.effort || form?.estimate || form?.workhour ||
+    (form?.id !== undefined ? form : null);
+  if (!effort || typeof effort !== "object") {
+    throw new CliError("response_error", "ZenTao returned no editable work-hour record");
+  }
+  return effort;
+}
+
+function verifyEffortTask(effort, taskId) {
+  if (effort.objectType !== undefined && effort.objectType !== "task") {
+    throw new CliError("ownership_error", "The work-hour record does not belong to a task");
+  }
+  const owner = effort.objectID ?? effort.task ?? effort.taskID;
+  if (owner === undefined || String(owner) !== String(taskId)) {
+    throw new CliError("ownership_error", "The work-hour record does not belong to the requested task");
+  }
+}
+
+async function editableEffortVariant(client, effortId) {
+  const variants = [
+    { route: `task-editeffort-${effortId}.json`, legacy: false },
+    { route: `task-editestimate-${effortId}.json`, legacy: true },
+  ];
+  for (const variant of variants) {
+    try {
+      const form = decodeLegacy(await client.json(variant.route));
+      return { ...variant, effort: effortFromEditForm(form) };
+    } catch (error) {
+      const unavailable = error instanceof CliError && (
+        (error.code === "http_error" && error.status === 404) ||
+        error.code === "response_error"
+      );
+      if (!unavailable) throw error;
+    }
+  }
+  throw new CliError(
+    "unsupported_version",
+    "ZenTao exposes neither editEffort nor editEstimate for this work-hour record"
+  );
+}
+
+function effortFields(effort, input) {
+  const date = effortDate(input.date ?? effort.date);
+  const consumed = Number(input.consumed ?? effort.consumed);
+  const left = Number(input.left ?? effort.left);
+  const work = input.work ?? effort.work ?? "";
+  if (!Number.isFinite(consumed) || consumed <= 0) {
+    throw new CliError("usage_error", "consumed must be positive");
+  }
+  if (!Number.isFinite(left) || left < 0) {
+    throw new CliError("usage_error", "left must be zero or positive");
+  }
+  if (typeof work !== "string") {
+    throw new CliError("usage_error", "work must be a string");
+  }
+  return { date, consumed, left, work: work.trim() };
 }
 
 function localDateTime(date = new Date()) {
@@ -537,7 +622,9 @@ function help() {
   zentao-cli.mjs start task <id>           # JSON on stdin
   zentao-cli.mjs pause task <id>           # JSON on stdin
   zentao-cli.mjs resume task <id>          # JSON on stdin
+  zentao-cli.mjs hours task <id>
   zentao-cli.mjs log-hours task <id>       # JSON on stdin
+  zentao-cli.mjs edit-hours task <id> <effort-id> # JSON on stdin
   zentao-cli.mjs finish task <id>          # JSON on stdin`;
 }
 
@@ -698,6 +785,36 @@ export async function run(argv, { env = process.env } = {}) {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: formBody(fields),
+    });
+    return legacyResult(response);
+  }
+
+  if (command === "hours") {
+    if (args[0] !== "task") throw new CliError("usage_error", "hours supports tasks only");
+    const id = positiveId(args[1]);
+    const variant = await workhourVariant(client, id);
+    return { records: effortRecords(variant.form) };
+  }
+
+  if (command === "edit-hours") {
+    if (args[0] !== "task") throw new CliError("usage_error", "edit-hours supports tasks only");
+    const taskId = positiveId(args[1]);
+    const effortId = positiveId(args[2]);
+    const input = await readInput();
+    const allowed = ["date", "consumed", "left", "work"];
+    if (!allowed.some((field) => Object.hasOwn(input, field))) {
+      throw new CliError("usage_error", "at least one work-hour field is required");
+    }
+    if (input.work !== undefined && typeof input.work !== "string") {
+      throw new CliError("usage_error", "work must be a string when provided");
+    }
+    const variant = await editableEffortVariant(client, effortId);
+    verifyEffortTask(variant.effort, taskId);
+    const fields = effortFields(variant.effort, input);
+    const response = await client.json(variant.route, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: formBody(fields, ["work"]),
     });
     return legacyResult(response);
   }
