@@ -6,6 +6,8 @@
 
 编写路由模块, 并在 `providerUsage.routes` 里声明(相对 `~/.agent-tools` 解析). 声明的路由优先探测; `"preset"` 填路由 id 可直接选中.
 
+包括 `commandcode` 在内的内置 preset 见主文档的[Provider usage](../../README.zh-CN.md#provider-usage)章节.
+
 ```jsonc
 {
   "providerUsage": {

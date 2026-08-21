@@ -4,6 +4,9 @@ Advanced guide for [provider usage](../../README.md#provider-usage): write your 
 usage probe for relays the built-in presets cannot reach (e.g. cookie-authenticated
 gateways) without modifying package code.
 
+Built-in presets, including `commandcode`, are documented in the main
+[provider usage](../../README.md#provider-usage) section.
+
 ## Declare a route
 
 Write a route module and list it in `providerUsage.routes` (paths resolve against
