@@ -1,6 +1,6 @@
 ---
 name: at-zentao
-description: "Work ZenTao bugs/tasks end to end, manage task lifecycle and hours, or read a linked story as development context: fetch details, handle the user's request, verify changes, and ask before committing or writing back to ZenTao. Supports single items and sequential batches. Use when the user references ZenTao (禅道) bugs, tasks, stories, requirements, task status, or task hours."
+description: "Handle ZenTao (禅道) Bugs and Tasks end to end, including updating or writing back an item after code changes, managing Task status and hours, and reading linked Stories. Use for referenced ZenTao items, requirements, status changes, time entries, or post-implementation synchronization."
 argument-hint: "bug <id> [request] | task <id> [request] | story <id> | bugs | tasks | export bug|task <id>"
 ---
 
