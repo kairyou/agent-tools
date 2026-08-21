@@ -116,8 +116,9 @@ compatibility and configuration.
 ### Provider usage
 
 Shows API relay / gateway balance and quota inside the agent. Supports Sub2API,
-One API (including OneHub and DoneHub), New API, Claude Code Hub, and OpenRouter;
-compatibility depends on the gateway version and enabled usage endpoints.
+One API (including OneHub and DoneHub), New API, Claude Code Hub, OpenRouter, and
+Command Code; compatibility depends on the gateway version and enabled usage
+endpoints.
 
 ```bash
 npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
@@ -139,8 +140,8 @@ configuration; official (non-relay) endpoints are skipped. If it reports
 {
   "providerUsage": {
     // auto | sub2api | openai-compatible | one-api | one-hub |
-    // done-hub | new-api | claude-code-hub | openrouter | <custom-route-id>
-    "preset": "auto",
+    // done-hub | new-api | claude-code-hub | openrouter | commandcode | <custom-route-id>
+    "preset": "auto", // auto-detect, or select one protocol listed above
     "days": 30,       // how many recent days of spend to count
     "debug": false    // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
@@ -149,7 +150,8 @@ configuration; official (non-relay) endpoints are skipped. If it reports
 
 Keep `preset` set to `auto` for automatic detection. Select a specific protocol
 only when you know which usage endpoint the gateway exposes; a configured custom
-route id is also accepted.
+route id is also accepted. Command Code usage relies on a version-sensitive
+endpoint that is not part of its documented Provider API.
 
 Output examples:
 

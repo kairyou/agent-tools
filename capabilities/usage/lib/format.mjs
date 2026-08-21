@@ -226,6 +226,31 @@ export function formatOpenRouterLine(data) {
   return parts.join(" | ");
 }
 
+function formatCredits(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toLocaleString("en-US", { maximumFractionDigits: 1 })
+    : "";
+}
+
+function formatCommandCodeWindow(label, window) {
+  if (!window || !Number.isFinite(window.used) || !Number.isFinite(window.cap)) return "";
+  const reset = window.resetAt ? compactDurationUntil(window.resetAt) : "";
+  return `${label} ${formatCredits(window.used)}/${formatCredits(window.cap)}${reset ? ` ⟳${reset}` : ""}`;
+}
+
+export function formatCommandCodeLine(data) {
+  const credits = data?.credits || {};
+  const limits = data?.windowLimits || {};
+  const parts = [];
+  if (Number.isFinite(credits.monthlyCredits)) parts.push(`credits ${formatCredits(credits.monthlyCredits)}`);
+  const fiveHour = formatCommandCodeWindow("5h", limits.fiveHour);
+  const weekly = formatCommandCodeWindow("W", limits.weekly);
+  if (fiveHour) parts.push(fiveHour);
+  if (weekly) parts.push(weekly);
+  if (parts.length === 0) throw new Error("Command Code billing payload has no usage fields");
+  return parts.join(" | ");
+}
+
 export function formatOneApiBillingLine(limit, used) {
   if (!hasSpendableOneApiLimit(limit)) return `used ${formatMoney(used)}`;
   return `balance ${formatMoney(Math.max(0, limit - used))} | used ${formatMoney(used)}/${formatMoney(limit)}`;

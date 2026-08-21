@@ -114,8 +114,8 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 ### Provider usage
 
 在 agent 内查看 API 中转网关的余额和额度. 支持 Sub2API, One API (包括 OneHub
-与 DoneHub), New API, Claude Code Hub 和 OpenRouter. 具体兼容性取决于网关版本
-及其是否开放相应接口.
+与 DoneHub), New API, Claude Code Hub, OpenRouter 和 Command Code. 具体兼容性
+取决于网关版本及其是否开放相应接口.
 
 ```bash
 npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
@@ -136,8 +136,8 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 {
   "providerUsage": {
     // auto | sub2api | openai-compatible | one-api | one-hub |
-    // done-hub | new-api | claude-code-hub | openrouter | <自定义 route id>
-    "preset": "auto",
+    // done-hub | new-api | claude-code-hub | openrouter | commandcode | <自定义 route id>
+    "preset": "auto", // 自动探测, 也可指定上面列出的协议
     "days": 30,       // 统计最近多少天的消耗
     "debug": false    // true: 探测过程写入 ~/.agent-tools/logs/usage-debug.log
   }
@@ -145,7 +145,8 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 ```
 
 保持 `preset: "auto"` 即可自动探测. 只有明确知道网关开放的是哪种用量协议时,
-才指定相应的内置 preset 或已配置的自定义 route id.
+才指定相应的内置 preset 或已配置的自定义 route id. Command Code 用量查询依赖
+未包含在公开 Provider API 中的接口, 可能随版本变化.
 
 显示效果示例:
 

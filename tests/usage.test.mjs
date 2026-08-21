@@ -512,6 +512,44 @@ test("provider usage auto-detects Claude Code Hub self-service quota", async () 
   });
 });
 
+test("Command Code usage reads credits and rolling windows with its API key", async () => {
+  const seen = [];
+  await withServer((req, res) => {
+    seen.push({ url: req.url, authorization: req.headers.authorization });
+    if (req.url === "/alpha/billing/credits") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        credits: { monthlyCredits: 69.5897838933, purchasedCredits: 0, freeCredits: 0 },
+        windowLimits: {
+          limited: true,
+          fiveHour: { used: 0, cap: 14, exceeded: false, resetAt: 0 },
+          weekly: { used: 0.4102161067, cap: 35, exceeded: false, resetAt: 0 },
+        },
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (base) => {
+    const payload = await runProvider({
+      baseUrl: `${base}/provider/v1`,
+      preset: "commandcode",
+    });
+    assert.equal(payload.systemMessage, "credits 69.6 | 5h 0/14 | W 0.4/35");
+    assert.deepEqual(seen, [
+      { url: "/alpha/billing/credits", authorization: "Bearer test-key" },
+    ]);
+  });
+});
+
+test("Command Code provider URLs select only the Command Code usage route", async () => {
+  const { orderedUsageRoutes } = await import("../capabilities/usage/lib/routes.mjs");
+  const routes = await orderedUsageRoutes({
+    baseUrl: "https://api.commandcode.ai/provider/v1",
+  });
+  assert.deepEqual(routes.map((route) => route.id), ["commandcode"]);
+});
+
 test("provider usage fails open when no compatible usage endpoint exists", async () => {
   const seen = [];
   await withServer((req, res) => {

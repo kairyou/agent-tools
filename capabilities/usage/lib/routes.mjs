@@ -30,6 +30,7 @@ import {
   hasSpendableOneApiLimit,
   formatOpenRouterLine,
   formatClaudeCodeHubLine,
+  formatCommandCodeLine,
 } from "./format.mjs";
 import { readRouteCache } from "./cache.mjs";
 
@@ -170,6 +171,22 @@ async function fetchOpenRouterUsage(context) {
   throw lastError || new Error("OpenRouter usage unavailable");
 }
 
+// Command Code exposes subscription credits and rolling windows through the
+// same internal endpoint used by its `/usage` overlay. This route is opt-in
+// via the commandcode preset or the official host and is intentionally kept
+// out of generic probing because the endpoint is not a documented Provider API.
+async function fetchCommandCodeUsage(context) {
+  const base = cleanBaseUrl(context.baseUrl)
+    .replace(/\/provider\/v1$/i, "")
+    .replace(/\/provider$/i, "")
+    .replace(/\/v1$/i, "");
+  const json = await requestJson(joinUrl(base, "/alpha/billing/credits"), {
+    key: context.key,
+    name: "Command Code billing credits",
+  });
+  return usageResult(context, "commandcode-billing", formatCommandCodeLine(json), json);
+}
+
 const USAGE_ROUTES = {
   "v1-usage": {
     id: "v1-usage",
@@ -195,6 +212,11 @@ const USAGE_ROUTES = {
     id: "claude-code-hub",
     path: "/api/v1/me/quota",
     run: fetchClaudeCodeHubUsage,
+  },
+  "commandcode": {
+    id: "commandcode",
+    path: "/alpha/billing/credits",
+    run: fetchCommandCodeUsage,
   },
 };
 
@@ -292,6 +314,7 @@ async function usageRouteIds(context) {
     "done-hub": ["oneapi-billing"],
     "openrouter": ["openrouter"],
     "claude-code-hub": ["claude-code-hub"],
+    "commandcode": ["commandcode"],
   };
   if (routes[preset]) return routes[preset];
 
@@ -302,6 +325,8 @@ async function usageRouteIds(context) {
   const customIds = (await customRoutes()).map((route) => route.id);
   const builtinIds = hostIncludes(context.baseUrl, "openrouter.ai")
     ? ["openrouter"]
+    : hostIncludes(context.baseUrl, "commandcode.ai")
+      ? ["commandcode"]
     : ["v1-usage", "newapi-token", "oneapi-billing", "claude-code-hub"];
   return [...new Set([...customIds, ...builtinIds])];
 }
