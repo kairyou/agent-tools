@@ -57,7 +57,7 @@ Read `git diff --staged` and generate a Conventional Commits title that explains
 - **description**: one concise verb-object phrase in the selected natural language. Avoid filler equivalent to "update files", "this commit", "misc changes", or "several changes". Preserve identifiers, function names, file names, package names, commands, and APIs as written.
 - **single line only**: commit messages always contain only the title line. Do not write a body or footer. Compress necessary WHY into the title.
 - **breaking changes**: mark with `type(scope)!: description`, still as one line. Do not use a `BREAKING CHANGE` footer.
-- **punctuation**: use ASCII punctuation.
+- **punctuation**: use ASCII punctuation throughout the title, including in non-English descriptions. Non-ASCII characters are allowed only in words and identifiers. Normalize localized punctuation before showing or committing the title.
 
 ## Generation Strategy
 
