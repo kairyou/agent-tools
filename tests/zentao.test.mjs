@@ -391,6 +391,38 @@ test("resolve keeps credentials internal and preserves UTF-8 comments", async (t
   assert.equal(form.get("comment"), "修复登录状态, commit abc1234.");
 });
 
+test("resolve tolerates the HTML-wrapped JSON response from classic ZenTao", async (t) => {
+  let form;
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/bug-resolve-42.json") {
+      assert.equal(req.headers.token, TOKEN);
+      form = new URLSearchParams(await body(req));
+      // 经典 action 路由的写操作会被套一层 iframe 刷新 HTML, JSON 在末尾
+      res.writeHead(200, { "content-type": "text/html; Language=UTF-8;charset=UTF-8" });
+      return res.end(
+        "<html><meta charset='utf-8'/><style>body{background:white}</style>" +
+        "<script>if(parent !== window) parent.location.reload(true);\n\n</script>\n" +
+        JSON.stringify({ status: "success", data: JSON.stringify({ result: "success" }) })
+      );
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const input = JSON.stringify({ resolution: "fixed", comment: "修复断言悬浮, commit abc1234." });
+  const result = await runCli(["resolve", "bug", "42"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    input,
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assertNoSecrets(result.stdout + result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, result: "success" });
+  assert.equal(form.get("comment"), "修复断言悬浮, commit abc1234.");
+});
+
 test("finish computes total consumed time inside the CLI", async (t) => {
   let submitted;
   const fixture = await listen(async (req, res) => {

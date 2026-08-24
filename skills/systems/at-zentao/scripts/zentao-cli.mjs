@@ -232,6 +232,15 @@ function safeRemoteMessage(body, secrets) {
   return redactString(message.slice(0, 500), secrets);
 }
 
+// ZenTao 经典 action 写操作可能返回 `<html>...</script>\n{...json...}`, 取最后一个 </script> 后的 JSON 重试解析.
+function unwrapHtmlWrappedJson(body) {
+  const marker = "</script>";
+  if (!body.includes(marker)) return body;
+  const idx = body.lastIndexOf(marker);
+  const candidate = body.slice(idx + marker.length).trim();
+  return candidate || body;
+}
+
 class ZenTaoClient {
   constructor(config) {
     this.config = config;
@@ -308,6 +317,14 @@ class ZenTaoClient {
     try {
       return JSON.parse(body);
     } catch {
+      const unwrapped = unwrapHtmlWrappedJson(body);
+      if (unwrapped !== body) {
+        try {
+          return JSON.parse(unwrapped);
+        } catch {
+          // 剥掉包装后仍无效, 走下方统一报错
+        }
+      }
       throw new CliError("response_error", "ZenTao returned invalid JSON");
     }
   }
