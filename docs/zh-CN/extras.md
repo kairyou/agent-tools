@@ -1,10 +1,10 @@
 # Extras
 
-完整可用, 只是场景较窄. 按需单独安装.
+这里收录日常开发主流程之外的可选工具.
 
 ## at-self-eval
 
-把 git 历史或你提供的工作日志归纳成自评产出清单, 用于季度/半年/晋升等绩效周期.
+基于 Git 提交历史或你提供的工作日志生成绩效自评, 可用于季度总结, 半年总结及晋升材料撰写.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
@@ -24,7 +24,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
 
 ## at-daily-log
 
-按天把各项目的 Git 提交提炼成工作日报, 调用时生成.
+按天把各项目的 Git 提交提炼成工作日报.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -34,12 +34,12 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 
 - `/at-daily-log` — 输出今天的日报
 - `/at-daily-log 2026-07-31` — 指定日期
-- `/at-daily-log 上周` / `/at-daily-log 最近两周` — 范围内每天一条, 跳过没有提交的日子
+- `/at-daily-log 上周` / `/at-daily-log 最近两周` — 按日期生成日报, 跳过没有 Git 提交的日期
 - `/at-daily-log 统计 C:\projects\project-a 今天的工作` — 只统计指定项目
 - `/at-daily-log 另外包含 C:\projects\project-c` — 在默认范围上追加
 - `/at-daily-log 记录日报` — 记录到配置的文件; 同一天重复执行只更新生成的部分
 - `/at-daily-log 记录到 C:\logs\daily-log.md` — 记录到指定文件
-- `/at-daily-log 每天 18:00 自动记录` — 引导搭建系统定时任务; 没有提交的日子不会写入
+- `/at-daily-log 每天 18:00 自动记录` — 引导搭建系统定时任务; 当天没有 Git 提交时不写入日报
 
 记录到文件的示例:
 
@@ -71,20 +71,6 @@ npx -y @kairyou/agent-tools@latest log -a claude codex opencode
 - `format: "daily"`: 写入单个 Markdown 文件, 并按日期归档; 每个已完成且有实质结果的回答记录为一行, 不记录未完成的提问; 内容可能因长度限制被截断, 因此仅适合作为轻量活动索引
 - Codex 安装后运行 `/hooks` 批准一次; opencode 安装或更新后需要重启
 
-`daily` 输出示例:
-
-```markdown
-+ 2026-08-03
-<!-- log:2026-08-03:start -->
-  1. project-a: 已定位登录超时的原因: 会话缓存在续期分支上没有更新过期时间, 第二次请求拿到的还是旧值。已经在 session.ts 补上续期并本地验证通过, 接下来...
-  2. project-a: 修复完成, 新增 3 个回归用例覆盖续期路径, 全部通过。
-  3. project-b: 报表导出为空定位到权限过滤条件写反, 已修正并确认导出恢复正常。
-<!-- log:2026-08-03:end -->
-```
-
-每轮一行, 直接摘录那一轮 AI 回复的收尾内容(过长会截断), 不做提炼也不跨轮归纳;
-同样只重写标记之间的部分, 文件里的其他内容不会被碰.
-
 `detailed` 输出示例(节选):
 
 ```markdown
@@ -110,6 +96,20 @@ Outcome
 Changes
 - src/auth/session.ts | 变更 +42/-8 | 操作 3 次
 ```
+
+`daily` 输出示例:
+
+```markdown
++ 2026-08-03
+<!-- log:2026-08-03:start -->
+  1. project-a: 已定位登录超时的原因: 会话缓存在续期分支上没有更新过期时间, 第二次请求拿到的还是旧值. 已经在 session.ts 补上续期并本地验证通过, 接下来...
+  2. project-a: 修复完成, 新增 3 个回归用例覆盖续期路径, 全部通过.
+  3. project-b: 报表导出为空定位到权限过滤条件写反, 已修正并确认导出恢复正常.
+<!-- log:2026-08-03:end -->
+```
+
+每轮一行, 直接摘录那一轮 AI 回复的收尾内容(过长会截断), 不做提炼也不跨轮归纳;
+同样只重写标记之间的部分, 文件里的其他内容不会被碰.
 
 ## 配置
 

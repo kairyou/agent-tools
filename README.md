@@ -224,7 +224,7 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the nav
 
 ## Extras
 
-See [extras](docs/en/extras.md) for situational content.
+See [extras](docs/en/extras.md) for optional tools outside the day-to-day development workflow.
 
 ## FAQ
 

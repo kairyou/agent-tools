@@ -1,11 +1,11 @@
 # Extras
 
-Fully usable, just situational. Install each on demand.
+This page lists optional tools outside the day-to-day development workflow.
 
 ## at-self-eval
 
-Summarize git history, a work log you provide, or both into a self-evaluation
-for performance cycles (quarterly, semi-annual, promotion).
+Turn Git commit history, a work log you provide, or both into a performance
+self-evaluation for quarterly reviews, half-year reviews, or promotion materials.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-self-eval -g -y
@@ -25,7 +25,7 @@ Review the generated result before use.
 
 ## at-daily-log
 
-Distill each day's Git commits across projects into a work report; runs when invoked.
+Distill each day's Git commits across projects into a work report.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
@@ -35,12 +35,12 @@ Usage:
 
 - `/at-daily-log` — print today's log
 - `/at-daily-log 2026-07-31` — pick the date
-- `/at-daily-log last week` / `/at-daily-log the last two weeks` — one entry per active day, empty days skipped
+- `/at-daily-log last week` / `/at-daily-log the last two weeks` — one report per date with Git commits; dates without commits are skipped
 - `/at-daily-log summarize today for C:\projects\project-a` — only that project
 - `/at-daily-log also include C:\projects\project-c` — add to the default scope
 - `/at-daily-log record the log` — record to the configured file; rerunning a day only refreshes the generated part
 - `/at-daily-log record it to C:\logs\daily-log.md` — record to that file
-- `/at-daily-log record daily at 18:00` — guides you through an OS scheduled task; days without commits are not written
+- `/at-daily-log record daily at 18:00` — guides you through an OS scheduled task; no report is written when the day has no Git commits
 
 Recorded output example:
 
@@ -73,21 +73,6 @@ npx -y @kairyou/agent-tools@latest log -a claude codex opencode
 - `format: "daily"`: writes to a single Markdown file grouped by date; each completed answer with substantive results is recorded as one line, while pending prompts are omitted; content may be truncated by the length limit, so use it only as a lightweight activity index
 - Codex: run `/hooks` once after installing to approve it; opencode: restart after installing or updating
 
-`daily` output example:
-
-```markdown
-+ 2026-08-03
-<!-- log:2026-08-03:start -->
-  1. project-a: Found the cause of the login timeout: the renewal branch never updated the cache expiry, so the second request still read the old value. Patched session.ts and verified...
-  2. project-a: Fix is in, with 3 regression tests covering the renewal path; all passing.
-  3. project-b: Empty report exports came from an inverted permission filter, now corrected and confirmed working.
-<!-- log:2026-08-03:end -->
-```
-
-One line per turn, taken verbatim from the closing text of that turn's AI reply
-(truncated when long); no distilling, no cross-turn consolidation. Updates likewise
-rewrite only what sits between the markers.
-
 `detailed` output example (excerpt):
 
 ```markdown
@@ -113,6 +98,21 @@ Outcome
 Changes
 - src/auth/session.ts | diff +42/-8 | 3 ops
 ```
+
+`daily` output example:
+
+```markdown
++ 2026-08-03
+<!-- log:2026-08-03:start -->
+  1. project-a: Found the cause of the login timeout: the renewal branch never updated the cache expiry, so the second request still read the old value. Patched session.ts and verified...
+  2. project-a: Fix is in, with 3 regression tests covering the renewal path; all passing.
+  3. project-b: Empty report exports came from an inverted permission filter, now corrected and confirmed working.
+<!-- log:2026-08-03:end -->
+```
+
+One line per turn, taken verbatim from the closing text of that turn's AI reply
+(truncated when long); no distilling, no cross-turn consolidation. Updates likewise
+rewrite only what sits between the markers.
 
 ## Configuration
 

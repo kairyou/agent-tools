@@ -218,7 +218,7 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背�
 
 ## Extras
 
-[extras](docs/zh-CN/extras.md) 收录场景较窄的内容.
+[extras](docs/zh-CN/extras.md) 介绍日常开发主流程之外的可选工具.
 
 ## FAQ
 
