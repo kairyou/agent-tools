@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "esbuild": "0.28.1",
+    "esbuild": "0.28.2",
     "zod": "4.4.3"
   },
   "scripts": {
