@@ -30,10 +30,11 @@ test("reconstructPrompt restores extracted source escapes and expressions", () =
 test("missing versioned prompt JSON is classified as mirror pending", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    if (String(url).includes("registry.npmjs.org")) {
+    const { hostname } = new URL(String(url));
+    if (hostname === "registry.npmjs.org") {
       return new Response(JSON.stringify({ version: "9.9.9" }));
     }
-    if (String(url).includes("api.github.com")) {
+    if (hostname === "api.github.com") {
       return new Response(JSON.stringify({ sha: "abc123" }));
     }
     return new Response("not found", { status: 404, statusText: "Not Found" });

@@ -25,7 +25,7 @@
     "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "esbuild": "0.28.1",
     "zod": "4.4.3"
   },
