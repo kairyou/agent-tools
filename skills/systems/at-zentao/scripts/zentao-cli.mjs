@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 const JSON_LIMIT = 4 * 1024 * 1024;
 const BINARY_LIMIT = 20 * 1024 * 1024;
 const INPUT_LIMIT = 1024 * 1024;
+// Keep write-back guidance compact enough to remain useful in an agent response.
+const COMMENT_PROMPT_LIMIT = 1000;
 const SECRET_KEYS = /^(?:password|token|authorization|cookie|set-cookie)$/i;
 const RESOLUTIONS = new Set([
   "fixed",
@@ -148,6 +150,7 @@ export function loadConfig({ env = process.env, file = configFile(env) } = {}) {
   const rawAccount = env.ZENTAO_ACCOUNT || section.account;
   const rawPassword = env.ZENTAO_PASSWORD || section.password;
   const rawToken = env.ZENTAO_TOKEN;
+  const rawCommentPrompt = section.commentPrompt;
   const urlText = resolveValue(rawUrl, env, "zentao.url");
   let parsedUrl;
   try {
@@ -171,12 +174,23 @@ export function loadConfig({ env = process.env, file = configFile(env) } = {}) {
   const token = resolveValue(rawToken, env, "zentao.token", { required: false });
   const account = resolveValue(rawAccount, env, "zentao.account", { required: !token });
   const password = resolveValue(rawPassword, env, "zentao.password", { required: !token });
+  if (rawCommentPrompt !== undefined && typeof rawCommentPrompt !== "string") {
+    throw new CliError("config_error", "zentao.commentPrompt must be a string");
+  }
+  const commentPrompt = rawCommentPrompt?.trim() || null;
+  if (commentPrompt && commentPrompt.length > COMMENT_PROMPT_LIMIT) {
+    throw new CliError(
+      "config_error",
+      `zentao.commentPrompt must not exceed ${COMMENT_PROMPT_LIMIT} characters`
+    );
+  }
   return {
     url: parsedUrl.href.replace(/\/$/, ""),
     account,
     password,
     token,
     tokenOnly: Boolean(token),
+    commentPrompt,
     secrets: [account, password, token].filter(Boolean),
   };
 }
@@ -385,6 +399,23 @@ function pick(source, keys) {
   return output;
 }
 
+function normalizeComments(actions) {
+  const entries = Array.isArray(actions) ? actions : Object.values(actions || {});
+  const comments = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object" || typeof entry.comment !== "string") continue;
+    const comment = entry.comment.trim();
+    if (!comment) continue;
+    const output = {};
+    for (const key of ["id", "actor", "action", "date"]) {
+      if (typeof entry[key] === "string" || typeof entry[key] === "number") output[key] = entry[key];
+    }
+    output.comment = comment;
+    comments.push(output);
+  }
+  return comments;
+}
+
 function normalizeDetail(kind, response) {
   const container = response?.data && typeof response.data === "object" ? response.data : response;
   const detail = container?.[kind] || container;
@@ -414,7 +445,12 @@ function normalizeDetail(kind, response) {
   } else if (kind === "story") {
     fields.push("stage", "category", "plan", "estimate", "spec", "verify", "source", "sourceNote");
   }
-  return { raw: detail, safe: pick(detail, fields) };
+  const safe = pick(detail, fields);
+  const actions = detail.actions ?? container?.actions;
+  if ((kind === "bug" || kind === "task") && actions && typeof actions === "object") {
+    safe.comments = normalizeComments(actions);
+  }
+  return { raw: detail, safe };
 }
 
 function attachmentUrls(detail) {
@@ -682,7 +718,13 @@ export async function run(argv, { env = process.env } = {}) {
     const resource = kind === "story" ? "stories" : `${kind}s`;
     const detail = normalizeDetail(kind, await client.json(`api.php/v1/${resource}/${id}`));
     const attachments = await downloadAttachments(client, detail.raw, directory);
-    return { item: detail.safe, attachments };
+    return {
+      item: detail.safe,
+      attachments,
+      ...(kind !== "story" && config.commentPrompt
+        ? { writeback: { commentPrompt: config.commentPrompt } }
+        : {}),
+    };
   }
 
   if (command === "comment") {
@@ -842,6 +884,9 @@ export async function run(argv, { env = process.env } = {}) {
     const input = await readInput();
     const current = Number(input.currentConsumed);
     if (!Number.isFinite(current) || current <= 0) throw new CliError("usage_error", "currentConsumed must be positive");
+    if (input.comment !== undefined && typeof input.comment !== "string") {
+      throw new CliError("usage_error", "comment must be a string when provided");
+    }
     const form = decodeLegacy(await client.json(`task-finish-${id}.json`));
     const task = form?.task || {};
     const previous = Number(task.consumed || 0);
@@ -855,6 +900,7 @@ export async function run(argv, { env = process.env } = {}) {
         consumed: previous + current,
         realStarted,
         finishedDate: input.finishedDate || localDateTime(),
+        comment: input.comment?.trim(),
       }),
     });
     return legacyResult(response);

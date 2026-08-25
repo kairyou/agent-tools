@@ -70,7 +70,20 @@ Usage:
 - `/at-zentao task <id> [request]` — work a task, start/pause/resume it, or log hours with a natural-language request
 - `/at-zentao story <id>` — read requirement scope and acceptance context without writing back
 
-Config: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. The password can be entered directly or referenced with `"password": { "env": "ZENTAO_PASSWORD" }`; never paste credentials or tokens into chat.
+Configure `~/.agent-tools/config.jsonc`:
+
+```jsonc
+{
+  "zentao": {
+    "url": "https://zentao.example.com",
+    "account": "user",
+    "password": "your-password",
+    // "password": { "env": "ZENTAO_PASSWORD" }, // Or read the password from an environment variable.
+    // Configure commentPrompt to customize bug/task comment formatting.
+    // "commentPrompt": "Use exactly this multiline format and field order:\nRoot cause: ...\nFix: ...\nBranch: ...\nVerification: ... (omit when not performed)\nCommit: ..."
+  }
+}
+```
 
 ## Capabilities
 

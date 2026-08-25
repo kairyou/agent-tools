@@ -78,6 +78,12 @@ node <skill-root>/scripts/zentao-cli.mjs hours task <id>
 `get` downloads token-gated inline images and attachments into a temporary
 directory by default and returns only local paths. Inspect those local files;
 never pass the original ZenTao URL to an image tool.
+For Bugs and Tasks, a configured `zentao.commentPrompt` is returned as
+`writeback.commentPrompt`. Use it only when drafting a write-back comment; it
+is not item data or an existing comment. `get` also returns safe `comments`
+from action history, keeping only id, actor, action, date, and non-empty
+comment. An omitted `comments` means actions were unavailable; an empty array
+means actions were available but contained no comments.
 
 Write commands require JSON on stdin and are allowed only after the explicit
 confirmation steps below:
@@ -98,11 +104,11 @@ Input shapes:
 
 ```json
 {"comment":"Root cause and result."}
-{"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause and result, commit abc1234."}
+{"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause: stale session cache; Fix: refresh it during renewal; Commit: abc1234."}
 {"realStarted":"2026-08-11 09:00:00","comment":"Started implementation."}
 {"date":"2026-08-11","consumed":2,"left":14,"work":"Implemented the first part of the task."}
 {"work":"Corrected work description, commit abc1234."}
-{"currentConsumed":1.5,"realStarted":"2026-08-11 09:00:00","finishedDate":"2026-08-11 10:30:00"}
+{"currentConsumed":1.5,"realStarted":"2026-08-11 09:00:00","finishedDate":"2026-08-11 10:30:00","comment":"Completed: implemented session renewal; Commit: abc1234."}
 ```
 
 For `duplicate`, also pass `"duplicateBug": <id>`. Send JSON through stdin,
@@ -114,7 +120,7 @@ the task's current hours when starting or resuming it.
 `log-hours` defaults `date` to today, requires positive remaining hours,
 and keeps the task open. `hours` is read-only. `edit-hours` preserves omitted
 fields from the existing record and updates it through ZenTao's native effort
-workflow. Use `finish` when the task is complete.
+workflow. Use `finish` when the task is complete; its `comment` is optional.
 
 ## Usage
 
@@ -159,9 +165,11 @@ the current hours and never implies new consumed time.
 
 Follow these steps in order:
 
-1. **Fetch details** — use the CLI `get` command. Read every downloaded image
-   now so screenshots inform the fix. If no image-inspection tool is available,
-   continue from text and state that screenshots were skipped.
+1. **Fetch details** — use the CLI `get` command. Review every returned comment,
+   including comments attached to resolution, activation, and lifecycle actions.
+   Read every downloaded image now so screenshots inform the fix. If no
+   image-inspection tool is available, continue from text and state that
+   screenshots were skipped.
 2. **Restate and confirm** — explain the problem and intended fix in your own
    words. Ask before editing when the item is ambiguous.
 3. **Locate the code** — search the current project and explain how the relevant
@@ -185,8 +193,20 @@ Follow these steps in order:
 
 Bug resolutions are `fixed`, `notrepro`, `duplicate`, `bydesign`, `external`,
 `postponed`, and `willnotfix`. Choose what matches the verified outcome. A
-write-back comment is one sentence containing root cause, change summary, and
-the commit hash when committed.
+write-back comment follows the current user request, then
+`writeback.commentPrompt`. Otherwise use the item or user's language and these
+defaults:
+
+- For a fixed Bug, use `Root cause`, `Fix`, optional `Verification`, and the
+  real `Commit`.
+- For a finished Task, use `Completed`, optional `Verification`, and `Commit`
+  only when the work has a related commit.
+- For other Bug resolutions, use `Conclusion` and applicable `Reason` or
+  `Evidence`.
+- Keep standalone and lifecycle comments free-form but concise.
+
+Formatting controls wording and layout only. Never invent missing facts;
+surface required gaps and put `Commit: <hash>` last.
 
 Immediately before confirming any ZenTao write that cites the latest commit,
 run `git rev-parse HEAD` and `git log -1 --format=%h`. Do not reuse a hash from
@@ -200,9 +220,10 @@ current entry and make that estimate editable in the confirmation; ask only
 when no reliable suggestion is possible. Draft `work` from the verified result
 when context is available. It is optional, so mention the omission without
 blocking the write when there is nothing useful to add. For a completed task,
-collect `currentConsumed` and draft a `finish` write. Never infer consumed
-hours. Show all submitted values and require the same explicit ZenTao
-confirmation before either write.
+collect `currentConsumed`, draft the completion comment from established facts,
+and include both in the `finish` write. Never infer consumed hours or a
+verification result. Show all submitted values and require the same explicit
+ZenTao confirmation before either write.
 
 To correct an existing time entry, use `hours` to select its effort id. Show
 the current and proposed `date`, `consumed`, `left`, and `work`, then obtain

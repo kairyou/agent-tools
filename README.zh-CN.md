@@ -70,7 +70,20 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 - `/at-zentao task <id> [请求]` — 处理指定 task, 用自然语言开始/暂停/继续或记录工时
 - `/at-zentao story <id>` — 只读查看研发需求范围和验收信息
 
-配置: `~/.agent-tools/config.jsonc` → `"zentao": { "url", "account", "password" }`. 密码可以直接填写, 也可以使用 `"password": { "env": "ZENTAO_PASSWORD" }` 引用环境变量; 不要在对话中粘贴凭据或 token.
+配置 `~/.agent-tools/config.jsonc`:
+
+```jsonc
+{
+  "zentao": {
+    "url": "https://zentao.example.com",
+    "account": "user",
+    "password": "your-password",
+    // "password": { "env": "ZENTAO_PASSWORD" }, // 或者从环境变量读取密码.
+    // 需要自定义 bug/task 评论(备注)格式时, 可配置 commentPrompt.
+    // "commentPrompt": "严格使用以下多行格式和字段顺序:\n原因: ...\n修复: ...\n分支: ...\n验证: ...(未验证时省略)\nCommit: ..."
+  }
+}
+```
 
 ## Capabilities
 

@@ -18,7 +18,7 @@ const ACCOUNT = "private-user";
 const PASSWORD = "private-password";
 const TOKEN = "private-token";
 
-function tempConfig(url, password = PASSWORD) {
+function tempConfig(url, password = PASSWORD, extra = {}) {
   const root = mkdtempSync(join(tmpdir(), "at-zentao-test-"));
   writeFileSync(
     join(root, "config.jsonc"),
@@ -28,6 +28,7 @@ function tempConfig(url, password = PASSWORD) {
         "url": ${JSON.stringify(url)},
         "account": ${JSON.stringify(ACCOUNT)},
         "password": ${JSON.stringify(password)},
+        ${Object.entries(extra).map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)},`).join("\n        ")}
       },
     }`
   );
@@ -107,6 +108,28 @@ test("JSONC config supports comments, trailing commas, and env secret references
   assert.equal(config.url, "https://zentao.example.test");
   assert.equal(config.account, ACCOUNT);
   assert.equal(config.password, PASSWORD);
+});
+
+test("comment prompt config is trimmed, optional, and bounded", () => {
+  const root = mkdtempSync(join(tmpdir(), "at-zentao-config-"));
+  const file = join(root, "config.jsonc");
+  const base = {
+    url: "https://zentao.example.test",
+    account: ACCOUNT,
+    password: PASSWORD,
+  };
+
+  writeFileSync(file, JSON.stringify({ zentao: { ...base, commentPrompt: "  Use four lines.  " } }));
+  assert.equal(loadConfig({ file, env: {} }).commentPrompt, "Use four lines.");
+
+  writeFileSync(file, JSON.stringify({ zentao: { ...base, commentPrompt: "   " } }));
+  assert.equal(loadConfig({ file, env: {} }).commentPrompt, null);
+
+  writeFileSync(file, JSON.stringify({ zentao: { ...base, commentPrompt: ["unsafe"] } }));
+  assert.throws(() => loadConfig({ file, env: {} }), /commentPrompt must be a string/);
+
+  writeFileSync(file, JSON.stringify({ zentao: { ...base, commentPrompt: "x".repeat(1001) } }));
+  assert.throws(() => loadConfig({ file, env: {} }), /must not exceed 1000 characters/);
 });
 
 test("CLI entry detection resolves a Skill symlink to the real script", (t) => {
@@ -220,6 +243,17 @@ test("task reads expose effort and actual-date fields without unsafe data", asyn
     finishedDate: null,
     assignedTo: ACCOUNT,
     password: PASSWORD,
+    actions: [
+      { id: 10, actor: "developer", action: "started", date: "2026-08-11 09:00:00", comment: "" },
+      {
+        id: 11,
+        actor: "tester",
+        action: "paused",
+        date: "2026-08-11 12:00:00",
+        comment: "  等待测试环境恢复.  ",
+        history: [{ field: "status", old: PASSWORD, new: "pause" }],
+      },
+    ],
   };
   const fixture = await listen(async (req, res) => {
     if (req.url === "/api.php/v1/tokens") {
@@ -233,15 +267,26 @@ test("task reads expose effort and actual-date fields without unsafe data", asyn
       });
     }
     if (req.url === "/api.php/v1/tasks/7") return json(res, 200, task);
+    if (req.url === "/api.php/v1/tasks/8") return json(res, 200, { ...task, id: 8, actions: [] });
+    if (req.url === "/api.php/v1/tasks/9") {
+      return json(res, 200, { id: 9, name: "Task without action history", status: "wait" });
+    }
     return json(res, 404, { message: "missing" });
   });
   t.after(fixture.close);
   const env = { AGENT_TOOLS_HOME: tempConfig(fixture.url) };
   const listed = await runCli(["list", "tasks"], { env });
   const detail = await runCli(["get", "task", "7"], { env });
+  const emptyComments = await runCli(["get", "task", "8"], { env });
+  const unavailableComments = await runCli(["get", "task", "9"], { env });
   assert.equal(listed.code, 0, listed.stderr);
   assert.equal(detail.code, 0, detail.stderr);
-  assertNoSecrets(listed.stdout + listed.stderr + detail.stdout + detail.stderr);
+  assert.equal(emptyComments.code, 0, emptyComments.stderr);
+  assert.equal(unavailableComments.code, 0, unavailableComments.stderr);
+  assertNoSecrets(
+    listed.stdout + listed.stderr + detail.stdout + detail.stderr +
+    emptyComments.stdout + emptyComments.stderr + unavailableComments.stdout + unavailableComments.stderr
+  );
   assert.deepEqual(JSON.parse(listed.stdout).items, [{
     id: 7,
     name: "Multi-day task",
@@ -263,7 +308,39 @@ test("task reads expose effort and actual-date fields without unsafe data", asyn
     left: 14,
     realStarted: "2026-08-11 09:00:00",
     finishedDate: null,
+    comments: [{
+      id: 11,
+      actor: "tester",
+      action: "paused",
+      date: "2026-08-11 12:00:00",
+      comment: "等待测试环境恢复.",
+    }],
   });
+  assert.equal(Object.hasOwn(JSON.parse(detail.stdout), "writeback"), false);
+  assert.deepEqual(JSON.parse(emptyComments.stdout).item.comments, []);
+  assert.equal(Object.hasOwn(JSON.parse(unavailableComments.stdout).item, "comments"), false);
+});
+
+test("get returns configured write-back guidance without mixing it into item data", async (t) => {
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") {
+      await body(req);
+      return json(res, 200, { token: TOKEN });
+    }
+    if (req.url === "/api.php/v1/bugs/42") {
+      return json(res, 200, { id: 42, title: "Prompted comment" });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const commentPrompt = "使用多行格式. 包含原因, 修复, 分支和 Commit.";
+  const result = await runCli(["get", "bug", "42"], {
+    env: { AGENT_TOOLS_HOME: tempConfig(fixture.url, PASSWORD, { commentPrompt }) },
+  });
+  assert.equal(result.code, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.writeback, { commentPrompt });
+  assert.equal(Object.hasOwn(output.item, "commentPrompt"), false);
 });
 
 test("story reads expose only development context and download story attachments", async (t) => {
@@ -338,10 +415,23 @@ test("get downloads token-gated images and returns local paths", async (t) => {
     }
     if (req.url === "/api.php/v1/bugs/42") {
       return json(res, 200, {
-        id: 42,
-        title: "Screenshot bug",
-        steps: '<p>See <img src="/file-read-99.png"></p>',
-        assignedTo: ACCOUNT,
+        bug: {
+          id: 42,
+          title: "Screenshot bug",
+          steps: '<p>See <img src="/file-read-99.png"></p>',
+          assignedTo: ACCOUNT,
+        },
+        actions: {
+          20: { id: 20, actor: "developer", action: "resolved", date: "2026-08-11 14:00:00", comment: "已修复." },
+          21: {
+            id: 21,
+            actor: "tester",
+            action: "activated",
+            date: "2026-08-12 09:00:00",
+            comment: "旧版兼容模式下仍可复现.",
+            token: TOKEN,
+          },
+        },
       });
     }
     if (req.url === "/file-read-99.png") {
@@ -360,6 +450,10 @@ test("get downloads token-gated images and returns local paths", async (t) => {
   assertNoSecrets(result.stdout + result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.item.title, "Screenshot bug");
+  assert.deepEqual(output.item.comments, [
+    { id: 20, actor: "developer", action: "resolved", date: "2026-08-11 14:00:00", comment: "已修复." },
+    { id: 21, actor: "tester", action: "activated", date: "2026-08-12 09:00:00", comment: "旧版兼容模式下仍可复现." },
+  ]);
   assert.equal(output.attachments.length, 1);
   assert.ok(existsSync(output.attachments[0].path));
   assert.deepEqual([...readFileSync(output.attachments[0].path)], [0x89, 0x50, 0x4e, 0x47]);
@@ -423,7 +517,7 @@ test("resolve tolerates the HTML-wrapped JSON response from classic ZenTao", asy
   assert.equal(form.get("comment"), "修复断言悬浮, commit abc1234.");
 });
 
-test("finish computes total consumed time inside the CLI", async (t) => {
+test("finish computes total consumed time and submits its optional comment", async (t) => {
   let submitted;
   const fixture = await listen(async (req, res) => {
     if (req.url === "/api.php/v1/tokens") {
@@ -443,7 +537,11 @@ test("finish computes total consumed time inside the CLI", async (t) => {
     return json(res, 404, { message: "missing" });
   });
   t.after(fixture.close);
-  const input = JSON.stringify({ currentConsumed: 1.5, finishedDate: "2026-08-11 10:30:00" });
+  const input = JSON.stringify({
+    currentConsumed: 1.5,
+    finishedDate: "2026-08-11 10:30:00",
+    comment: "完成登录状态修复, commit abc1234.",
+  });
   const result = await runCli(["finish", "task", "7"], {
     env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
     input,
@@ -454,6 +552,7 @@ test("finish computes total consumed time inside the CLI", async (t) => {
   assert.equal(submitted.get("consumed"), "3.5");
   assert.equal(submitted.get("realStarted"), "2026-08-11 09:00:00");
   assert.equal(submitted.get("finishedDate"), "2026-08-11 10:30:00");
+  assert.equal(submitted.get("comment"), "完成登录状态修复, commit abc1234.");
 });
 
 test("start preserves current task hours and submits the chosen start time", async (t) => {
@@ -598,11 +697,17 @@ test("task transitions reject unsafe input or missing current hours before writi
     env,
     input: JSON.stringify({ realStarted: "2026-08-18 09:30:00" }),
   });
+  const invalidFinishComment = await runCli(["finish", "task", "7"], {
+    env,
+    input: JSON.stringify({ currentConsumed: 1, comment: 42 }),
+  });
   const missingHours = await runCli(["start", "task", "7"], { env, input: "{}" });
   assert.equal(invalidComment.code, 1);
   assert.equal(JSON.parse(invalidComment.stderr).error, "usage_error");
   assert.equal(invalidStartTime.code, 1);
   assert.equal(JSON.parse(invalidStartTime.stderr).error, "usage_error");
+  assert.equal(invalidFinishComment.code, 1);
+  assert.equal(JSON.parse(invalidFinishComment.stderr).error, "usage_error");
   assert.equal(missingHours.code, 1);
   assert.equal(JSON.parse(missingHours.stderr).error, "response_error");
   assert.equal(postCount, 0);
