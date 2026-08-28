@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // agent-tools installer: wires statusline / usage into each agent's config.
 // Runtime-dependent skills are installed with their capability. Standalone
-// Standalone skills are still handled by `npx skills add`.
+// skills are still handled by `npx skills add`.
 //
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
-//   usage       Active API provider quota/balance (all agents).
-//   vision      inspect_image MCP server + at-vision skill (all agents).
-//   log         AI session work log via agent hooks (all agents).
+//   usage       Active API provider quota/balance (Claude/Codex/OpenCode).
+//   vision      inspect_image host adapter + at-vision skill.
+//   log         AI session work log via agent hooks (Claude/Codex/OpenCode).
 //
 // Standalone commands (dispatched before capability parsing):
 //   inspect-image <path|url> --question "..."   Human diagnostic for vision.
@@ -22,6 +22,12 @@
 //               ~/.codex/config.toml (vision MCP) + ~/.agents/skills (at-vision)
 //   opencode -> ~/.config/opencode/ (usage + log plugins,
 //               vision MCP in opencode.json + skills/at-vision)
+//   pi       -> ~/.pi/agent/extensions/ (native vision tool)
+//               + ~/.pi/agent/skills/at-vision
+//   zcode    -> ~/.zcode/cli/config.json (vision MCP)
+//               + ~/.zcode/skills/at-vision
+//   dsh      -> ~/.dsh/cordis.patch.yml (official MCP client row)
+//               + ~/.dsh/skills/at-vision
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -32,7 +38,7 @@
 //   agent-tools <capabilities> [options]
 //
 // Options:
-//   -a, --agent <names>       Target agents: claude | codex | opencode.
+//   -a, --agent <names>       Target agents: claude | codex | opencode | pi | zcode | dsh.
 //                             Default: claude.
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
@@ -41,6 +47,10 @@
 //   --claude-skills-dir <p>   Override ~/.claude/skills (for testing).
 //   --codex-config <path>     Override ~/.codex/config.toml (for testing).
 //   --codex-skills-dir <p>    Override ~/.agents/skills (for testing).
+//   --pi-agent-dir <path>     Override ~/.pi/agent (for testing).
+//   --zcode-config <path>     Override ~/.zcode/cli/config.json (for testing).
+//   --zcode-skills-dir <path> Override ~/.zcode/skills (for testing).
+//   --dsh-home <path>         Override ~/.dsh (for testing).
 //   --uninstall               Remove what this installer added, restoring backups.
 //   --dry-run                 Print planned changes without writing anything.
 //   -h, --help                Show this help.
@@ -92,11 +102,14 @@ const RUNTIME = {
   opencodeUsageTui: path.join(INSTALL_ROOT, "dist", "usage", "opencode-tui.mjs"),
 };
 const ALL_CAPS = ["statusline", "usage", "vision", "log"];
-const ALL_AGENTS = ["claude", "codex", "opencode"];
+const ALL_AGENTS = ["claude", "codex", "opencode", "pi", "zcode", "dsh"];
 const AGENT_CAPS = {
   claude: ["statusline", "usage", "vision", "log"],
   codex: ["usage", "vision", "log"],
   opencode: ["usage", "vision", "log"],
+  pi: ["vision"],
+  zcode: ["vision"],
+  dsh: ["vision"],
 };
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
@@ -300,6 +313,10 @@ function parseArgs(argv) {
     claudeSkillsDir: null,
     codexConfig: null,
     codexSkillsDir: null,
+    piAgentDir: null,
+    zcodeConfig: null,
+    zcodeSkillsDir: null,
+    dshHome: null,
     uninstall: false,
     dryRun: false,
     help: false,
@@ -334,6 +351,10 @@ function parseArgs(argv) {
       case "--claude-skills-dir": opts.claudeSkillsDir = argv[++i]; break;
       case "--codex-config": opts.codexConfig = argv[++i]; break;
       case "--codex-skills-dir": opts.codexSkillsDir = argv[++i]; break;
+      case "--pi-agent-dir": opts.piAgentDir = argv[++i]; break;
+      case "--zcode-config": opts.zcodeConfig = argv[++i]; break;
+      case "--zcode-skills-dir": opts.zcodeSkillsDir = argv[++i]; break;
+      case "--dsh-home": opts.dshHome = argv[++i]; break;
       case "--uninstall": opts.uninstall = true; break;
       case "--dry-run": opts.dryRun = true; break;
       case "-h":
@@ -535,6 +556,7 @@ const VISION_RATE_LIMIT_STATE = path.join(INSTALL_ROOT, "cache", "vision-rate-li
 const VISION_DIST_DIR = path.join(REPO_ROOT, "dist", "vision");
 const VISION_RUNTIME_SERVER = path.join(VISION_RUNTIME_DIR, "mcp-server.mjs");
 const VISION_RUNTIME_CLI = path.join(VISION_RUNTIME_DIR, "cli.mjs");
+const VISION_RUNTIME_PI_EXTENSION = path.join(VISION_RUNTIME_DIR, "pi-extension.mjs");
 const VISION_SKILL_IDENTITY = Object.freeze({
   owner: "@kairyou/agent-tools",
   capability: "vision",
@@ -545,7 +567,7 @@ const USAGE_SKILL_IDENTITY = Object.freeze({
   capability: "usage",
   artifact: "skill",
 });
-// Vision is bundled at release time. Install atomically swaps two self-contained
+// Vision is bundled at release time. Install atomically swaps self-contained
 // entry files into ~/.agent-tools/dist/vision, so hosts never run npm and a
 // failed update cannot destroy the previously working runtime.
 function visionMcpCommand() {
@@ -591,6 +613,16 @@ function isOpenCodeVisionMcp(value, mcp = visionMcpCommand()) {
   );
 }
 
+function isZcodeVisionMcp(value, mcp = visionMcpCommand()) {
+  return Boolean(
+    value &&
+      value.command === mcp.command &&
+      Array.isArray(value.args) &&
+      value.args.length === 1 &&
+      isVisionServerPath(value.args[0])
+  );
+}
+
 function installVisionRuntime(opts) {
   if (opts.uninstall) return;
   console.log(`vision runtime: ${VISION_RUNTIME_DIR}`);
@@ -598,7 +630,7 @@ function installVisionRuntime(opts) {
     console.log(`  [dry-run] would atomically install ${VISION_DIST_DIR} -> ${VISION_RUNTIME_DIR}`);
     return;
   }
-  for (const name of ["mcp-server.mjs", "cli.mjs"]) {
+  for (const name of ["mcp-server.mjs", "cli.mjs", "pi-extension.mjs"]) {
     if (!fs.existsSync(path.join(VISION_DIST_DIR, name))) {
       throw new Error(`Missing bundled vision runtime ${path.join(VISION_DIST_DIR, name)}. Run npm run build.`);
     }
@@ -616,7 +648,7 @@ function installVisionRuntime(opts) {
       JSON.stringify({ owner: "@kairyou/agent-tools", capability: "vision", version: 1 }, null, 2) + "\n",
       false
     );
-    for (const name of ["mcp-server.mjs", "cli.mjs"]) {
+    for (const name of ["mcp-server.mjs", "cli.mjs", "pi-extension.mjs"]) {
       const check = spawnSync(process.execPath, ["--check", path.join(stage, name)], {
         encoding: "utf8",
       });
@@ -1123,6 +1155,192 @@ function runOpencode(opts) {
   if (!opts.dryRun) console.log("  NOTE: restart opencode to load the agent-tools usage plugin.");
 }
 
+// ---- Pi: native extension tool plus the capability-owned skill. ----
+
+const PI_VISION_STUB_NAME = "agent-tools-vision.js";
+
+function piAgentDir(opts) {
+  return opts.piAgentDir || path.join(os.homedir(), ".pi", "agent");
+}
+
+function piVisionStubContents() {
+  return (
+    "// Generated by agent-tools installer; do not edit.\n" +
+    `export { default } from ${JSON.stringify(pathToFileURL(VISION_RUNTIME_PI_EXTENSION).href)};\n`
+  );
+}
+
+function isManagedPiVisionStub(file) {
+  return fs.existsSync(file) && fs.readFileSync(file, "utf8") === piVisionStubContents();
+}
+
+function runPi(opts) {
+  if (!wants(opts, "vision")) return;
+  const agentDir = piAgentDir(opts);
+  const stub = path.join(agentDir, "extensions", PI_VISION_STUB_NAME);
+  const skillsDir = path.join(agentDir, "skills");
+  console.log(`pi vision: ${stub}`);
+
+  if (opts.uninstall) {
+    if (isManagedPiVisionStub(stub)) removeFile(stub, opts.dryRun);
+    else if (fs.existsSync(stub)) console.log(`  kept unmanaged ${stub}`);
+    else console.log("  no agent-tools vision extension found; nothing to remove.");
+    installVisionSkillDir(skillsDir, { remove: true, dryRun: opts.dryRun });
+    console.log("  - vision");
+    return;
+  }
+
+  if (fs.existsSync(stub) && !isManagedPiVisionStub(stub)) {
+    throw new Error(
+      `Refusing to overwrite existing unmanaged Pi extension ${stub}. ` +
+        "Move or remove it, then re-run the install."
+    );
+  }
+  writeText(stub, piVisionStubContents(), opts.dryRun);
+  installVisionSkillDir(skillsDir, { remove: false, dryRun: opts.dryRun });
+  console.log("  + vision (native inspect_image extension + at-vision skill)");
+  if (!opts.dryRun) console.log("  NOTE: restart Pi or run /reload to load the agent-tools vision extension.");
+}
+
+// ---- ZCode: native user MCP config plus the user-level skill. ----
+
+function updateZcodeVisionMcp(file, { remove, dryRun, mcp }) {
+  const exists = fs.existsSync(file);
+  const currentText = exists ? fs.readFileSync(file, "utf8") : "{}\n";
+  const errors = [];
+  const current = parseJsonc(currentText, errors, { allowTrailingComma: true }) || {};
+  if (errors.length > 0 || typeof current !== "object" || Array.isArray(current)) {
+    throw new Error(`Cannot parse ${file} as JSONC`);
+  }
+  const existing = current.mcp?.servers?.[VISION_MCP_NAME];
+  if (existing && !isZcodeVisionMcp(existing, mcp)) {
+    if (remove) {
+      console.log(`  kept unmanaged ${VISION_MCP_NAME} entry in ${file}`);
+      return;
+    }
+    throw new Error(
+      `Found an existing unmanaged ${VISION_MCP_NAME} entry in ${file}. ` +
+        "Remove or rename it, then re-run the install."
+    );
+  }
+  const desired = remove ? undefined : { command: mcp.command, args: mcp.args, env: {} };
+  if (JSON.stringify(existing) === JSON.stringify(desired)) {
+    console.log(`  kept existing ${file}`);
+    return;
+  }
+  const eol = currentText.includes("\r\n") ? "\r\n" : "\n";
+  const edits = modify(currentText, ["mcp", "servers", VISION_MCP_NAME], desired, {
+    formattingOptions: { insertSpaces: true, tabSize: 2, eol },
+  });
+  const updated = applyEdits(currentText, edits).replace(/\s*$/, "") + eol;
+  writeText(file, updated, dryRun);
+}
+
+function runZcode(opts) {
+  if (!wants(opts, "vision")) return;
+  const file = opts.zcodeConfig || path.join(os.homedir(), ".zcode", "cli", "config.json");
+  const skillsDir = opts.zcodeSkillsDir || path.join(os.homedir(), ".zcode", "skills");
+  console.log(`zcode vision: ${file}`);
+  updateZcodeVisionMcp(file, {
+    remove: opts.uninstall,
+    dryRun: opts.dryRun,
+    mcp: visionMcpCommand(),
+  });
+  installVisionSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
+  console.log(opts.uninstall ? "  - vision" : "  + vision (inspect_image MCP + at-vision skill)");
+  if (!opts.uninstall && !opts.dryRun) {
+    console.log("  NOTE: start a new ZCode session to load the agent-tools vision MCP server.");
+  }
+}
+
+// ---- DeepSeek Harness: official MCP client row in the global Cordis patch. ----
+
+const DSH_VISION_BEGIN = "# >>> agent-tools vision >>>";
+const DSH_VISION_END = "# <<< agent-tools vision <<<";
+const DSH_VISION_ROW_ID = "agent-tools-vision";
+
+function dshHome(opts) {
+  return opts.dshHome || process.env.DSH_HOME || path.join(os.homedir(), ".dsh");
+}
+
+function dshVisionBlock(mcp) {
+  return [
+    DSH_VISION_BEGIN,
+    "- insert:",
+    `    - id: ${DSH_VISION_ROW_ID}`,
+    "      name: '@deepseek-ai/dsh-mcp-client'",
+    "      config:",
+    `        serverName: ${DSH_VISION_ROW_ID}`,
+    "        transport: stdio",
+    `        command: ${JSON.stringify(mcp.command)}`,
+    `        args: [${mcp.args.map((arg) => JSON.stringify(arg)).join(", ")}]`,
+    "        env: {}",
+    DSH_VISION_END,
+    "",
+  ].join("\n");
+}
+
+function updateDshVisionPatch(file, { remove, dryRun, mcp }) {
+  const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "[]\n";
+  const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blockRe = new RegExp(
+    `\\r?\\n?${escape(DSH_VISION_BEGIN)}[\\s\\S]*?${escape(DSH_VISION_END)}\\r?\\n?`
+  );
+  const hadManagedBlock = blockRe.test(current);
+  let base = current.replace(blockRe, "\n").trim();
+  if (base !== "" && base !== "[]" && !base.startsWith("-")) {
+    throw new Error(`Cannot update ${file}: the Cordis patch must be a top-level YAML array`);
+  }
+
+  if (!remove && !hadManagedBlock) {
+    const conflict = new RegExp(
+      `^\\s*(?:-\\s*)?(?:id|serverName):\\s*['\"]?${escape(DSH_VISION_ROW_ID)}['\"]?\\s*$`,
+      "m"
+    );
+    if (conflict.test(base)) {
+      throw new Error(
+        `Found an existing unmanaged ${DSH_VISION_ROW_ID} Cordis row in ${file}. ` +
+          "Remove or rename it, then re-run the install."
+      );
+    }
+  }
+
+  let next;
+  if (remove) {
+    if (!hadManagedBlock) {
+      console.log(`  no managed ${DSH_VISION_ROW_ID} Cordis row found; nothing to remove.`);
+      return;
+    }
+    next = base === "" ? "[]\n" : `${base}\n`;
+  } else {
+    const block = dshVisionBlock(mcp);
+    next = base === "" || base === "[]" ? block : `${base}\n\n${block}`;
+  }
+  if (next === current) {
+    console.log(`  kept existing ${file}`);
+    return;
+  }
+  writeText(file, next, dryRun);
+}
+
+function runDsh(opts) {
+  if (!wants(opts, "vision")) return;
+  const home = dshHome(opts);
+  const patchFile = path.join(home, "cordis.patch.yml");
+  const skillsDir = path.join(home, "skills");
+  console.log(`dsh vision: ${patchFile}`);
+  updateDshVisionPatch(patchFile, {
+    remove: opts.uninstall,
+    dryRun: opts.dryRun,
+    mcp: visionMcpCommand(),
+  });
+  installVisionSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
+  console.log(opts.uninstall ? "  - vision" : "  + vision (official MCP client row + at-vision skill)");
+  if (!opts.uninstall && !opts.dryRun) {
+    console.log("  NOTE: restart DSH and wait for mcp__agent-tools-vision__inspect_image to appear.");
+  }
+}
+
 function visionRuntimeHasRemainingReference(opts) {
   const removed = new Set(opts.agents);
   if (!removed.has("claude")) {
@@ -1162,6 +1380,36 @@ function visionRuntimeHasRemainingReference(opts) {
       return true;
     }
   }
+  if (!removed.has("pi")) {
+    const stub = path.join(piAgentDir(opts), "extensions", PI_VISION_STUB_NAME);
+    try {
+      if (isManagedPiVisionStub(stub)) return true;
+    } catch {
+      return true;
+    }
+  }
+  if (!removed.has("zcode")) {
+    const file = opts.zcodeConfig || path.join(os.homedir(), ".zcode", "cli", "config.json");
+    try {
+      if (isZcodeVisionMcp(readJsonc(file).mcp?.servers?.[VISION_MCP_NAME])) return true;
+    } catch {
+      return true;
+    }
+  }
+  if (!removed.has("dsh")) {
+    const file = path.join(dshHome(opts), "cordis.patch.yml");
+    try {
+      const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+      const start = text.indexOf(DSH_VISION_BEGIN);
+      const end = text.indexOf(DSH_VISION_END, start + DSH_VISION_BEGIN.length);
+      if (start !== -1 && end !== -1) {
+        const block = text.slice(start, end);
+        if (block.includes(fwd(VISION_RUNTIME_SERVER))) return true;
+      }
+    } catch {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -1187,7 +1435,14 @@ function cleanupVisionRuntimeIfUnused(opts) {
   console.log(`  removed unused vision runtime ${VISION_RUNTIME_DIR}`);
 }
 
-const AGENTS = { claude: runClaude, codex: runCodex, opencode: runOpencode };
+const AGENTS = {
+  claude: runClaude,
+  codex: runCodex,
+  opencode: runOpencode,
+  pi: runPi,
+  zcode: runZcode,
+  dsh: runDsh,
+};
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));

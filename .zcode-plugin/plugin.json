@@ -5,6 +5,7 @@
   "author": {
     "name": "kairyou"
   },
+  "license": "MIT",
   "skills": [
     "./skills/workflow/at-commit",
     "./skills/workflow/at-daily-log",
@@ -12,6 +13,5 @@
     "./skills/workflow/at-self-eval",
     "./skills/workflow/at-simplify",
     "./skills/systems/at-zentao"
-  ],
-  "license": "MIT"
+  ]
 }

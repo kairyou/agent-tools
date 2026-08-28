@@ -1,6 +1,6 @@
 # Agent Tools
 
-Reusable Agent Skills, plus runtime capabilities (statusline, provider usage, vision) for Codex, Claude Code, and opencode.
+Reusable Agent Skills for compatible coding agents, plus per-agent runtime capabilities for statusline, provider usage, vision, and session logging.
 
 Requires Node.js >= 22.
 
@@ -17,6 +17,9 @@ npx -y skills@latest add kairyou/agent-tools --list
 # Install globally (pass one or more names after --skill)
 npx -y skills@latest add kairyou/agent-tools --skill <name...> -g -y
 ```
+
+The Skills installer automatically detects and installs to the Skill directories
+of most supported agents.
 
 ### at-commit
 
@@ -99,11 +102,12 @@ re-running the install command updates. The installer only touches config
 entries it wrote itself, and `config.jsonc` updates only add missing default
 keys without touching your edits or comments.
 
-| Capability | Claude Code | Codex | OpenCode |
-| --- | --- | --- | --- |
-| `statusline` | ✓ | – | – |
-| `usage` | `/at-usage` skill | hook + `$at-usage` skill | toast + `/at-usage` command |
-| `vision` | ✓ | ✓ | ✓ |
+| Runtime capability | Supported agents |
+| --- | --- |
+| `statusline` | Claude Code |
+| `usage` | Claude Code, Codex, OpenCode |
+| `vision` | Claude Code, Codex, OpenCode, Pi, ZCode, DeepSeek Harness |
+| `log` | Claude Code, Codex, OpenCode |
 
 ### Statusline
 
@@ -200,10 +204,12 @@ Lets a main model that cannot see images use a multimodal model to analyze error
 #### Install
 
 ```bash
-npx -y @kairyou/agent-tools@latest vision -a claude codex opencode
+npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
 ```
 
 Uninstalling keeps your vision provider config by default.
+Pi uses a native extension; the other agents use their MCP configuration
+surfaces.
 
 #### Configure
 

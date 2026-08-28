@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-可复用的 Agent Skills, 以及适用于 Codex, Claude Code 与 opencode 的 runtime capabilities: statusline, provider usage 与跨模型识图.
+适用于兼容 coding agent 的可复用 Agent Skills, 以及按 Agent 适配的 runtime capabilities: statusline, provider usage, 跨模型识图与 session log.
 
 需要 Node.js >= 22.
 
@@ -17,6 +17,8 @@ npx -y skills@latest add kairyou/agent-tools --list
 # 全局安装(--skill 后面可以跟一个或多个名字)
 npx -y skills@latest add kairyou/agent-tools --skill <name...> -g -y
 ```
+
+Skills installer 会自动检测并安装到大多数受支持 Agent 的 Skills 目录.
 
 ### at-commit
 
@@ -98,11 +100,12 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 安装器只改动自己写入的配置项, 更新 `config.jsonc` 时只补充缺失的默认键,
 不会动你的修改和注释.
 
-| Capability | Claude Code | Codex | OpenCode |
-| --- | --- | --- | --- |
-| `statusline` | ✓ | – | – |
-| `usage` | `/at-usage` skill | hook + `$at-usage` skill | toast + `/at-usage` 命令 |
-| `vision` | ✓ | ✓ | ✓ |
+| Runtime capability | 支持的 Agent |
+| --- | --- |
+| `statusline` | Claude Code |
+| `usage` | Claude Code, Codex, OpenCode |
+| `vision` | Claude Code, Codex, OpenCode, Pi, ZCode, DeepSeek Harness |
+| `log` | Claude Code, Codex, OpenCode |
 
 ### Statusline
 
@@ -194,10 +197,11 @@ balance $362 | today $61.7 | 30d $566
 #### 安装
 
 ```bash
-npx -y @kairyou/agent-tools@latest vision -a claude codex opencode
+npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
 ```
 
 卸载时默认保留 vision provider 配置.
+Pi 使用原生 extension; 其他 Agent 通过各自的 MCP 配置接入.
 
 #### 配置
 

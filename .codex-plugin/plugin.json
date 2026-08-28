@@ -1,7 +1,7 @@
 {
   "name": "agent-tools",
-  "version": "0.1.0",
-  "description": "Reusable Agent Skills, plus runtime capabilities (statusline, provider usage, vision) for Codex, Claude Code, and opencode",
+  "version": "0.23.0",
+  "description": "Reusable Agent Skills from agent-tools",
   "license": "MIT",
   "skills": "./skills/"
 }

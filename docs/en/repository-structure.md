@@ -4,10 +4,12 @@
 agent-tools/
 ├── .claude-plugin/    # Claude Code/plugin ecosystem manifest.
 ├── .codex-plugin/     # Codex plugin manifest.
+├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, one directory each.
 │   ├── statusline/    # Agent status line: branch, model, usage.
 │   ├── usage/         # Provider balance / quota display.
-│   └── vision/        # Cross-model image understanding.
+│   ├── vision/        # Cross-model image understanding and host adapters.
+│   └── log/           # Session work-log hooks and plugins.
 ├── skills/            # Reusable Agent Skills.
 │   ├── workflow/      # Workflow-oriented skills.
 │   │   ├── at-commit/   # Conventional Commit message skill.

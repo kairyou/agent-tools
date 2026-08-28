@@ -33,6 +33,7 @@ const TARGETS = {
     entryPoints: {
       "mcp-server": path.join(ROOT, "capabilities", "vision", "mcp-server.mjs"),
       cli: path.join(ROOT, "capabilities", "vision", "lib", "cli.mjs"),
+      "pi-extension": path.join(ROOT, "capabilities", "vision", "pi-extension.mjs"),
     },
   },
   log: {
