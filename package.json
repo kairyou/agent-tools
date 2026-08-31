@@ -1,6 +1,6 @@
 {
   "name": "@kairyou/agent-tools",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "Reusable Agent Skills plus per-agent runtime capabilities for compatible coding agents.",
   "license": "MIT",
   "repository": {
