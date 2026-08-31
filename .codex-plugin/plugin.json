@@ -1,6 +1,6 @@
 {
   "name": "agent-tools",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "Reusable Agent Skills from agent-tools",
   "license": "MIT",
   "skills": "./skills/"
