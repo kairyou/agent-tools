@@ -67,6 +67,7 @@ function apiKeyFor(auth, provider) {
   if (process.env.PROVIDER_USAGE_API_KEY) return process.env.PROVIDER_USAGE_API_KEY;
   if (process.env.SUB2API_API_KEY) return process.env.SUB2API_API_KEY;
   if (provider.env_key && process.env[provider.env_key]) return process.env[provider.env_key];
+  if (provider.experimental_bearer_token) return provider.experimental_bearer_token;
   if (auth.OPENAI_API_KEY) return auth.OPENAI_API_KEY;
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
   return "";

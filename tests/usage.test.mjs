@@ -177,6 +177,46 @@ test("local usage CLI queries Codex and Claude without a package manager", async
   });
 });
 
+test("Codex usage reads the provider experimental bearer token", async () => {
+  const seen = [];
+  await withServer((req, res) => {
+    seen.push({ url: req.url, authorization: req.headers.authorization });
+    if (req.url === "/v1/usage?days=30") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ balance: 18.75 }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  }, async (baseUrl) => {
+    const temp = mkdtempSync(join(tmpdir(), "agent-tools-codex-provider-token-"));
+    const codexHome = join(temp, "codex");
+    const agentHome = join(temp, "agent");
+    mkdirSync(codexHome, { recursive: true });
+    mkdirSync(agentHome, { recursive: true });
+    writeFileSync(
+      join(codexHome, "config.toml"),
+      `model_provider = "mock"\n[model_providers.mock]\nname = "Mock"\nbase_url = "${baseUrl}/v1"\nexperimental_bearer_token = "config-token"\n`
+    );
+    writeFileSync(join(agentHome, "config.jsonc"), JSON.stringify({ providerUsage: {} }));
+
+    const result = await runUsageCli("codex", {
+      CODEX_HOME: codexHome,
+      AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_PRESET: "sub2api",
+      PROVIDER_USAGE_BASE_URL: "",
+      SUB2API_BASE_URL: "",
+      OPENAI_BASE_URL: "",
+      OPENAI_API_KEY: "",
+    });
+
+    assert.deepEqual(result, { status: 0, stdout: "balance $18.8\n", stderr: "" });
+    assert.deepEqual(seen, [
+      { url: "/v1/usage?days=30", authorization: "Bearer config-token" },
+    ]);
+  });
+});
+
 test("Sub2API weekly limits include the time until reset", async () => {
   const resetInMs = ((3 * 24 + 1) * 60 + 30) * 60 * 1000;
   const weeklyWindowStart = new Date(Date.now() + resetInMs - 7 * 86400 * 1000).toISOString();
