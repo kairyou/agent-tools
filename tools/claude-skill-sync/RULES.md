@@ -21,7 +21,7 @@ every Claude Code runtime.
 | `AGENT_TOOL_NAME` | Render as `Agent`, then apply the cross-agent tool wording rule |
 | `AGENT_UNAVAILABLE_INSTRUCTIONS` | Empty because the selected variant requires multi-agent capability |
 | `BASE_FINDER_ANGLES_BLOCK` | Upstream correctness finder object |
-| `CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE` | Local Reuse and Simplification fragments plus upstream Efficiency, Altitude, and Conventions objects |
+| `CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE` | Local Reuse, Simplification, and Altitude fragments plus upstream Efficiency and Conventions objects |
 | `RECALL_BIASED_VERIFY_PHASE` | Upstream verify template plus upstream recall-biased rubric |
 | output format | Put the local Markdown report first, with explicit `High`, `Medium`, or `Low` findings; preserve the upstream JSON schema for the low-frequency `--json` mode |
 | `REPORT_FINDINGS_TOOL_NAME` | Host-specific placeholder; the portable output rule forbids using it |
@@ -30,7 +30,7 @@ every Claude Code runtime.
 | `REUSE_FINDER_ANGLE_BLOCK` | Local-locked Reuse fragment |
 | `SIMPLIFICATION_FINDER_ANGLE_BLOCK` | Local-locked Simplification fragment |
 | `EFFICIENCY_FINDER_ANGLE_BLOCK` | Upstream Efficiency object |
-| `ALTITUDE_FINDER_ANGLE_BLOCK` | Upstream Altitude object |
+| `ALTITUDE_FINDER_ANGLE_BLOCK` | Local-locked Altitude fragment verified from the official Claude Code 2.1.260 npm bundle |
 
 Every variable in an included wrapper must be resolved. Generation fails if a
 `${...}` expression remains.
@@ -68,10 +68,13 @@ The rules cover:
 ## Local-locked fragments
 
 Piebald currently leaves Reuse and Simplification as runtime interpolation
-values without standalone prompt objects. Their rendered text is stored in
-`rules.mjs` and hash-reported during dry runs.
+values without standalone prompt objects. Its standalone Altitude object also
+disappeared even though the fragment remained in the official Claude Code
+2.1.260 npm bundle and changed there. These rendered fragments are stored in
+`rules.mjs` and hash-reported during dry runs. The missing Altitude ID remains
+an optional monitoring input so its reappearance produces a reviewable change.
 
-This is the main fidelity limit. A change to those values could be invisible
+This is the main fidelity limit. A change to these fragments could be invisible
 to the versioned JSON even when the surrounding wrapper is unchanged. Compare
 them with a real rendered Claude Code prompt whenever a surrounding template
 changes, and periodically as a manual audit even when it does not.

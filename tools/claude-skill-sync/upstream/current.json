@@ -104,17 +104,6 @@
       "version": "2.1.154"
     },
     {
-      "name": "Skill: Code Review (altitude dimension)",
-      "id": "skill-code-review-altitude",
-      "description": "Code-review dimension: check whether each change is implemented at the right depth rather than as a fragile special case",
-      "pieces": [
-        "### Altitude\n\nCheck that each change is implemented at the right depth, not as a fragile\nbandaid. Special cases layered on shared infrastructure are a sign the fix\nisn't deep enough — prefer generalizing the underlying mechanism over adding\nspecial cases.\n"
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.173"
-    },
-    {
       "name": "Skill: Code Review (conventions dimension)",
       "id": "skill-code-review-conventions",
       "description": "Code-review dimension: flag diff lines that break a rule stated in an applicable CLAUDE.md (user, repo-root, or ancestor-directory), quoting the exact rule and offending line, and emit nothing when no CLAUDE.md governs the change",

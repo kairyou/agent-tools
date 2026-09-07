@@ -3,7 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ALL_PROMPT_IDS, SKILLS, UPSTREAM_REPOSITORY } from "./manifest.mjs";
+import {
+  ALL_PROMPT_IDS,
+  OPTIONAL_PROMPT_IDS,
+  SKILLS,
+  UPSTREAM_REPOSITORY,
+} from "./manifest.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const TOOL_DIR = path.join(ROOT, "tools", "claude-skill-sync");
@@ -163,7 +168,9 @@ export async function fetchUpstream(version, options = {}) {
   const byId = new Map(source.prompts.map((prompt) => [prompt.id, prompt]));
   const missing = ALL_PROMPT_IDS.filter((id) => !byId.has(id));
   if (missing.length) throw new Error(`Upstream is missing required prompt IDs:\n${missing.join("\n")}`);
-  const prompts = ALL_PROMPT_IDS.map((id) => byId.get(id));
+  const prompts = [...ALL_PROMPT_IDS, ...OPTIONAL_PROMPT_IDS]
+    .filter((id) => byId.has(id))
+    .map((id) => byId.get(id));
   return {
     schemaVersion: 1,
     claudeCodeVersion: version,
@@ -197,6 +204,9 @@ export function compareSnapshots(current, pending) {
       use: Object.entries(SKILLS)
         .filter(([, skill]) => skill.includedPromptIds.includes(prompt.id))
         .map(([name]) => name),
+      monitoredBy: Object.entries(SKILLS)
+        .filter(([, skill]) => skill.monitoredPromptIds?.includes(prompt.id))
+        .map(([name]) => name),
     }));
 }
 
@@ -216,9 +226,10 @@ export function renderReport(current, pending) {
   ];
   if (!changes.length) lines.push("No selected prompt changed.");
   for (const change of changes) {
-    lines.push(
-      `- ${change.id} (${change.status}, source ${change.promptVersion}) — included by ${change.use.join(", ")}`
-    );
+    const disposition = change.use.length
+      ? `included by ${change.use.join(", ")}`
+      : `monitored for ${change.monitoredBy.join(", ")}`;
+    lines.push(`- ${change.id} (${change.status}, source ${change.promptVersion}) — ${disposition}`);
   }
   lines.push(
     "",

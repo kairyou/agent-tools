@@ -7,6 +7,7 @@ import {
 
 const REUSE_GUIDANCE = LOCAL_FRAGMENTS.reuseGuidance.text;
 const SIMPLIFICATION_BLOCK = LOCAL_FRAGMENTS.simplificationBlock.text;
+const ALTITUDE_BLOCK = LOCAL_FRAGMENTS.altitudeBlock.text;
 const REVIEW_TARGET_GUIDANCE = `If the argument is a hosted pull/merge request URL or a numeric PR/MR identifier,
 read \`references/review-targets.md\` from this skill directory before running
 commands. Follow its read-only resolution and authentication fallback rules;
@@ -15,6 +16,7 @@ do not switch the user's working tree or write to the hosting service.`;
 export const LOCAL_LOCKED_HASHES = {
   reuse: sha256(REUSE_GUIDANCE),
   simplification: sha256(SIMPLIFICATION_BLOCK),
+  altitude: sha256(ALTITUDE_BLOCK),
 };
 
 function requirePrompt(prompts, id) {
@@ -51,8 +53,7 @@ the changed code. ${REUSE_GUIDANCE}`
 
 ${REUSE_GUIDANCE}`;
   const efficiency = requirePrompt(prompts, "skill-code-review-efficiency");
-  const altitude = requirePrompt(prompts, "skill-code-review-altitude");
-  return [reuse, SIMPLIFICATION_BLOCK, efficiency, altitude].join("\n\n");
+  return [reuse, SIMPLIFICATION_BLOCK, efficiency, ALTITUDE_BLOCK].join("\n\n");
 }
 
 function renderOutput(prompts) {
@@ -149,7 +150,7 @@ function renderSimplify(snapshot) {
       "${EFFICIENCY_FINDER_ANGLE_BLOCK}",
       `${requirePrompt(prompts, "skill-code-review-efficiency")}\n`
     )
-    .replace("${ALTITUDE_FINDER_ANGLE_BLOCK}", `${requirePrompt(prompts, "skill-code-review-altitude")}\n`);
+    .replace("${ALTITUDE_FINDER_ANGLE_BLOCK}", `${ALTITUDE_BLOCK}\n`);
   if (body.includes("${")) throw new Error("Unresolved variable in at-simplify upstream composition");
   body = applyTextRule(body, "at-simplify/agent-tool");
   body = body.replace("`/simplify", "`at-simplify").replace("`/code-review`", "`at-review`");

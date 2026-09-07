@@ -13,6 +13,22 @@ Flag unnecessary complexity the diff adds: redundant or derivable state,
 copy-paste with slight variation, deep nesting, dead code left behind. Name
 the simpler form that does the same job.`,
   },
+  altitudeBlock: {
+    source: {
+      package: "@anthropic-ai/claude-code-linux-x64",
+      version: "2.1.260",
+      artifact: "official npm bundle",
+      piebaldPromptId: "skill-code-review-altitude",
+      reason: "not exposed as a standalone Piebald prompt object",
+    },
+    text: `### Altitude
+
+Check that each change fixes the root cause at the right depth rather than
+patching a symptom with a fragile bandaid. Special cases layered on shared
+infrastructure are a sign the fix isn't deep enough — prefer the simpler, more
+general change to the underlying mechanism over adding special cases, and name
+that change.`,
+  },
 };
 
 export const TEXT_RULES = {

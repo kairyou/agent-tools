@@ -14,8 +14,16 @@ import {
   readJson,
   reconstructPrompt,
 } from "../tools/claude-skill-sync/lib.mjs";
-import { SKILLS } from "../tools/claude-skill-sync/manifest.mjs";
-import { renderSkills } from "../tools/claude-skill-sync/render.mjs";
+import {
+  ALL_PROMPT_IDS,
+  OPTIONAL_PROMPT_IDS,
+  SKILLS,
+} from "../tools/claude-skill-sync/manifest.mjs";
+import {
+  LOCAL_LOCKED_HASHES,
+  renderSkills,
+} from "../tools/claude-skill-sync/render.mjs";
+import { LOCAL_FRAGMENTS } from "../tools/claude-skill-sync/rules.mjs";
 
 test("reconstructPrompt restores extracted source escapes and expressions", () => {
   const prompt = {
@@ -78,6 +86,9 @@ test("semantic version comparison is numeric", () => {
 
 test("accepted Claude prompt snapshot reproduces the installable skills", () => {
   const snapshot = readJson(CURRENT_FILE);
+  const ids = snapshot.prompts.map(({ id }) => id);
+  assert.ok(ALL_PROMPT_IDS.every((id) => ids.includes(id)));
+  assert.ok(ids.every((id) => ALL_PROMPT_IDS.includes(id) || OPTIONAL_PROMPT_IDS.includes(id)));
   const generated = renderSkills(snapshot);
   for (const [name, content] of Object.entries(generated)) {
     assert.equal(fs.readFileSync(path.join(ROOT, SKILLS[name].target), "utf8"), content);
@@ -122,6 +133,60 @@ test("manifest targets stay inside the two workflow skill directories", () => {
       "skills/workflow/at-simplify/SKILL.md",
     ]
   );
+});
+
+test("local altitude guidance records its accepted Claude Code provenance", () => {
+  const altitude = LOCAL_FRAGMENTS.altitudeBlock;
+  assert.deepEqual(altitude.source, {
+    package: "@anthropic-ai/claude-code-linux-x64",
+    version: "2.1.260",
+    artifact: "official npm bundle",
+    piebaldPromptId: "skill-code-review-altitude",
+    reason: "not exposed as a standalone Piebald prompt object",
+  });
+  assert.match(altitude.text, /fixes the root cause at the right depth/);
+  assert.match(altitude.text, /name\s+that change/);
+  assert.match(LOCAL_LOCKED_HASHES.altitude, /^[a-f0-9]{64}$/);
+  for (const skill of Object.values(SKILLS)) {
+    assert.ok(!skill.includedPromptIds.includes("skill-code-review-altitude"));
+    assert.ok(skill.monitoredPromptIds.includes("skill-code-review-altitude"));
+  }
+  assert.deepEqual(OPTIONAL_PROMPT_IDS, ["skill-code-review-altitude"]);
+});
+
+test("a restored optional prompt becomes a monitored change", async () => {
+  const originalFetch = globalThis.fetch;
+  const current = readJson(CURRENT_FILE);
+  const restored = {
+    name: "Skill: Code Review (altitude dimension)",
+    id: "skill-code-review-altitude",
+    description: "restored extraction",
+    pieces: [LOCAL_FRAGMENTS.altitudeBlock.text],
+    identifiers: [],
+    identifierMap: {},
+    version: "9.9.9",
+  };
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("registry.npmjs.org")) {
+      return new Response(JSON.stringify({ version: "9.9.9" }));
+    }
+    if (String(url).endsWith("/commits/main")) {
+      return new Response(JSON.stringify({ sha: "abc123" }));
+    }
+    return new Response(JSON.stringify({
+      version: "9.9.9",
+      prompts: [...current.prompts, restored],
+    }));
+  };
+  try {
+    const pending = await fetchUpstream("9.9.9");
+    const change = compareSnapshots(current, pending).find(({ id }) => id === restored.id);
+    assert.deepEqual(change.use, []);
+    assert.deepEqual(change.monitoredBy, ["at-review", "at-simplify"]);
+    assert.equal(change.status, "added");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("snapshot comparison reports included prompt changes", () => {

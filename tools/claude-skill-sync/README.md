@@ -43,10 +43,22 @@ leave its branch untouched so manual review edits are never overwritten.
 Only prompt objects composed into the portable skills are fetched and diffed.
 Host-specific and reference-only prompts do not participate in automated sync.
 
-Piebald does not expose the Reuse and Simplification interpolation values as
-standalone prompt objects. Their text is therefore local-locked in
-`render.mjs`; compare it with a real rendered Claude Code prompt when either
-surrounding template changes.
+Piebald prompt IDs are curated extraction metadata, not a stable Anthropic API.
+If a selected ID disappears, the fetch fails closed so a maintainer can verify
+whether the fragment was removed, renamed, or missed by extraction.
+
+Fragments that cannot be tracked reliably through Piebald are local-locked in
+`rules.mjs`, with their source reason and, when available, the exact Claude Code
+package version. Their content hashes are printed during inspection. Reuse and
+Simplification are runtime interpolation values that Piebald does not expose as
+standalone prompt objects. Altitude is verified from the official Claude Code
+2.1.260 npm bundle after its Piebald object disappeared while the underlying
+fragment changed and remained in the bundle.
+
+The missing Altitude ID remains optional monitoring input. Its absence does not
+block unrelated updates; if Piebald exposes it again, the sync creates a
+reviewable monitored change so maintainers can compare it with the local-locked
+fragment and restore direct tracking when appropriate.
 
 ## Provenance
 
