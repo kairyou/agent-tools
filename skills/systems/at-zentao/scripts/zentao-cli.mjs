@@ -541,8 +541,24 @@ function readableHtml(html, localPath) {
     references.push(localPath(url));
     return `\u0000${references.length - 1}\u0000`;
   };
-  return html
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+  const withoutBlockedElements = (source) => {
+    let output = "";
+    let cursor = 0;
+    while (cursor < source.length) {
+      const lower = source.toLowerCase();
+      const script = lower.indexOf("<script", cursor);
+      const style = lower.indexOf("<style", cursor);
+      const start = script < 0 ? style : style < 0 ? script : Math.min(script, style);
+      if (start < 0) return output + source.slice(cursor);
+      output += source.slice(cursor, start);
+      const name = script === start ? "script" : "style";
+      const end = lower.indexOf(`</${name}>`, start + name.length + 1);
+      if (end < 0) return output;
+      cursor = end + name.length + 3;
+    }
+    return output;
+  };
+  return withoutBlockedElements(html)
     .replace(/<img\b[^>]*>/gi, (tag) => {
       const src = htmlAttribute(tag, "src");
       return src ? reference(src) : "[image without source]";
