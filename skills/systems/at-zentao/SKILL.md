@@ -68,6 +68,11 @@ Read-only commands:
 ```text
 node <skill-root>/scripts/zentao-cli.mjs list bugs
 node <skill-root>/scripts/zentao-cli.mjs list tasks
+node <skill-root>/scripts/zentao-cli.mjs list stories
+node <skill-root>/scripts/zentao-cli.mjs list tasks "person account or exact name"
+node <skill-root>/scripts/zentao-cli.mjs list tasks "person" --relation finishedBy --status all
+node <skill-root>/scripts/zentao-cli.mjs list bugs "person" --relation resolvedBy --status all
+node <skill-root>/scripts/zentao-cli.mjs list stories "person account or exact name"
 node <skill-root>/scripts/zentao-cli.mjs get bug <id>
 node <skill-root>/scripts/zentao-cli.mjs get task <id>
 node <skill-root>/scripts/zentao-cli.mjs get story <id>
@@ -124,6 +129,26 @@ workflow. Use `finish` when the task is complete; its `comment` is optional.
 
 ## Usage
 
+### Read-only personnel and history queries
+
+Interpret natural language; users do not need CLI flags. "查张三的任务"
+maps to `list tasks "张三"`; "查张三解决的 Bug" maps to
+`list bugs "张三" --relation resolvedBy --status all`; "查我完成的任务"
+maps to `list tasks --relation finishedBy --status all`.
+Use `openedBy` for created items and `closedBy` for items closed by the person.
+For all historical items still assigned to someone, use `assignedTo` with
+`--status all`. Completion is a relationship: finished/resolved items may
+have been reassigned or closed, so do not infer the finisher from assignedTo.
+Use an exact status only when requested (for example `--status closed`).
+Account matches take precedence over exact names. If a name is ambiguous,
+ask for the account. Authentication always uses the existing configuration.
+
+These list queries are read-only. Requests to view, explain, or trace a commit
+also stop after reading the referenced Bug/Task, comments, and linked Story;
+do not enter the implementation workflow below. Extract bug/task IDs from the
+commit when present and use `get` directly. Do not infer a ZenTao account from
+a Git author without a matching directory entry or user clarification.
+
 - `/at-zentao bug <id>` — handle a single bug.
 - `/at-zentao task <id>` — handle a single task.
 - `/at-zentao story <id>` — read requirement scope and acceptance context.
@@ -131,6 +156,12 @@ workflow. Use `finish` when the task is complete; its `comment` is optional.
 - `/at-zentao bugs` — list bugs assigned to the configured account; let the
   user select one or more.
 - `/at-zentao tasks` — list assigned tasks and let the user select.
+- When the user asks to inspect another person's Bugs or Tasks, treat the
+  named person as the query subject while keeping the configured account for
+  authentication. Use a read-only query and state the accessible scope.
+- When the user asks for completed, closed, or historical work, include that
+  status range only for that request. Do not expand the default actionable
+  list.
 - `/at-zentao export bug <id>` or `export task <id>` — create a read-only,
   self-contained handoff bundle.
 
@@ -145,8 +176,9 @@ match; never guess or call `log-hours` again to compensate for a mistake.
 
 If a list response includes pager data showing more items than returned, tell
 the user the shown and total counts. Do not silently imply the list is complete.
-Do not browse through products/projects; start from assigned lists or an
-explicit item id.
+Do not browse through products/projects for the default personal list. For an
+explicit request about another person or historical work, use the narrowest
+supported read-only scope and never imply that a partial result is complete.
 
 When a fetched Bug or Task has a positive `story` id, fetch that Story before
 planning the implementation. Use its `spec` and `verify` fields to identify

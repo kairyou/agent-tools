@@ -372,6 +372,51 @@ function decodeLegacy(value) {
   }
 }
 
+// Match engineering-tools' bounded, explicit PATH_INFO pagination. Never
+// report a partial traversal as a complete personnel query.
+async function queryPages(client, prefix, key) {
+  const rows = new Map();
+  let expectedPages;
+  const deadline = Date.now() + 60_000;
+  for (let page = 1; page <= 500; page++) {
+    if (Date.now() > deadline) throw new CliError("response_error", "Personnel query exceeded its time limit; no complete result available");
+    const data = decodeLegacy(await client.json(`${prefix}${page}.json`));
+    const collection = data?.[key];
+    if (!collection || typeof collection !== "object") throw new CliError("response_error", "Personnel query list is missing");
+    const pager = data.pager;
+    const pages = Number(pager?.pageTotal);
+    if (!Number.isInteger(pages) || pages < 0 || pages > 500 || Number(pager?.pageID) !== page ||
+        (expectedPages !== undefined && pages !== expectedPages)) {
+      throw new CliError("response_error", "Personnel query pagination is incomplete or changed");
+    }
+    expectedPages = pages;
+    const batch = Array.isArray(collection) ? collection : Object.values(collection);
+    for (const row of batch) {
+      if (!row || !Number.isSafeInteger(Number(row.id)) || Number(row.id) < 1 || rows.has(String(row.id))) {
+        throw new CliError("response_error", "Personnel query contains invalid or repeated records");
+      }
+      rows.set(String(row.id), row);
+    }
+    if (page >= Math.max(1, pages)) return [...rows.values()];
+    if (!batch.length) throw new CliError("response_error", "Personnel query returned an empty intermediate page");
+  }
+  throw new CliError("response_error", "Personnel query exceeded its page limit");
+}
+
+async function personnelList(client, plural, target, relation, status) {
+  const users = await queryPages(client, "company-browse-all-0-bydept-id_asc-0-100-", "users");
+  const accountMatches = users.filter((user) => user.account === target);
+  const matches = accountMatches.length ? accountMatches : users.filter((user) => user.realname === target);
+  if (matches.length !== 1) throw new CliError("usage_error", matches.length ? "Multiple people have that name; use an exact account" : "Person not found in the accessible directory; use an exact account");
+  const user = matches[0];
+  // ZenTao user/control.php accepts a numeric user ID, not an account in
+  // my-work's param slot. finishedBy/resolvedBy retain completed ownership.
+  const resource = plural === "stories" ? "story" : plural.slice(0, -1);
+  const rows = await queryPages(client, `user-${resource}-${user.id}-${relation}-id_asc-0-100-`, plural);
+  const open = plural === "tasks" ? ["wait", "doing", "pause"] : plural === "stories" ? ["draft", "reviewing", "active", "launched"] : ["active"];
+  return rows.filter((row) => status === "all" || (status === "open" ? open.includes(row.status) : row.status === status));
+}
+
 function positiveId(value) {
   if (!/^\d+$/.test(value || "") || Number(value) < 1) {
     throw new CliError("usage_error", "item id must be a positive integer");
@@ -455,11 +500,14 @@ function normalizeDetail(kind, response) {
 
 function attachmentUrls(detail) {
   const found = new Set();
-  const html = [detail.steps, detail.desc, detail.spec, detail.verify]
+  const html = [detail.steps, detail.desc, detail.spec, detail.verify,
+    ...(detail.comments || []).map((entry) => entry.comment)]
     .filter((entry) => typeof entry === "string")
     .join("\n");
-  for (const match of html.matchAll(/(?:src|href)=["']([^"']*\/file-(?:read|download)-\d+[^"']*)["']/gi)) {
-    found.add(match[1].replaceAll("&amp;", "&"));
+  for (const tag of html.matchAll(/<(img|a)\b[^>]*>/gi)) {
+    const isImage = tag[1].toLowerCase() === "img";
+    const url = htmlAttribute(tag[0], isImage ? "src" : "href");
+    if (url && (isImage || /\/file-(?:read|download)-\d+/i.test(url))) found.add(url);
   }
   const files = Array.isArray(detail.files) ? detail.files : Object.values(detail.files || {});
   for (const file of files) {
@@ -480,14 +528,60 @@ function attachmentName(urlText, index) {
   return `${match[1]}${match[2] ? `.${match[2]}` : ""}`;
 }
 
-async function downloadAttachments(client, detail, directory) {
+function htmlAttribute(tag, name) {
+  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+  return match ? (match[1] ?? match[2] ?? match[3]).replaceAll("&amp;", "&") : undefined;
+}
+
+function readableHtml(html, localPath) {
+  // Output text, not executable HTML. Insert local references after stripping
+  // tags so path characters are never interpreted as markup.
+  const references = [];
+  const reference = (url) => {
+    references.push(localPath(url));
+    return `\u0000${references.length - 1}\u0000`;
+  };
+  return html
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const src = htmlAttribute(tag, "src");
+      return src ? reference(src) : "[image without source]";
+    })
+    .replace(/<a\b[^>]*>/gi, (tag) => {
+      const href = htmlAttribute(tag, "href");
+      return href && /\/file-(?:read|download)-\d+/i.test(href) ? `${reference(href)} ` : "";
+    })
+    .replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, "\n")
+    .replace(/<!--([\s\S]*?)-->|<\/?[a-z][^>]*>/gi, "")
+    .replace(/&(?:nbsp|amp|quot|apos);/g, (entity) => ({ "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&apos;": "'" })[entity])
+    .replace(/\u0000(\d+)\u0000/g, (_, index) => references[Number(index)] || "")
+    .trim();
+}
+
+async function downloadAttachments(client, detail, directory, safe) {
   const output = [];
-  for (const [index, urlText] of attachmentUrls(detail).entries()) {
+  const paths = new Map();
+  const names = new Set();
+  for (const [index, urlText] of attachmentUrls({ ...detail, comments: safe.comments }).entries()) {
     const url = client.endpoint(urlText);
-    const destination = path.join(directory, attachmentName(url.href, index));
+    if (paths.has(url.href)) continue;
+    const baseName = attachmentName(url.href, index);
+    const name = names.has(baseName) ? `${index + 1}-${baseName}` : baseName;
+    names.add(name);
+    const destination = path.resolve(directory, name);
     await client.download(url.href, destination);
-    output.push({ path: path.resolve(destination) });
+    paths.set(url.href, destination);
+    output.push({ path: destination });
   }
+  const localPath = (url) => {
+    const destination = paths.get(client.endpoint(url).href);
+    if (!destination) throw new CliError("response_error", "Inline attachment was not downloaded");
+    return destination;
+  };
+  for (const key of ["steps", "desc", "spec", "verify"]) {
+    if (typeof safe[key] === "string") safe[key] = readableHtml(safe[key], localPath);
+  }
+  for (const comment of safe.comments || []) comment.comment = readableHtml(comment.comment, localPath);
   return output;
 }
 
@@ -668,7 +762,7 @@ function effortDate(value) {
 function help() {
   return `Usage:
   zentao-cli.mjs doctor
-  zentao-cli.mjs list <bugs|tasks>
+  zentao-cli.mjs list <bugs|tasks|stories> [person] [--relation assignedTo|openedBy|finishedBy|resolvedBy|closedBy] [--status open|all|wait|doing|pause|done|resolved|closed|draft|reviewing|launched]
   zentao-cli.mjs get <bug|task|story> <id> [--download-dir <path>]
   zentao-cli.mjs resolve bug <id>          # JSON on stdin
   zentao-cli.mjs comment <bug|task> <id>   # {"comment":"..."} on stdin
@@ -698,14 +792,34 @@ export async function run(argv, { env = process.env } = {}) {
 
   if (command === "list") {
     const plural = args[0];
-    if (plural !== "bugs" && plural !== "tasks") throw new CliError("usage_error", "list type must be bugs or tasks");
+    if (!["bugs", "tasks", "stories"].includes(plural)) throw new CliError("usage_error", "list type must be bugs, tasks, or stories");
     const singular = plural.slice(0, -1);
-    const data = decodeLegacy(await client.json(`my-work-${singular}.json`));
+    let person;
+    let relation = "assignedTo";
+    let status = "open";
+    for (let index = 1; index < args.length; index++) {
+      const arg = args[index];
+      if (arg === "--relation" && args[index + 1]) relation = args[++index];
+      else if (arg === "--status" && args[index + 1]) status = args[++index];
+      else if (!arg.startsWith("--") && !person) person = arg;
+      else throw new CliError("usage_error", "Invalid list query arguments");
+    }
+    const relations = ["assignedTo", "openedBy", "closedBy", singular === "task" ? "finishedBy" : singular === "bug" ? "resolvedBy" : "assignedTo"];
+    const statuses = singular === "task" ? ["open", "all", "wait", "doing", "pause", "done", "closed", "cancel"] : ["open", "all", "active", "resolved", "closed", "draft", "reviewing", "launched"];
+    if (!relations.includes(relation) || !statuses.includes(status)) throw new CliError("usage_error", "Invalid relation or status for this item type");
+    const explicit = args.length > 1;
+    if (explicit && !(person || config.account)) throw new CliError("usage_error", "Specify a person for a token-only historical query");
+    const data = explicit
+      ? { [plural]: await personnelList(client, plural, person || config.account, relation, status) }
+      : decodeLegacy(await client.json(singular === "story"
+        ? "my-work-story-assignedTo-0-id_asc-0-100-1.json"
+        : `my-work-${singular}.json`));
     const fields = singular === "bug"
       ? ["id", "title", "severity", "pri", "status", "project", "product", "story"]
-      : ["id", "name", "title", "pri", "status", "project", "execution", "module", "story", "estimate", "consumed", "left", "realStarted", "finishedDate"];
+      : singular === "task" ? ["id", "name", "title", "pri", "status", "project", "execution", "module", "story", "estimate", "consumed", "left", "realStarted", "finishedDate"]
+      : ["id", "title", "status", "stage", "pri", "product", "project", "plan", "estimate", "openedDate", "deadline"];
     const items = Array.isArray(data?.[plural]) ? data[plural].map((item) => pick(item, fields)) : [];
-    return { items, ...(data?.pager ? { pager: pick(data.pager, ["recTotal", "recPerPage", "pageID", "pageTotal"]) } : {}) };
+    return { items, ...(explicit ? { complete: true, relation, status } : {}), ...(data?.pager ? { pager: pick(data.pager, ["recTotal", "recPerPage", "pageID", "pageTotal"]) } : {}) };
   }
 
   if (command === "get") {
@@ -717,7 +831,7 @@ export async function run(argv, { env = process.env } = {}) {
     else directory = fs.mkdtempSync(path.join(os.tmpdir(), `agent-tools-zentao-${kind}-${id}-`));
     const resource = kind === "story" ? "stories" : `${kind}s`;
     const detail = normalizeDetail(kind, await client.json(`api.php/v1/${resource}/${id}`));
-    const attachments = await downloadAttachments(client, detail.raw, directory);
+    const attachments = await downloadAttachments(client, detail.raw, directory, detail.safe);
     return {
       item: detail.safe,
       attachments,

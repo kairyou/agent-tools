@@ -230,6 +230,52 @@ test("list returns only review-safe item fields", async (t) => {
   assert.equal(output.pager.recTotal, 1);
 });
 
+test("personnel queries resolve names, paginate and retain completed ownership", async (t) => {
+  const requests = [];
+  const fixture = await listen(async (req, res) => {
+    requests.push(req.url);
+    if (req.url === "/api.php/v1/tokens") {
+      const credentials = JSON.parse(await body(req));
+      assert.equal(credentials.account, ACCOUNT);
+      return json(res, 200, { token: TOKEN });
+    }
+    const pager = (page, pages) => ({ recTotal: pages, recPerPage: 1, pageID: page, pageTotal: pages });
+    if (req.url.startsWith("/company-browse-all-0-bydept-id_asc-0-100-")) {
+      return json(res, 200, { users: { 8: { id: 8, account: "other", realname: "张三" } }, pager: pager(1, 1) });
+    }
+    if (req.url.startsWith("/user-task-8-finishedBy-id_asc-0-100-")) {
+      const page = req.url.endsWith("-2.json") ? 2 : 1;
+      return json(res, 200, { tasks: [{ id: page, name: "Completed", status: page === 1 ? "done" : "closed", assignedTo: "someone-else" }], pager: pager(page, 2) });
+    }
+    if (req.url === "/user-bug-8-assignedTo-id_asc-0-100-1.json") {
+      return json(res, 200, { bugs: [{ id: 1, status: "active" }, { id: 2, status: "closed" }], pager: pager(1, 1) });
+    }
+    return json(res, 404, { message: "missing" });
+  });
+  t.after(fixture.close);
+  const env = { AGENT_TOOLS_HOME: tempConfig(fixture.url) };
+  const tasks = await runCli(["list", "tasks", "张三", "--relation", "finishedBy", "--status", "all"], { env });
+  assert.equal(tasks.code, 0, tasks.stderr);
+  assert.deepEqual(JSON.parse(tasks.stdout).items.map(item => item.status), ["done", "closed"]);
+  assert.equal(JSON.parse(tasks.stdout).complete, true);
+  const bugs = await runCli(["list", "bugs", "other"], { env });
+  assert.equal(bugs.code, 0, bugs.stderr);
+  assert.equal(JSON.parse(bugs.stdout).items.length, 1);
+  assert.ok(!requests.some(route => route.includes("my-work")));
+  assertNoSecrets(tasks.stdout + tasks.stderr + bugs.stdout + bugs.stderr);
+});
+
+test("personnel queries reject repeated pages instead of returning partial results", async (t) => {
+  const fixture = await listen(async (req, res) => {
+    if (req.url === "/api.php/v1/tokens") return json(res, 200, { token: TOKEN });
+    return json(res, 200, { users: [{ id: 1, account: "other" }], pager: { pageID: 1, pageTotal: 2 } });
+  });
+  t.after(fixture.close);
+  const result = await runCli(["list", "tasks", "other"], { env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) } });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout + result.stderr, /pagination/);
+});
+
 test("task reads expose effort and actual-date fields without unsafe data", async (t) => {
   const task = {
     id: 7,
@@ -386,7 +432,7 @@ test("story reads expose only development context and download story attachments
     pri: 2,
     stage: "developing",
     estimate: 8,
-    spec: '<p>Managers can approve requests. <img src="/file-read-88.png"></p>',
+    spec: `Managers can approve requests. ${output.attachments[0].path}`,
     verify: "Approved requests are immutable.",
   });
   assert.equal(output.attachments.length, 1);
@@ -457,6 +503,59 @@ test("get downloads token-gated images and returns local paths", async (t) => {
   assert.equal(output.attachments.length, 1);
   assert.ok(existsSync(output.attachments[0].path));
   assert.deepEqual([...readFileSync(output.attachments[0].path)], [0x89, 0x50, 0x4e, 0x47]);
+});
+
+test("get localizes comment-only images and cleans HTML in nested and sibling actions", async (t) => {
+  for (const kind of ["bug", "task"]) {
+    const downloads = [];
+    const fixture = await listen(async (req, res) => {
+      if (req.url === "/api.php/v1/tokens") return json(res, 200, { token: TOKEN });
+      if (req.url === `/api.php/v1/${kind}s/32951`) {
+        const actions = [{ id: 1, action: "commented", comment:
+          `<p>截图&nbsp;&amp;说明<br><img onload="setImageSize(this,870)" src="${fixture.url}/file-read-67698.png" alt="" /></p>` +
+          '<div><img SRC = /file-read-67698.png><a href = "/file-download-77.txt">日志</a></div>' +
+          '<script>hidden()</script><style>hidden</style>' }];
+        return json(res, 200, kind === "bug"
+          ? { bug: { id: 32951, files: {} }, actions }
+          : { task: { id: 32951, actions } });
+      }
+      if (["/file-read-67698.png", "/file-download-77.txt"].includes(req.url)) {
+        assert.equal(req.headers.token, TOKEN);
+        downloads.push(req.url);
+        res.writeHead(200, { "content-type": "application/octet-stream" });
+        return res.end("downloaded content");
+      }
+      return json(res, 404, {});
+    });
+    t.after(fixture.close);
+    const result = await runCli(["get", kind, "32951"], {
+      env: { AGENT_TOOLS_HOME: tempConfig(fixture.url) },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.deepEqual(downloads, ["/file-read-67698.png", "/file-download-77.txt"]);
+    assert.equal(output.attachments.length, 2);
+    for (const attachment of output.attachments) {
+      assert.equal(readFileSync(attachment.path, "utf8"), "downloaded content");
+    }
+    const [image, log] = output.attachments.map(entry => entry.path);
+    assert.equal(output.item.comments[0].comment, `截图 &说明\n${image}\n${image}${log} 日志`);
+    assert.doesNotMatch(result.stdout, /https?:|<img|onload|<p>|hidden/);
+    assertNoSecrets(result.stdout + result.stderr);
+  }
+});
+
+test("get fails without returning remote comment images when download fails", async (t) => {
+  const env = await authenticatedFixture(t, (req, res) => {
+    if (req.url === "/api.php/v1/bugs/32951") {
+      return json(res, 200, { id: 32951, actions: [{ comment: '<img src="/file-read-67698.png">' }] });
+    }
+    return json(res, 404, {});
+  });
+  const result = await runCli(["get", "bug", "32951"], { env });
+  assert.equal(result.code, 1);
+  assert.equal(result.stdout, "");
+  assert.doesNotMatch(result.stderr, /file-read-67698|<img/);
 });
 
 test("resolve keeps credentials internal and preserves UTF-8 comments", async (t) => {
