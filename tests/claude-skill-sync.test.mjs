@@ -167,7 +167,7 @@ test("a restored optional prompt becomes a monitored change", async () => {
     version: "9.9.9",
   };
   globalThis.fetch = async (url) => {
-    if (String(url).includes("registry.npmjs.org")) {
+    if (new URL(String(url)).hostname === "registry.npmjs.org") {
       return new Response(JSON.stringify({ version: "9.9.9" }));
     }
     if (String(url).endsWith("/commits/main")) {

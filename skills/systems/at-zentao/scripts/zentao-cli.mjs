@@ -554,6 +554,8 @@ function readableHtml(html, localPath) {
     .replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, "\n")
     .replace(/<!--([\s\S]*?)-->|<\/?[a-z][^>]*>/gi, "")
     .replace(/&(?:nbsp|amp|quot|apos);/g, (entity) => ({ "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&apos;": "'" })[entity])
+    // Escape residual tag openers, including those created by earlier removals.
+    .replaceAll("<", "&lt;")
     .replace(/\u0000(\d+)\u0000/g, (_, index) => references[Number(index)] || "")
     .trim();
 }

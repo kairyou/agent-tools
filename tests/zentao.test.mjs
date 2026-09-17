@@ -545,6 +545,18 @@ test("get localizes comment-only images and cleans HTML in nested and sibling ac
   }
 });
 
+test("get escapes residual HTML openers without deleting comparison signs", async (t) => {
+  const env = await authenticatedFixture(t, (req, res) => json(res, 200, {
+    id: 42,
+    actions: [{ comment: '1 < 2; <<script>hidden()</script>script>alert(1); <!<!-- -->-->' }],
+  }));
+  const result = await runCli(["get", "bug", "42"], { env });
+  assert.equal(result.code, 0, result.stderr);
+  const comment = JSON.parse(result.stdout).item.comments[0].comment;
+  assert.ok(comment.startsWith("1 &lt; 2;"));
+  assert.doesNotMatch(comment, /<|hidden/);
+});
+
 test("get fails without returning remote comment images when download fails", async (t) => {
   const env = await authenticatedFixture(t, (req, res) => {
     if (req.url === "/api.php/v1/bugs/32951") {
