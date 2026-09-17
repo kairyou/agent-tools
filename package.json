@@ -47,5 +47,9 @@
   },
   "bin": {
     "agent-tools": "./scripts/install.mjs"
+  },
+  "overrides": {
+    "hono": "^4.13.5",
+    "qs": "^6.16.0"
   }
 }
