@@ -558,7 +558,20 @@ function readableHtml(html, localPath) {
     }
     return output;
   };
-  return withoutBlockedElements(html)
+  const withoutComments = (source) => {
+    let output = "";
+    let cursor = 0;
+    while (cursor < source.length) {
+      const start = source.indexOf("<!--", cursor);
+      if (start < 0) return output + source.slice(cursor);
+      output += source.slice(cursor, start);
+      const end = source.indexOf("-->", start + 4);
+      if (end < 0) return output;
+      cursor = end + 3;
+    }
+    return output;
+  };
+  return withoutComments(withoutBlockedElements(html))
     .replace(/<img\b[^>]*>/gi, (tag) => {
       const src = htmlAttribute(tag, "src");
       return src ? reference(src) : "[image without source]";
@@ -568,7 +581,7 @@ function readableHtml(html, localPath) {
       return href && /\/file-(?:read|download)-\d+/i.test(href) ? `${reference(href)} ` : "";
     })
     .replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, "\n")
-    .replace(/<!--([\s\S]*?)-->|<\/?[a-z][^>]*>/gi, "")
+    .replace(/<\/?[a-z][^>]*>/gi, "")
     .replace(/&(?:nbsp|amp|quot|apos);/g, (entity) => ({ "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&apos;": "'" })[entity])
     // Escape residual tag openers, including those created by earlier removals.
     .replaceAll("<", "&lt;")
