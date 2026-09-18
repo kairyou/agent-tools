@@ -578,13 +578,19 @@ function readableHtml(html, localPath) {
       const start = source.indexOf("<", cursor);
       if (start < 0) return output + source.slice(cursor);
       output += source.slice(cursor, start);
+      if (!/\/?[a-z]/i.test(source.slice(start + 1, start + 3))) {
+        output += "&lt;";
+        cursor = start + 1;
+        continue;
+      }
       const end = source.indexOf(">", start + 1);
-      if (end < 0) return output;
+      if (end < 0) return output + "&lt;" + source.slice(start + 1);
       cursor = end + 1;
     }
     return output;
   };
-  return withoutTags(withoutComments(withoutBlockedElements(html))
+  let output = withoutComments(withoutBlockedElements(html));
+  output = output
     .replace(/<img\b[^>]*>/gi, (tag) => {
       const src = htmlAttribute(tag, "src");
       return src ? reference(src) : "[image without source]";
@@ -593,12 +599,11 @@ function readableHtml(html, localPath) {
       const href = htmlAttribute(tag, "href");
       return href && /\/file-(?:read|download)-\d+/i.test(href) ? `${reference(href)} ` : "";
     })
-    .replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, "\n")
+    .replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr|h[1-6])\s*>/gi, "\n");
+  return withoutTags(output)
     .replace(/&(?:nbsp|amp|quot|apos);/g, (entity) => ({ "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&apos;": "'" })[entity])
-    // Escape residual tag openers, including those created by earlier removals.
-    .replaceAll("<", "&lt;")
     .replace(/\u0000(\d+)\u0000/g, (_, index) => references[Number(index)] || "")
-    .trim());
+    .trim();
 }
 
 async function downloadAttachments(client, detail, directory, safe) {
