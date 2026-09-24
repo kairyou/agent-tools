@@ -119,7 +119,7 @@ The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
 
 ```text
 # Pick and order the fields via statusline.fields in ~/.agent-tools/config.jsonc:
-⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+⎇ main | Opus 4.8 | 5h 7% ⟳ 2h54m | w 41% ⟳ 3d1h
 
 # With a compatible API relay, quota info is shown too:
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
@@ -174,13 +174,13 @@ Output examples:
 
 ```text
 # Plan limits (sub2api / openai-compatible).
-D $0.0/$100 | W $0.0/$300 ⟳3d1h | Exp 07-08
+D $0.0/$100 | W $0.0/$300 ⟳ 3d1h | Exp 07-08
 
 # Multi-window limits (claude-code-hub).
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
 # Balance and usage (one-api / one-hub / done-hub / new-api / openrouter).
-balance $15.0 | used $5.0/$20.0 | ⟳3d1h
+balance $15.0 | used $5.0/$20.0 | ⟳ 3d1h
 
 # Wallet and recent spend (sub2api).
 balance $362 | today $61.7 | 30d $566

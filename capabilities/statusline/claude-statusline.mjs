@@ -3,7 +3,7 @@
 // Reads session JSON from stdin and prints one compact status line.
 //
 // Default:
-//   ⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+//   ⎇ main | Opus 4.8 | 5h 7% ⟳ 2h54m | w 41% ⟳ 3d1h
 //
 // Customize with either:
 //   node statusline.mjs --fields branch,model,fiveHour,week
@@ -166,7 +166,7 @@ function usageWindow(window, config) {
   }
   const pct = `${Math.round(window.used_percentage)}%`;
   const left = compactDuration(secondsUntil(window.resets_at));
-  return left ? `${pct} ${config.symbols.reset}${left}` : pct;
+  return left ? `${pct} ${config.symbols.reset}\u2009${left}` : pct;
 }
 
 function showMissingUsageWindow() {

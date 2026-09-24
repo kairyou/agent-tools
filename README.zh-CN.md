@@ -117,7 +117,7 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 
 ```text
 # 显示项与顺序由 ~/.agent-tools/config.jsonc 的 statusline.fields 控制:
-⎇ main | Opus 4.8 | 5h 7% ⟳2h54m | w 41% ⟳3d1h
+⎇ main | Opus 4.8 | 5h 7% ⟳ 2h54m | w 41% ⟳ 3d1h
 
 # 使用兼容的 API 中转时, 也会显示中转额度:
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
@@ -168,13 +168,13 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
 
 ```text
 # 套餐限额 (sub2api / openai-compatible).
-D $0.0/$100 | W $0.0/$300 ⟳3d1h | Exp 07-08
+D $0.0/$100 | W $0.0/$300 ⟳ 3d1h | Exp 07-08
 
 # 多窗口限额 (claude-code-hub).
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
 # 余额与用量 (one-api / one-hub / done-hub / new-api / openrouter).
-balance $15.0 | used $5.0/$20.0 | ⟳3d1h
+balance $15.0 | used $5.0/$20.0 | ⟳ 3d1h
 
 # 钱包与近期消耗 (sub2api).
 balance $362 | today $61.7 | 30d $566

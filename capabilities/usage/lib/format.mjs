@@ -220,7 +220,7 @@ export function formatOpenRouterLine(data) {
   } else if (used !== undefined) {
     parts.push(`used ${formatMoney(used)}`);
   }
-  if (reset) parts.push(`⟳${reset}`);
+  if (reset) parts.push(`⟳\u2009${reset}`);
 
   if (parts.length === 0) throw new Error("OpenRouter payload has no usage fields");
   return parts.join(" | ");
@@ -235,7 +235,7 @@ function formatCredits(value) {
 function formatCommandCodeWindow(label, window) {
   if (!window || !Number.isFinite(window.used) || !Number.isFinite(window.cap)) return "";
   const reset = window.resetAt ? compactDurationUntil(window.resetAt) : "";
-  return `${label} ${formatCredits(window.used)}/${formatCredits(window.cap)}${reset ? ` ⟳${reset}` : ""}`;
+  return `${label} ${formatCredits(window.used)}/${formatCredits(window.cap)}${reset ? ` ⟳\u2009${reset}` : ""}`;
 }
 
 export function formatCommandCodeLine(data) {
@@ -329,7 +329,7 @@ function formatQuotaLimitedLine(root) {
         const rateUsed = pickNumber(entry, ["used"]);
         const reset = compactDurationUntil(rateLimitResetAt(entry));
         return window && rateLimit !== undefined && rateUsed !== undefined
-          ? `${window} ${formatMoney(rateUsed)}/${formatMoney(rateLimit)}${reset ? ` ⟳${reset}` : ""}`
+          ? `${window} ${formatMoney(rateUsed)}/${formatMoney(rateLimit)}${reset ? ` ⟳\u2009${reset}` : ""}`
           : "";
       })
       .filter(Boolean);
@@ -369,7 +369,7 @@ function formatUsageLine(root) {
   const parts = [];
   if (dailyLimit > 0 && dailyUsage !== undefined) parts.push(`D ${formatMoney(dailyUsage)}/${formatMoney(dailyLimit)}`);
   if (weeklyLimit > 0 && weeklyUsage !== undefined) {
-    parts.push(`W ${formatMoney(weeklyUsage)}/${formatMoney(weeklyLimit)}${weeklyReset ? ` ⟳${weeklyReset}` : ""}`);
+    parts.push(`W ${formatMoney(weeklyUsage)}/${formatMoney(weeklyLimit)}${weeklyReset ? ` ⟳\u2009${weeklyReset}` : ""}`);
   }
   if (monthlyLimit > 0 && monthlyUsage !== undefined) parts.push(`M ${formatMoney(monthlyUsage)}/${formatMoney(monthlyLimit)}`);
   if (expires) parts.push(`Exp ${expires}`);

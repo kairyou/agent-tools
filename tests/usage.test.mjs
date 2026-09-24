@@ -237,7 +237,7 @@ test("Sub2API weekly limits include the time until reset", async () => {
     res.end("{}");
   }, async (baseUrl) => {
     const payload = await runProvider({ baseUrl: `${baseUrl}/v1`, preset: "sub2api" });
-    assert.equal(payload.systemMessage, "W $153/$480 ⟳3d1h");
+    assert.equal(payload.systemMessage, "W $153/$480 ⟳\u20093d1h");
   });
 });
 
@@ -263,7 +263,7 @@ test("v1 usage rate-limit windows require an explicit reset time", async () => {
     res.end("{}");
   }, async (baseUrl) => {
     const payload = await runProvider({ baseUrl: `${baseUrl}/v1`, preset: "openai-compatible" });
-    assert.equal(payload.systemMessage, "Q $20.0/$100 | 5h $2.1/$10.0 ⟳2h54m, W $153/$480");
+    assert.equal(payload.systemMessage, "Q $20.0/$100 | 5h $2.1/$10.0 ⟳\u20092h54m, W $153/$480");
   });
 });
 
@@ -308,7 +308,7 @@ test("OpenRouter limit reset is displayed as a compact countdown", async () => {
     res.end("{}");
   }, async (baseUrl) => {
     const payload = await runProvider({ baseUrl: `${baseUrl}/api/v1`, preset: "openrouter" });
-    assert.equal(payload.systemMessage, "balance $15.0 | used $5.0/$20.0 | ⟳3d1h");
+    assert.equal(payload.systemMessage, "balance $15.0 | used $5.0/$20.0 | ⟳\u20093d1h");
   });
 });
 
@@ -325,7 +325,7 @@ test("a future reset less than one minute away is displayed as zero minutes", as
     res.end("{}");
   }, async (baseUrl) => {
     const payload = await runProvider({ baseUrl: `${baseUrl}/api/v1`, preset: "openrouter" });
-    assert.equal(payload.systemMessage, "used $5.0 | ⟳0m");
+    assert.equal(payload.systemMessage, "used $5.0 | ⟳\u20090m");
   });
 });
 
