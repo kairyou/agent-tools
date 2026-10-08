@@ -44,14 +44,14 @@ jobs:
       - name: Fetch pending upstream
         if: steps.existing.outputs.count == '0'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           REQUESTED_VERSION: ${{ inputs.version }}
         run: |
           args=()
           if [ -n "$REQUESTED_VERSION" ]; then
             args+=(--version "$REQUESTED_VERSION")
           fi
-          npm run claude-skills:fetch -- "${args[@]}"
+          set -o pipefail
+          npm run claude-skills:fetch -- "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/claude-skill-fetch.log"
 
       - name: Render and verify final candidate
         id: candidate
@@ -63,11 +63,25 @@ jobs:
           fi
 
           cat tools/claude-skill-sync/upstream/pending-report.md >> "$GITHUB_STEP_SUMMARY"
-          npm run claude-skills:apply -- --write
+          set -o pipefail
+          npm run claude-skills:apply -- --write 2>&1 | tee "$RUNNER_TEMP/claude-skill-render.log"
           npm run claude-skills:check
           npm run build
           npm test
           echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve failed sync candidate
+        if: failure() && steps.existing.outputs.count == '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: claude-skill-sync-diagnostics
+          path: |
+            ${{ runner.temp }}/claude-skill-fetch.log
+            ${{ runner.temp }}/claude-skill-render.log
+            tools/claude-skill-sync/upstream/
+            skills/workflow/at-review/SKILL.md
+            skills/workflow/at-simplify/SKILL.md
+          retention-days: 14
 
       - name: Create draft review PR
         if: steps.candidate.outputs.changed == 'true'
@@ -79,12 +93,12 @@ jobs:
           commit-message: "chore: sync latest Claude Code skill prompts"
           title: "chore: sync latest Claude Code skill prompts"
           body: |
-            This draft PR contains the final generated candidate for the latest mirrored Claude Code prompts.
+            This draft PR contains the final generated candidate for the latest official Claude Code npm package.
 
             Review:
 
             - `tools/claude-skill-sync/upstream/current.json` for source provenance and the accepted baseline.
+            - `texts` and `selection` in that snapshot for the complete selected review, output, fixes, and simplify content.
             - Generated changes to `skills/workflow/at-review/SKILL.md` and `skills/workflow/at-simplify/SKILL.md`.
-            - Monitored host-specific prompt changes in the workflow run summary; they are intentionally excluded from the portable skills.
 
             The workflow ran `claude-skills:check`, `npm run build`, and `npm test` before opening this PR. If neither skill changed, merging only advances the reviewed upstream baseline. Merge remains the manual acceptance step; publishing remains separate.

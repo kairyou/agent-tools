@@ -1,17 +1,7 @@
 # Claude skill upstream sync
 
-This maintainer-only tool tracks the Claude Code prompt fragments from which
-`at-review` and `at-simplify` are derived and adapted. It is outside the
-published package.
-
-The machine-readable source is the versioned prompt JSON maintained by
-[`Piebald-AI/tweakcc`](https://github.com/Piebald-AI/tweakcc). Fetching treats
-that repository as untrusted data: no upstream code is executed.
-
-`RULES.md` is the maintainer reference for selected Claude Code variants,
-local substitutions, excluded features, and known fidelity limits. It explains
-why the generated skills differ from Claude Code in host-specific details; it
-is not required at runtime.
+This maintainer-only tool derives `at-review` and `at-simplify` directly from
+the official Claude Code npm package. It is outside the published package.
 
 ## Workflow
 
@@ -23,44 +13,42 @@ npm run claude-skills:apply -- --write
 npm run claude-skills:check
 ```
 
-`fetch` writes only `upstream/pending.json` and a review report. `apply` is
-read-only unless `--write` is passed. A successful write promotes the pending
-snapshot to `upstream/current.json` and regenerates the two installable skills.
-Without `--version`, `fetch` uses the highest mirrored version not newer than
-npm latest. If npm is ahead, the command reports the lag and still processes
-the newest available mirror. An explicit `--version` remains strict: a missing
-matching JSON is reported as `mirror pending` without writing files.
+Fetching requires `tar` on PATH. Without `--version`, it selects npm latest and
+reads the matching `@anthropic-ai/claude-code-linux-x64` package on every host OS.
+The package is neither installed nor executed.
 
-The scheduled GitHub Action runs the same fetch and apply pipeline in its
-runner, then runs `claude-skills:check`, the build, and the full test suite. It
-opens a draft PR containing the final candidate: the promoted `current.json`
-and any generated skill changes. The pending files are transient and never
-belong in that PR. A renderer or patch-anchor failure stops the workflow before
-PR creation. Merging the reviewed PR accepts the upstream baseline; publishing
-remains a separate manual step. While a sync PR is open, later scheduled runs
-leave its branch untouched so manual review edits are never overwritten.
+`fetch` writes `upstream/pending.json` and a report only after successful
+extraction. Review the generated diff before using `apply --write`, which promotes
+the snapshot to `current.json`. `check` reproduces the skills offline.
+Unchanged selected content does not create a version-only update.
 
-Only prompt objects composed into the portable skills are fetched and diffed.
-Host-specific and reference-only prompts do not participate in automated sync.
+The scheduled Action fetches, renders, builds, and tests before opening a draft
+PR. Review the official snapshot and generated skills together. While a sync PR
+is open, later runs leave its branch untouched. Merge accepts the snapshot;
+publishing remains separate.
 
-Piebald prompt IDs are curated extraction metadata, not a stable Anthropic API.
-If a selected ID disappears, the fetch fails closed so a maintainer can verify
-whether the fragment was removed, renamed, or missed by extraction.
+If extraction or validation fails, download `claude-skill-sync-diagnostics` from
+the run for fetch/render logs and available snapshots. No fallback to older text
+is used.
 
-Fragments that cannot be tracked reliably through Piebald are local-locked in
-`rules.mjs`, with their source reason and, when available, the exact Claude Code
-package version. Their content hashes are printed during inspection. Reuse and
-Simplification are runtime interpolation values that Piebald does not expose as
-standalone prompt objects. Altitude is verified from the official Claude Code
-2.1.260 npm bundle after its Piebald object disappeared while the underlying
-fragment changed and remained in the bundle.
+## Extraction and limits
 
-The missing Altitude ID remains optional monitoring input. Its absence does not
-block unrelated updates; if Piebald exposes it again, the sync creates a
-reviewable monitored change so maintainers can compare it with the local-locked
-fragment and restore direct tracking when appropriate.
+The extractor locates the registered `code-review` and `simplify` commands in
+embedded JavaScript modules, follows their references, and statically interprets
+the selected prompt-producing code. It does not match full prompt sentences or
+pin minified variable names. Reuse, Simplification, Altitude, and other referenced
+content are included automatically.
 
-## Provenance
+The selected review variant is the explicit `high` recipe with agents available,
+host reporting disabled, and a ten-finding limit. It is not the model-dependent
+default routing of a live Claude Code session. See `RULES.md` for local adaptations.
 
-The selected upstream prompt objects are redistributed under the MIT license
-from Piebald LLC. See `THIRD_PARTY_LICENSE.md`.
+Real-package extraction was verified against 2.1.260, 2.1.292, and 2.1.293. The
+older 2.1.235 package layout is unsupported. Changes to packaging, command routing,
+or selected runtime expressions may require an extractor update; ordinary prose,
+fragment changes, and symbol renaming do not require sentence patches.
+
+The snapshot records the package version, npm SHA-512 integrity, bundle and
+source-module hashes, selection options, rendered texts, and their SHA-256 hashes.
+The renderer retains Markdown output by default, opt-in `--json` and `--fix`, and
+portable instruction-file/tool wording. Always review behavioral changes in the PR.

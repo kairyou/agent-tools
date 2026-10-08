@@ -1,87 +1,61 @@
-# Claude skill composition and compatibility rules
+# Claude skill composition rules
 
-The generated skills are derived and adapted from selected variants of Claude
-Code's built-in `code-review` and `simplify` workflow prompts. They keep the
-useful behavior while removing host-specific output and tool assumptions, so
-they work across supported agents. They are not byte-for-byte captures of
-every Claude Code runtime.
+The generated skills use Claude Code's registered `code-review` and `simplify`
+commands from the official npm package. They retain the selected upstream content
+while adapting output and tool assumptions for portable skills.
 
 ## Selected variants
 
-| Skill | Selected Claude Code variant |
+| Skill | Selection |
 | --- | --- |
-| `at-review` | High effort, Agent available, eight finder angles, recall-biased verification, Markdown findings by default, optional `--json` and `--fix` |
-| `at-simplify` | Agent available, four parallel cleanup angles, apply fixes |
+| `at-review` | Explicit `high` recipe, Agent available, host reporting disabled, at most 10 findings, optional fix instructions |
+| `at-simplify` | Agent available, no supplied target, upstream cleanup and fix workflow |
 
-## Runtime variables
+`high` names the recipe selected from the official effort router. The tool does
+not reproduce model-specific default routing, user settings, feature flags,
+telemetry, PR comment posting, or session-dependent prefixes.
 
-| Variable | Resolution |
-| --- | --- |
-| `DIFF_GATHERING_PHASE` | Upstream `skill-code-review-phase-0-gather-diff` object |
-| `AGENT_TOOL_NAME` | Render as `Agent`, then apply the cross-agent tool wording rule |
-| `AGENT_UNAVAILABLE_INSTRUCTIONS` | Empty because the selected variant requires multi-agent capability |
-| `BASE_FINDER_ANGLES_BLOCK` | Upstream correctness finder object |
-| `CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE` | Local Reuse, Simplification, and Altitude fragments plus upstream Efficiency and Conventions objects |
-| `RECALL_BIASED_VERIFY_PHASE` | Upstream verify template plus upstream recall-biased rubric |
-| output format | Put the local Markdown report first, with explicit `High`, `Medium`, or `Low` findings; preserve the upstream JSON schema for the low-frequency `--json` mode |
-| `REPORT_FINDINGS_TOOL_NAME` | Host-specific placeholder; the portable output rule forbids using it |
-| `HAS_REPORT_FINDINGS_TOOL` | False branch because host-specific structured reporting is excluded |
-| hosted PR/MR target guidance | Local Phase 0 instruction that loads `references/review-targets.md`; it resolves an exact base/head pair without remote writes or worktree switching |
-| `REUSE_FINDER_ANGLE_BLOCK` | Local-locked Reuse fragment |
-| `SIMPLIFICATION_FINDER_ANGLE_BLOCK` | Local-locked Simplification fragment |
-| `EFFICIENCY_FINDER_ANGLE_BLOCK` | Upstream Efficiency object |
-| `ALTITUDE_FINDER_ANGLE_BLOCK` | Local-locked Altitude fragment verified from the official Claude Code 2.1.260 npm bundle |
+## Official extraction
 
-Every variable in an included wrapper must be resolved. Generation fails if a
-`${...}` expression remains.
+`official.mjs` downloads the matching Linux x64 package and verifies npm's SHA-512
+integrity before reading `package/claude` through `tar`. `bundle.mjs` parses its
+embedded JavaScript modules without installing or executing upstream code.
 
-## Reference-only upstream prompts
+Command registration identifies the entrypoints. The review call site supplies
+the effort router, output formatter, and Agent/host-reporting predicates. Local
+selection values choose the high recipe and the fix-flag branch. The simplify
+handler is interpreted with an empty target and Agent availability enabled.
 
-These prompts are not fetched or diffed. Re-check their latest upstream
-equivalents only when implementing the corresponding portable feature:
+The static reader supports literals, strings, templates, references, imported
+bindings, function calls/default arguments, conditionals, logical expressions,
+strict equality, concatenation, arrays/objects, local declarations, return, if,
+and switch. String trimming is explicitly supported. It rejects unknown active
+operations, missing or ambiguous imports/commands, and excessive interpretation.
+It never calls upstream JavaScript through eval, Function, or dynamic import.
 
-- `agent-prompt-code-review-part-8-github-comment-posting` — reference for a
-  future opt-in hosted-review comment workflow.
-- `agent-prompt-code-review-unavailable-agent-inline-mode` — reference for a
-  future single-agent review fallback.
-- `agent-prompt-simplify-unavailable-agent-inline-mode` — reference for a
-  future single-agent simplify fallback.
+Reuse, Simplification, Altitude, and other referenced text are resolved from the
+same official bundle. The snapshot stores complete selected texts rather than
+third-party prompt IDs or locally frozen fragments. Any selected text change
+participates in candidate review.
 
-These IDs are discovery hints, not stable upstream contracts.
+## Local adaptations
 
-## Portability rules
+- Markdown findings by default; the official JSON contract is scoped to `--json`.
+- Apply the official fixes section only when `--fix` was passed.
+- Generalize Agent and host-reporting tool names.
+- Include `AGENTS.md` and agent-level instructions alongside `CLAUDE.md`.
+- Quote `@{upstream}` for PowerShell.
+- Use portable skill names and frontmatter.
+- Add read-only hosted PR/MR target guidance through `references/review-targets.md`.
 
-The executable exact-match rules live in `rules.mjs`. Each rule has an ID,
-source text, replacement text, and expected match count. A changed upstream
-anchor stops generation instead of silently dropping the patch.
+The output contract is located using text extracted from the same package, not a
+fixed sentence. Other upstream content, including unavailable-Agent fallback
+instructions within the high recipe, remains intact.
 
-The rules cover:
+## Verification boundary
 
-- Agent-specific tool wording.
-- Project instruction files beyond `CLAUDE.md`.
-- Host-specific findings reporting.
-- The optional `--fix` guard.
-- PowerShell-safe quoting for `@{upstream}`.
-- Portable skill names and frontmatter.
-- Read-only hosted PR/MR target resolution through a bundled reference.
-
-## Local-locked fragments
-
-Piebald currently leaves Reuse and Simplification as runtime interpolation
-values without standalone prompt objects. Its standalone Altitude object also
-disappeared even though the fragment remained in the official Claude Code
-2.1.260 npm bundle and changed there. These rendered fragments are stored in
-`rules.mjs` and hash-reported during dry runs. The missing Altitude ID remains
-an optional monitoring input so its reappearance produces a reviewable change.
-
-This is the main fidelity limit. A change to these fragments could be invisible
-to the versioned JSON even when the surrounding wrapper is unchanged. Compare
-them with a real rendered Claude Code prompt whenever a surrounding template
-changes, and periodically as a manual audit even when it does not.
-
-## Upstream roles
-
-`Piebald-AI/tweakcc` supplies the versioned machine-readable JSON. The
-`Piebald-AI/claude-code-system-prompts` repository supplies a human-readable
-Markdown and changelog view of the same Claude Code extraction ecosystem. It
-is useful for review, but it is not an independent verification source.
+Real packages 2.1.260, 2.1.292, and 2.1.293 were verified. The older monolithic
+2.1.235 layout is unsupported. The module format and command/router interfaces
+are internal implementation details, so future structural changes can still
+require maintenance. Unknown cases stop generation instead of guessing or
+silently retaining an older snapshot.

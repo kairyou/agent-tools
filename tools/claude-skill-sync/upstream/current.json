@@ -1,193 +1,49 @@
 {
-  "schemaVersion": 1,
-  "claudeCodeVersion": "2.1.235",
+  "schemaVersion": 3,
+  "claudeCodeVersion": "2.1.293",
   "source": {
-    "repository": "Piebald-AI/tweakcc",
-    "commit": "c947735bcc8d7f03770200ce0c4fe3f3212db8db",
-    "path": "data/prompts/prompts-2.1.235.json",
-    "sha256": "b65d598b9dc4c34955ecc3eb64034ed5b10f62c32b479a170724cdee32a7e342"
+    "package": "@anthropic-ai/claude-code-linux-x64",
+    "version": "2.1.293",
+    "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.293.tgz",
+    "integrity": "sha512-tYTbeVuhqD0TW2WJs90Tq+JaKLLnrX5JuxYTLG3pxf4Vr3QMonqsMLu4hZkgVSfEDPZhneFuDDgULQ3/FZzAIw==",
+    "bundleSha256": "8968405e26db478af44eabc4635ab5ca557057b702a54460a59c13e1b253e978"
   },
-  "prompts": [
-    {
-      "name": "Agent Prompt: /code-review part 5 recall-biased verification phase",
-      "id": "agent-prompt-code-review-part-5-recall-biased-verification-phase",
-      "description": "Recall-biased /code-review verification phase that treats realistic uncertain findings as plausible unless code refutes them",
-      "pieces": [
-        "**PLAUSIBLE by default** — do not refute a candidate for being \"speculative\" or\n\"depends on runtime state\" when the state is realistic: concurrency races,\nnil/undefined on a rare-but-reachable path (error handler, cold cache, missing\noptional field), falsy-zero treated as missing, off-by-one on a boundary the\ncode does not exclude, retry storms / partial failures, regex/allowlist that\nlost an anchor. These are PLAUSIBLE.\n\n**REFUTED** only when constructible from the code: factually wrong (quote the\nactual line); provably impossible (type/constant/invariant — show it); already\nhandled in this diff (cite the guard); or pure style with no observable effect."
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.160"
+  "selection": {
+    "effort": "high",
+    "agentAvailable": true,
+    "hostReporting": false,
+    "maxFindings": 10
+  },
+  "moduleHashes": [
+    "045788355292df15c6fbc8207c04a799b491b804ac7930716987819b5ba923bb",
+    "0816f23998bcb60daddc3a5c17b7fd2726054f87223ac5960c110b5d107309aa",
+    "220f5dfdfc81fb22baed987fc6f666d01a24defe4fd32c531e94759b32063945",
+    "4553d328d9a416fde35b9a11d4de18ab94d8b71167801a8b01e689b42d23b6f4",
+    "4e4c9874ac91a94e17c38e1e78b60e8e242c6e5859333c8e6eef47557a5b643e",
+    "6f1172c95b3ac4e5c981dafb6ca433c1424f5167572e94fbee83f817ddeea822",
+    "739ab70d1ba02dae2faf4e7cf07d683fb961befb75ba94bf76814e510191144f",
+    "76efda96f539b504094b8bf16620aaffed35f759f0714326d45e46b838eca9ab",
+    "88d906624278daf6f3496a64584208f0bdae79f09cece411ad3ca60412292574",
+    "8b1299a7e76b831835b970d5497e816bfa1f443c29b7ac6834de2f78165462cc",
+    "8eefaad8ea3f38dba9b7a3effe64fa77b394b5f219105a65e1e57f5eb368bb8f",
+    "9a9de3074efa827a7aba99de49d527557b9eb8316d8094de538ea2f547cff20a"
+  ],
+  "texts": {
+    "review": {
+      "text": "`high effort → 3+5 angles × 6 candidates → 1-vote verify (recall-biased) → ≤10 findings`\n\nYou are reviewing for **recall** at high effort: catch every real bug a careful\nreviewer would catch in one sitting. At this level, catching real bugs matters\nmore than avoiding false positives. Err on the side of surfacing.\n\n## Phase 0 — Gather the diff\n\nRun `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`\nif there's no upstream) to get the unified diff under review. If there are\nuncommitted changes, or the range diff is empty, also run `git diff HEAD` and\ninclude the working-tree changes in scope — the review often runs before the\ncommit. If a PR number, branch name, or file path was passed as an argument,\nreview that target instead. Treat this diff as the review scope.\n\n## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)\n\nRun **8 independent finder angles** via the Agent tool. Each\nsurfaces **up to 6 candidate findings** with `file`, `line`, a one-line\n`summary`, and a concrete `failure_scenario`. If the Agent tool is not available in your current tool set, do not error — perform each angle (and each verification) yourself, sequentially, in this context.\n\n### Angle A — line-by-line diff scan\n\nRead every hunk in the diff, line by line. Then Read the enclosing function for\neach hunk — bugs in unchanged lines of a touched function are in scope (the PR\nre-exposes or fails to fix them). For every line ask: what input, state, timing,\nor platform makes this line wrong? Look for inverted/wrong conditions,\noff-by-one, null/undefined deref, missing `await`, falsy-zero checks,\nwrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.\n\n### Angle B — removed-behavior auditor\n\nFor every line the diff DELETES or replaces, name the invariant or behavior it\nenforced, then search the new code for where that invariant is re-established.\nIf you can't find it, that's a candidate: a removed guard, a dropped error\npath, a narrowed validation, a deleted test that was covering a real case.\n\n### Angle C — cross-file tracer\n\nFor each function the diff changes, find its callers (Grep for the symbol) and\ncheck whether the change breaks any call site: a new precondition, a changed\nreturn shape, a new exception, a timing/ordering dependency. Also check callees:\ndoes a parallel change in the same PR make a call unsafe?\n\n### Reuse\n\nThe angles above hunt for bugs; this one and the next two hunt for cleanup in\nthe changed code. Flag new code that re-implements something the codebase\nalready has — Grep shared/utility modules and files adjacent to the change,\nand name the existing helper to call instead.\n\n### Simplification\n\nFlag unnecessary complexity the diff adds: redundant or derivable state,\ncopy-paste with slight variation, deep nesting, dead code left behind. Name\nthe simpler form that does the same job.\n\n### Efficiency\n\nFlag wasted work the diff introduces: redundant computation or repeated I/O,\nindependent operations run sequentially, blocking work added to startup or\nhot paths. Also flag long-lived objects built from closures or captured\nenvironments — they keep the entire enclosing scope alive for the object's\nlifetime (a memory leak when that scope holds large values); prefer a\nclass/struct that copies only the fields it needs. Name the cheaper\nalternative.\n\n### Altitude\n\nCheck that each change fixes the root cause at the right depth rather than\npatching a symptom with a fragile bandaid. Special cases layered on shared\ninfrastructure are a sign the fix isn't deep enough — prefer the simpler, more\ngeneral change to the underlying mechanism over adding special cases, and name\nthat change.\n\n### Conventions (CLAUDE.md)\n\nFind the CLAUDE.md files that govern the changed code: the user-level\n~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or\nCLAUDE.local.md in a directory that is an ancestor of a changed file (a\ndirectory's CLAUDE.md only applies to files at or below it). Read each one\nthat exists, then check the diff for clear violations of the rules they state.\n\nOnly flag a violation when you can quote the exact rule and the exact line\nthat breaks it — no style preferences, no vague \"spirit of the doc\"\ninferences. In the finding, name the CLAUDE.md path and quote the rule so the\nreport can cite it. If no CLAUDE.md applies, return nothing for this angle.\n\nCleanup, altitude, and conventions candidates use the same\n`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete\ncost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule\nis broken) instead of a crash. Correctness bugs always outrank cleanup,\naltitude, and conventions findings when the output cap forces a cut.\n\nPass every candidate with a nameable failure scenario through — finders that\nsilently drop half-believed candidates bypass the verify step and are the\ndominant cause of misses.\n\n## Phase 2 — Verify (1-vote, recall-biased)\n\nDedup near-duplicates (same defect, same location, same reason → keep one). For\neach remaining candidate, run **one verifier** via the Agent tool:\ngive it the diff, the relevant file(s), and the candidate; it returns exactly\none of **CONFIRMED / PLAUSIBLE / REFUTED**.\n\n**PLAUSIBLE by default** — do not refute a candidate for being \"speculative\" or\n\"depends on runtime state\" when the state is realistic: concurrency races,\nnil/undefined on a rare-but-reachable path (error handler, cold cache, missing\noptional field), falsy-zero treated as missing, off-by-one on a boundary the\ncode does not exclude, retry storms / partial failures, regex/allowlist that\nlost an anchor. These are PLAUSIBLE.\n\n**REFUTED** only when constructible from the code: factually wrong (quote the\nactual line); provably impossible (type/constant/invariant — show it); already\nhandled in this diff (cite the guard); or pure style with no observable effect.\n\nKeep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.\n\n## Output\n\nReturn findings as a JSON array of at most 10 objects:\n\n```json\n[\n  {\n    \"file\": \"path/to/file.ext\",\n    \"line\": 123,\n    \"summary\": \"one-sentence statement of the bug\",\n    \"failure_scenario\": \"concrete inputs/state → wrong output/crash\"\n  }\n]\n```\n\nRanked most-severe first. If more than 10 survive, keep the 10 most\nsevere. If nothing survives verification, return `[]`. Do not call the\nReportFindings tool even if it is available - this review's\noutput contract is the JSON block above.",
+      "sha256": "665e2e510c91fdd577b75239ee22b3aa51347cb1cb81dcd1adc791ef2e6b6bd9"
     },
-    {
-      "name": "Agent Prompt: /code-review part 7 high effort mode",
-      "id": "agent-prompt-code-review-part-7-high-effort-mode",
-      "description": "High-effort /code-review prompt that favors recall with three finder angles, recall-biased verification, and up to ten JSON findings",
-      "pieces": [
-        "\\`high effort → 3+5 angles × 6 candidates → 1-vote verify (recall-biased) → ≤10 findings\\`\n\nYou are reviewing for **recall** at high effort: catch every real bug a careful\nreviewer would catch in one sitting. At this level, catching real bugs matters\nmore than avoiding false positives. Err on the side of surfacing.\n\n${",
-        "}\n## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)\n\nRun **8 independent finder angles** via the ${",
-        "} tool. Each\nsurfaces **up to 6 candidate findings** with \\`file\\`, \\`line\\`, a one-line\n\\`summary\\`, and a concrete \\`failure_scenario\\`. ${",
-        "}\n\n${",
-        "}\n${",
-        "}\nPass every candidate with a nameable failure scenario through — finders that\nsilently drop half-believed candidates bypass the verify step and are the\ndominant cause of misses.\n\n${",
-        "}\n${",
-        "(10)}"
-      ],
-      "identifiers": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "identifierMap": {
-        "0": "DIFF_GATHERING_PHASE",
-        "1": "AGENT_TOOL_NAME",
-        "2": "AGENT_UNAVAILABLE_INSTRUCTIONS",
-        "3": "BASE_FINDER_ANGLES_BLOCK",
-        "4": "CLEANUP_AND_ALTITUDE_CANDIDATES_NOTE",
-        "5": "RECALL_BIASED_VERIFY_PHASE",
-        "6": "OUTPUT_FORMAT_FN"
-      },
-      "version": "2.1.218"
+    "output": {
+      "text": "## Output\n\nReturn findings as a JSON array of at most 10 objects:\n\n```json\n[\n  {\n    \"file\": \"path/to/file.ext\",\n    \"line\": 123,\n    \"summary\": \"one-sentence statement of the bug\",\n    \"failure_scenario\": \"concrete inputs/state → wrong output/crash\"\n  }\n]\n```\n\nRanked most-severe first. If more than 10 survive, keep the 10 most\nsevere. If nothing survives verification, return `[]`. Do not call the\nReportFindings tool even if it is available - this review's\noutput contract is the JSON block above.",
+      "sha256": "5dc9de17f9b9ae7f7864c5180ad83cc3cc3d6ee719b43c3cc0ee5d5d4dc606cd"
     },
-    {
-      "name": "Agent Prompt: /code-review part 9 fix application",
-      "id": "agent-prompt-code-review-part-9-fix-application",
-      "description": "Optional /code-review instructions for applying findings to the working tree when --fix is passed",
-      "pieces": [
-        "\n\n## Applying fixes (--fix)\n\nThe \\`--fix\\` flag was passed. After producing the findings list, apply the\nfindings to the working tree instead of stopping at the report: fix each one\ndirectly — correctness bugs and reuse/simplification/efficiency cleanups alike.\nSkip any finding whose fix would change intended behavior, require changes well\noutside the reviewed diff, or that you judge to be a false positive — note the\nskip rather than arguing with it. ${",
-        "?`Then ${",
-        "}; after the call, give one line per skipped finding saying why.`:`Finish with a brief summary of what was fixed\nand what was skipped.`}\n"
-      ],
-      "identifiers": [
-        0,
-        1
-      ],
-      "identifierMap": {
-        "0": "HAS_REPORT_FINDINGS_TOOL",
-        "1": "REPORT_FINDINGS_TOOL_NAME"
-      },
-      "version": "2.1.235"
+    "fixes": {
+      "text": "## Applying fixes (--fix)\n\nThe `--fix` flag was passed. After producing the findings list, apply the\nfindings to the working tree instead of stopping at the report: fix each one\ndirectly — correctness bugs and reuse/simplification/efficiency cleanups alike.\nSkip any finding whose fix would change intended behavior, require changes well\noutside the reviewed diff, or that you judge to be a false positive — note the\nskip rather than arguing with it. Finish with a brief summary of what was fixed\nand what was skipped.",
+      "sha256": "547ece4a0093b6eb0c98829b2086b81447677b91bd2e7b28d0dfb3a5b910d394"
     },
-    {
-      "name": "Agent Prompt: /simplify slash command",
-      "id": "agent-prompt-simplify-slash-command",
-      "description": "Instructions for the /simplify slash command that reviews changed code for reuse, simplification, efficiency, and altitude cleanups, then applies the fixes",
-      "pieces": [
-        "\\`/simplify → 4 cleanup agents in parallel → apply the fixes\\`\n\nYou are improving the quality of the changed code, not hunting for bugs. Review\nit for reuse, simplification, efficiency, and altitude issues, then fix what you\nfind. Do not look for correctness bugs — that is what \\`/code-review\\` is for.\n\n${",
-        "}\n## Phase 1 — Review (4 cleanup agents in parallel)\n\nLaunch **4 independent review agents** via the ${",
-        "} tool, all in a\nsingle message so they run concurrently. Pass each agent the diff and one of\nthe four angles below. Each returns its findings with \\`file\\`, \\`line\\`, a\none-line \\`summary\\`, and the concrete cost (what is duplicated, wasted, or\nharder to maintain).\n\n### Reuse\n\n${",
-        "}\n${",
-        "}\n${",
-        "}\n${",
-        "}\n## Phase 2 — Apply the fixes\n\nWait for all four agents to complete, dedup findings that point at the same\nline or mechanism, and fix each remaining one directly. Skip any finding whose\nfix would change intended behavior, require changes well outside the reviewed\ndiff, or that you judge to be a false positive — note the skip rather than\narguing with it. Finish with a brief summary of what was fixed and what was\nskipped (or confirm the code was already clean).\n"
-      ],
-      "identifiers": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "identifierMap": {
-        "0": "DIFF_GATHERING_PHASE",
-        "1": "AGENT_TOOL_NAME",
-        "2": "REUSE_FINDER_ANGLE_BLOCK",
-        "3": "SIMPLIFICATION_FINDER_ANGLE_BLOCK",
-        "4": "EFFICIENCY_FINDER_ANGLE_BLOCK",
-        "5": "ALTITUDE_FINDER_ANGLE_BLOCK"
-      },
-      "version": "2.1.154"
-    },
-    {
-      "name": "Skill: Code Review (conventions dimension)",
-      "id": "skill-code-review-conventions",
-      "description": "Code-review dimension: flag diff lines that break a rule stated in an applicable CLAUDE.md (user, repo-root, or ancestor-directory), quoting the exact rule and offending line, and emit nothing when no CLAUDE.md governs the change",
-      "pieces": [
-        "### Conventions (CLAUDE.md)\n\nFind the CLAUDE.md files that govern the changed code: the user-level\n~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or\nCLAUDE.local.md in a directory that is an ancestor of a changed file (a\ndirectory's CLAUDE.md only applies to files at or below it). Read each one\nthat exists, then check the diff for clear violations of the rules they state.\n\nOnly flag a violation when you can quote the exact rule and the exact line\nthat breaks it — no style preferences, no vague \"spirit of the doc\"\ninferences. In the finding, name the CLAUDE.md path and quote the rule so the\nreport can cite it. If no CLAUDE.md applies, return nothing for this angle.\n"
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.178"
-    },
-    {
-      "name": "Skill: Code Review correctness finder angles",
-      "id": "skill-code-review-correctness-finder-angles",
-      "description": "Shared /code-review finder-angle block covering line-by-line diff scanning, removed-behavior auditing, and cross-file tracing",
-      "pieces": [
-        "### Angle A — line-by-line diff scan\n\nRead every hunk in the diff, line by line. Then Read the enclosing function for\neach hunk — bugs in unchanged lines of a touched function are in scope (the PR\nre-exposes or fails to fix them). For every line ask: what input, state, timing,\nor platform makes this line wrong? Look for inverted/wrong conditions,\noff-by-one, null/undefined deref, missing \\`await\\`, falsy-zero checks,\nwrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.\n\n### Angle B — removed-behavior auditor\n\nFor every line the diff DELETES or replaces, name the invariant or behavior it\nenforced, then search the new code for where that invariant is re-established.\nIf you can't find it, that's a candidate: a removed guard, a dropped error\npath, a narrowed validation, a deleted test that was covering a real case.\n\n### Angle C — cross-file tracer\n\nFor each function the diff changes, find its callers (Grep for the symbol) and\ncheck whether the change breaks any call site: a new precondition, a changed\nreturn shape, a new exception, a timing/ordering dependency. Also check callees:\ndoes a parallel change in the same PR make a call unsafe?\n"
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.206"
-    },
-    {
-      "name": "Skill: /code-review efficiency dimension",
-      "id": "skill-code-review-efficiency",
-      "description": "Code-review pass that surfaces wasted effort the diff adds — duplicate computation or I/O, avoidable serialization, large scopes held by closures — and points to the cheaper option",
-      "pieces": [
-        "### Efficiency\n\nFlag wasted work the diff introduces: redundant computation or repeated I/O,\nindependent operations run sequentially, blocking work added to startup or\nhot paths. Also flag long-lived objects built from closures or captured\nenvironments — they keep the entire enclosing scope alive for the object's\nlifetime (a memory leak when that scope holds large values); prefer a\nclass/struct that copies only the fields it needs. Name the cheaper\nalternative.\n"
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.173"
-    },
-    {
-      "name": "Skill: Code Review (Output — findings JSON array)",
-      "id": "skill-code-review-output-findings-json-array",
-      "description": "Defines the code-review skill's result shape: a JSON array of findings carrying file, line, summary, and failure_scenario",
-      "pieces": [
-        "## Output\n\nReturn findings as a JSON array of at most ${",
-        "} objects:\n\n\\`\\`\\`json\n[\n  {\n    \"file\": \"path/to/file.ext\",\n    \"line\": 123,\n    \"summary\": \"one-sentence statement of the bug\",\n    \"failure_scenario\": \"concrete inputs/state → wrong output/crash\"\n  }\n]\n\\`\\`\\`\n\nRanked most-severe first. If more than ${",
-        "} survive, keep the ${",
-        "} most\nsevere. If nothing survives verification, return \\`[]\\`. Do not call the\n${",
-        "} tool even if it is available - this review's\noutput contract is the JSON block above.\n"
-      ],
-      "identifiers": [
-        0,
-        0,
-        0,
-        1
-      ],
-      "identifierMap": {
-        "0": "MAX_FINDINGS",
-        "1": "REPORT_FINDINGS_TOOL_NAME"
-      },
-      "version": "2.1.216"
-    },
-    {
-      "name": "Skill: Code Review (Phase 0 — gather the diff)",
-      "id": "skill-code-review-phase-0-gather-diff",
-      "description": "Opening step of the code-review skill: assemble the unified diff to review with git diff",
-      "pieces": [
-        "## Phase 0 — Gather the diff\n\nRun `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`\nif there's no upstream) to get the unified diff under review. If there are\nuncommitted changes, or the range diff is empty, also run `git diff HEAD` and\ninclude the working-tree changes in scope — the review often runs before the\ncommit. If a PR number, branch name, or file path was passed as an argument,\nreview that target instead. Treat this diff as the review scope.\n"
-      ],
-      "identifiers": [],
-      "identifierMap": {},
-      "version": "2.1.173"
-    },
-    {
-      "name": "Skill: Code Review (Phase 2 — verify, recall-biased)",
-      "id": "skill-code-review-phase-2-verify-recall-biased",
-      "description": "Recall-tier verification step: one verifier per candidate finding, biased toward keeping anything plausible",
-      "pieces": [
-        "## Phase 2 — Verify (1-vote, recall-biased)\n\nDedup near-duplicates (same defect, same location, same reason → keep one). For\neach remaining candidate, run **one verifier** via the ${",
-        "} tool:\ngive it the diff, the relevant file(s), and the candidate; it returns exactly\none of **CONFIRMED / PLAUSIBLE / REFUTED**.\n\n${",
-        "}\n\nKeep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.\n"
-      ],
-      "identifiers": [
-        0,
-        1
-      ],
-      "identifierMap": {
-        "0": "AGENT_TOOL_NAME",
-        "1": "RECALL_BIASED_RUBRIC"
-      },
-      "version": "2.1.173"
+    "simplify": {
+      "text": "`/simplify → 4 cleanup agents in parallel → apply the fixes`\n\nYou are improving the quality of the changed code, not hunting for bugs. Review\nit for reuse, simplification, efficiency, and altitude issues, then fix what you\nfind. Do not look for correctness bugs — that is what `/code-review` is for.\n\n## Phase 0 — Gather the diff\n\nRun `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`\nif there's no upstream) to get the unified diff under review. If there are\nuncommitted changes, or the range diff is empty, also run `git diff HEAD` and\ninclude the working-tree changes in scope — the review often runs before the\ncommit. If a PR number, branch name, or file path was passed as an argument,\nreview that target instead. Treat this diff as the review scope.\n\n## Phase 1 — Review (4 cleanup agents in parallel)\n\nLaunch **4 independent review agents** via the Agent tool, all in a\nsingle message so they run concurrently. Pass each agent the diff and one of\nthe four angles below. Each returns its findings with `file`, `line`, a\none-line `summary`, and the concrete cost (what is duplicated, wasted, or\nharder to maintain).\n\n### Reuse\n\nFlag new code that re-implements something the codebase\nalready has — Grep shared/utility modules and files adjacent to the change,\nand name the existing helper to call instead.\n\n### Simplification\n\nFlag unnecessary complexity the diff adds: redundant or derivable state,\ncopy-paste with slight variation, deep nesting, dead code left behind. Name\nthe simpler form that does the same job.\n\n### Efficiency\n\nFlag wasted work the diff introduces: redundant computation or repeated I/O,\nindependent operations run sequentially, blocking work added to startup or\nhot paths. Also flag long-lived objects built from closures or captured\nenvironments — they keep the entire enclosing scope alive for the object's\nlifetime (a memory leak when that scope holds large values); prefer a\nclass/struct that copies only the fields it needs. Name the cheaper\nalternative.\n\n### Altitude\n\nCheck that each change fixes the root cause at the right depth rather than\npatching a symptom with a fragile bandaid. Special cases layered on shared\ninfrastructure are a sign the fix isn't deep enough — prefer the simpler, more\ngeneral change to the underlying mechanism over adding special cases, and name\nthat change.\n\n## Phase 2 — Apply the fixes\n\nWait for all four agents to complete, dedup findings that point at the same\nline or mechanism, and fix each remaining one directly. Skip any finding whose\nfix would change intended behavior, require changes well outside the reviewed\ndiff, or that you judge to be a false positive — note the skip rather than\narguing with it. Finish with a brief summary of what was fixed and what was\nskipped (or confirm the code was already clean).",
+      "sha256": "88c823a859a3b21110b3458ed8319d0b2ff77f253a50f5fed8b7362378d3ab7f"
     }
-  ]
+  }
 }

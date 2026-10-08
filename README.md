@@ -274,7 +274,6 @@ See the [repository structure](docs/en/repository-structure.md).
 - `at-review` and `at-simplify` are installable Agent Skills derived and
   adapted from Claude Code's built-in `code-review` and `simplify` workflow
   prompts.
-  Automated upstream tracking uses versioned prompt data from
-  [tweakcc](https://github.com/Piebald-AI/tweakcc); human-readable prompt
-  history comes from
-  [claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts).
+  Automated upstream tracking reads the official Claude Code npm package directly.
+
+For upstream skill updates, review the generated draft PR; see the [sync workflow](tools/claude-skill-sync/README.md).

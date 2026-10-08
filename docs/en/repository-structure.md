@@ -21,3 +21,5 @@ agent-tools/
 ├── tools/             # Maintainer-only upstream sync and repository tooling.
 └── scripts/           # Install, sync, validation, and maintenance scripts.
 ```
+
+The sync Action reads npm latest directly from the official Claude Code package. Review its draft PR. On failure, download `claude-skill-sync-diagnostics` from the run. See the [maintainer workflow](../../tools/claude-skill-sync/README.md).

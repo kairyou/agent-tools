@@ -1,115 +1,30 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { test } from "node:test";
+import { CURRENT_FILE, ROOT, readJson, sha256, compareSnapshots, discoverLatestVersion, writePending } from "../tools/claude-skill-sync/lib.mjs";
+import { renderSkills } from "../tools/claude-skill-sync/render.mjs";
+import { SKILLS } from "../tools/claude-skill-sync/manifest.mjs";
 
-import {
-  CURRENT_FILE,
-  MirrorPendingError,
-  ROOT,
-  compareVersions,
-  compareSnapshots,
-  discoverLatestMirrorVersion,
-  fetchUpstream,
-  readJson,
-  reconstructPrompt,
-} from "../tools/claude-skill-sync/lib.mjs";
-import {
-  ALL_PROMPT_IDS,
-  OPTIONAL_PROMPT_IDS,
-  SKILLS,
-} from "../tools/claude-skill-sync/manifest.mjs";
-import {
-  LOCAL_LOCKED_HASHES,
-  renderSkills,
-} from "../tools/claude-skill-sync/render.mjs";
-import { LOCAL_FRAGMENTS } from "../tools/claude-skill-sync/rules.mjs";
-
-test("reconstructPrompt restores extracted source escapes and expressions", () => {
-  const prompt = {
-    id: "example",
-    pieces: ["Use \\`tool\\` with ${", "(10)}"],
-    identifiers: [0],
-    identifierMap: { 0: "OUTPUT_FORMAT_FN" },
-  };
-  assert.equal(reconstructPrompt(prompt), "Use `tool` with ${OUTPUT_FORMAT_FN(10)}");
-});
-
-test("missing versioned prompt JSON is classified as mirror pending", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
-    const { hostname } = new URL(String(url));
-    if (hostname === "registry.npmjs.org") {
-      return new Response(JSON.stringify({ version: "9.9.9" }));
-    }
-    if (hostname === "api.github.com") {
-      return new Response(JSON.stringify({ sha: "abc123" }));
-    }
-    return new Response("not found", { status: 404, statusText: "Not Found" });
-  };
-  try {
-    await assert.rejects(() => fetchUpstream("9.9.9"), MirrorPendingError);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("mirror discovery selects the newest version not newer than npm", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
-    if (String(url).includes("/commits/main")) {
-      return new Response(JSON.stringify({ sha: "abc123" }));
-    }
-    return new Response(
-      JSON.stringify([
-        { name: "prompts-2.1.222.json" },
-        { name: "prompts-2.1.223.json" },
-        { name: "prompts-2.1.225.json" },
-        { name: "README.md" },
-      ])
-    );
-  };
-  try {
-    assert.deepEqual(await discoverLatestMirrorVersion("2.1.224"), {
-      version: "2.1.223",
-      commit: "abc123",
-    });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("semantic version comparison is numeric", () => {
-  assert.ok(compareVersions("2.1.100", "2.1.99") > 0);
-  assert.equal(compareVersions("2.1.223", "2.1.223"), 0);
-});
-
-test("accepted Claude prompt snapshot reproduces the installable skills", () => {
+test("official snapshot reproduces both installable skills offline", () => {
   const snapshot = readJson(CURRENT_FILE);
-  const ids = snapshot.prompts.map(({ id }) => id);
-  assert.ok(ALL_PROMPT_IDS.every((id) => ids.includes(id)));
-  assert.ok(ids.every((id) => ALL_PROMPT_IDS.includes(id) || OPTIONAL_PROMPT_IDS.includes(id)));
-  const generated = renderSkills(snapshot);
-  for (const [name, content] of Object.entries(generated)) {
-    assert.equal(fs.readFileSync(path.join(ROOT, SKILLS[name].target), "utf8"), content);
+  assert.equal(snapshot.source.version, snapshot.claudeCodeVersion);
+  assert.equal(snapshot.source.package, "@anthropic-ai/claude-code-linux-x64");
+  for (const [name, text] of Object.entries(renderSkills(snapshot))) {
+    assert.equal(fs.readFileSync(path.join(ROOT, SKILLS[name].target), "utf8"), text);
   }
 });
 
-test("portable review excludes Claude-only host behavior", () => {
+test("portable output and opt-in fixes retain their behavior", () => {
   const review = renderSkills(readJson(CURRENT_FILE))["at-review"];
-  assert.match(review, /hosted pull\/merge request URL/);
-  assert.match(review, /references\/review-targets\.md/);
-  assert.match(review, /\[--fix\] \[<pr-or-mr-url\|branch\|path>\]/);
-  assert.match(review, /host-specific findings-reporting tool/);
   assert.match(review, /main agent's final answer is a Markdown report/);
-  assert.match(review, /1\. High\|Medium\|Low: summary/);
   assert.match(review, /Only when `--json` was explicitly passed/);
-  assert.ok(review.indexOf("Markdown report") < review.indexOf("### JSON mode"));
-  assert.match(review, /"failure_scenario": "concrete inputs\/state → wrong output\/crash"/);
-  assert.match(review, /AGENTS\.md or CLAUDE\.md/);
   assert.match(review, /Only apply anything when `--fix` was passed/);
-  assert.doesNotMatch(review, /GitHub comment|workflow-backed|publish an artifact|ReportFindings/);
-  assert.doesNotMatch(review, /Agent tool is not available|single-pass inline/);
+  assert.match(review, /AGENTS\.md or CLAUDE\.md/);
+  assert.match(review, /host-specific findings-reporting/);
+  assert.match(review, /perform each angle/);
+  assert.doesNotMatch(review, /ReportFindings|\$\{/);
 });
 
 test("hosted review target guidance stays read-only and supports private-host fallbacks", () => {
@@ -125,88 +40,75 @@ test("hosted review target guidance stays read-only and supports private-host fa
   assert.match(reference, /Do not guess that the default branch/);
 });
 
-test("manifest targets stay inside the two workflow skill directories", () => {
-  assert.deepEqual(
-    Object.values(SKILLS).map(({ target }) => target).sort(),
-    [
-      "skills/workflow/at-review/SKILL.md",
-      "skills/workflow/at-simplify/SKILL.md",
-    ]
-  );
-});
 
-test("local altitude guidance records its accepted Claude Code provenance", () => {
-  const altitude = LOCAL_FRAGMENTS.altitudeBlock;
-  assert.deepEqual(altitude.source, {
-    package: "@anthropic-ai/claude-code-linux-x64",
-    version: "2.1.260",
-    artifact: "official npm bundle",
-    piebaldPromptId: "skill-code-review-altitude",
-    reason: "not exposed as a standalone Piebald prompt object",
-  });
-  assert.match(altitude.text, /fixes the root cause at the right depth/);
-  assert.match(altitude.text, /name\s+that change/);
-  assert.match(LOCAL_LOCKED_HASHES.altitude, /^[a-f0-9]{64}$/);
-  for (const skill of Object.values(SKILLS)) {
-    assert.ok(!skill.includedPromptIds.includes("skill-code-review-altitude"));
-    assert.ok(skill.monitoredPromptIds.includes("skill-code-review-altitude"));
-  }
-  assert.deepEqual(OPTIONAL_PROMPT_IDS, ["skill-code-review-altitude"]);
-});
-
-test("a restored optional prompt becomes a monitored change", async () => {
-  const originalFetch = globalThis.fetch;
+test("official prose changes trigger review and reach generated skills", () => {
   const current = readJson(CURRENT_FILE);
-  const restored = {
-    name: "Skill: Code Review (altitude dimension)",
-    id: "skill-code-review-altitude",
-    description: "restored extraction",
-    pieces: [LOCAL_FRAGMENTS.altitudeBlock.text],
-    identifiers: [],
-    identifierMap: {},
-    version: "9.9.9",
-  };
-  globalThis.fetch = async (url) => {
-    if (new URL(String(url)).hostname === "registry.npmjs.org") {
-      return new Response(JSON.stringify({ version: "9.9.9" }));
-    }
-    if (String(url).endsWith("/commits/main")) {
-      return new Response(JSON.stringify({ sha: "abc123" }));
-    }
-    return new Response(JSON.stringify({
-      version: "9.9.9",
-      prompts: [...current.prompts, restored],
-    }));
-  };
-  try {
-    const pending = await fetchUpstream("9.9.9");
-    const change = compareSnapshots(current, pending).find(({ id }) => id === restored.id);
-    assert.deepEqual(change.use, []);
-    assert.deepEqual(change.monitoredBy, ["at-review", "at-simplify"]);
-    assert.equal(change.status, "added");
-  } finally {
-    globalThis.fetch = originalFetch;
+  for (const name of ["review", "fixes", "simplify"]) {
+    const pending = structuredClone(current);
+    pending.texts[name].text += "\n\nNew upstream instruction.";
+    pending.texts[name].sha256 = sha256(pending.texts[name].text);
+    assert.deepEqual(compareSnapshots(current, pending).map((entry) => entry.name), [name]);
+    assert.match(renderSkills(pending)[name === "simplify" ? "at-simplify" : "at-review"], /New upstream instruction/);
   }
+  const pending = structuredClone(current);
+  const output = current.texts.output.text;
+  pending.texts.output.text += "\nNew output instruction.";
+  pending.texts.review.text = pending.texts.review.text.replace(output, pending.texts.output.text);
+  for (const name of ["review", "output"]) pending.texts[name].sha256 = sha256(pending.texts[name].text);
+  assert.match(renderSkills(pending)["at-review"], /New output instruction/);
 });
 
-test("snapshot comparison reports included prompt changes", () => {
+test("unchanged content does not create version-only updates", () => {
   const current = readJson(CURRENT_FILE);
   const pending = structuredClone(current);
-  const included = pending.prompts.find(
-    ({ id }) => id === "skill-code-review-efficiency"
-  );
-  included.pieces[0] += " changed";
-  const changes = compareSnapshots(current, pending);
-  assert.equal(changes.length, 1);
-  assert.deepEqual(changes[0].use, ["at-review", "at-simplify"]);
+  pending.claudeCodeVersion = pending.source.version = "9.9.9";
+  pending.source.bundleSha256 = "changed";
+  assert.deepEqual(compareSnapshots(current, pending), []);
 });
 
-test("renderer fails closed when an expected patch anchor changes", () => {
-  const snapshot = readJson(CURRENT_FILE);
-  const changed = structuredClone(snapshot);
-  const root = changed.prompts.find(
-    ({ id }) => id === "agent-prompt-code-review-part-7-high-effort-mode"
-  );
-  root.pieces = root.pieces.map((piece) => piece.replace("via the ${", "through the ${"));
-  assert.throws(() => renderSkills(changed), /at-review\/agent-tool expected 2 matches/);
+test("a successful unchanged fetch removes an older candidate without changing the accepted snapshot", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "skill-pending-test-"));
+  try {
+    const current = readJson(CURRENT_FILE);
+    const accepted = JSON.stringify(current);
+    fs.writeFileSync(path.join(directory, "current.json"), accepted);
+    const changed = structuredClone(current);
+    changed.texts.review.text += " changed";
+    changed.texts.review.sha256 = sha256(changed.texts.review.text);
+    assert.equal(writePending(changed, directory).wrote, true);
+    assert.ok(fs.existsSync(path.join(directory, "pending.json")));
+    assert.equal(writePending(current, directory).wrote, false);
+    assert.ok(!fs.existsSync(path.join(directory, "pending.json")));
+    assert.ok(!fs.existsSync(path.join(directory, "pending-report.md")));
+    assert.equal(fs.readFileSync(path.join(directory, "current.json"), "utf8"), accepted);
+  } finally {
+    const relative = path.relative(os.tmpdir(), directory);
+    assert.ok(!path.isAbsolute(relative) && relative.startsWith("skill-pending-test-") && !relative.includes(path.sep));
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("invalid content and ambiguous output cannot generate a candidate", () => {
+  for (const mutate of [
+    (s) => { s.source.version = "0.0.0"; },
+    (s) => { delete s.texts.fixes; },
+    (s) => { s.texts.review.text += "unverified"; },
+    (s) => { s.texts.review.text += s.texts.output.text; s.texts.review.sha256 = sha256(s.texts.review.text); },
+  ]) {
+    const snapshot = readJson(CURRENT_FILE); mutate(snapshot);
+    assert.throws(() => renderSkills(snapshot), /mismatch|Invalid official content|exactly once/);
+  }
+});
+
+test("version discovery uses npm directly and rejects invalid metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url) => {
+      assert.equal(String(url), "https://registry.npmjs.org/@anthropic-ai/claude-code/latest");
+      return new Response(JSON.stringify({ version: "9.9.9" }));
+    };
+    assert.equal(await discoverLatestVersion(), "9.9.9");
+    globalThis.fetch = async () => new Response(JSON.stringify({ version: "invalid" }));
+    await assert.rejects(discoverLatestVersion, /invalid Claude Code version/);
+  } finally { globalThis.fetch = originalFetch; }
 });

@@ -262,7 +262,6 @@ cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx 
   [GitLens](https://github.com/gitkraken/vscode-gitlens) 的提交消息生成思路,
   并针对 Agent Skill 工作流重新实现.
 - `at-review` 和 `at-simplify` 基于 Claude Code 内置的 `code-review` 和
-  `simplify` 工作流提示词整理并适配为可安装的 Agent Skill. 自动上游跟踪使用
-  [tweakcc](https://github.com/Piebald-AI/tweakcc) 的版本化
-  prompt 数据; 人工审查历史来自
-  [claude-code-system-prompts](https://github.com/Piebald-AI/claude-code-system-prompts).
+  `simplify` 工作流提示词整理并适配为可安装的 Agent Skill. 自动同步直接读取官方 npm 包.
+
+上游 skill 更新请审查自动生成的草稿 PR, 参见[同步流程](tools/claude-skill-sync/README.md).

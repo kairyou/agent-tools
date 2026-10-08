@@ -6,19 +6,22 @@ argument-hint: "[--fix] [<pr-or-mr-url|branch|path>]"
 
 # Code Review
 
+If the argument is a hosted pull/merge request URL or a numeric PR/MR identifier,
+read `references/review-targets.md` from this skill directory before running
+commands. Follow its read-only resolution and authentication fallback rules;
+do not switch the user's working tree or write to the hosting service.
+
 `high effort → 3+5 angles × 6 candidates → 1-vote verify (recall-biased) → ≤10 findings`
 
 You are reviewing for **recall** at high effort: catch every real bug a careful reviewer would catch in one sitting. At this level, catching real bugs matters more than avoiding false positives. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
 
-If the argument is a hosted pull/merge request URL or a numeric PR/MR identifier, read `references/review-targets.md` from this skill directory before running commands. Follow its read-only resolution and authentication fallback rules; do not switch the user's working tree or write to the hosting service.
-
 Run `git diff "@{upstream}...HEAD"` (or `git diff main...HEAD` / `git diff HEAD~1` if there's no upstream) to get the unified diff under review. If there are uncommitted changes, or the range diff is empty, also run `git diff HEAD` and include the working-tree changes in scope — the review often runs before the commit. If a PR number, branch name, or file path was passed as an argument, review that target instead. Treat this diff as the review scope.
 
 ## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)
 
-Run **8 independent finder angles** using multi-agent capabilities. Each surfaces **up to 6 candidate findings** with `file`, `line`, a one-line `summary`, and a concrete `failure_scenario`.
+Run **8 independent finder angles** using multi-agent capabilities. Each surfaces **up to 6 candidate findings** with `file`, `line`, a one-line `summary`, and a concrete `failure_scenario`. If multi-agent support is not available in your current tool set, do not error — perform each angle (and each verification) yourself, sequentially, in this context.
 
 ### Angle A — line-by-line diff scan
 
@@ -48,9 +51,9 @@ Flag wasted work the diff introduces: redundant computation or repeated I/O, ind
 
 Check that each change fixes the root cause at the right depth rather than patching a symptom with a fragile bandaid. Special cases layered on shared infrastructure are a sign the fix isn't deep enough — prefer the simpler, more general change to the underlying mechanism over adding special cases, and name that change.
 
-### Conventions (project instructions)
+### Conventions (AGENTS.md or CLAUDE.md)
 
-Find the instruction files that govern the changed code: user-level instructions for the current agent, the repo-root AGENTS.md or CLAUDE.md, plus any AGENTS.md, CLAUDE.md, or CLAUDE.local.md in a directory that is an ancestor of a changed file (a directory's instruction file only applies to files at or below it). Read each one that exists, then check the diff for clear violations of the rules they state.
+Find the instruction files that govern the changed code: the user-level instruction files for the current agent, the repo-root AGENTS.md or CLAUDE.md, plus any AGENTS.md or CLAUDE.md or CLAUDE.local.md in a directory that is an ancestor of a changed file (a directory's AGENTS.md or CLAUDE.md only applies to files at or below it). Read each one that exists, then check the diff for clear violations of the rules they state.
 
 Only flag a violation when you can quote the exact rule and the exact line that breaks it — no style preferences, no vague "spirit of the doc" inferences. In the finding, name the instruction file path and quote the rule so the report can cite it. If no instruction file applies, return nothing for this angle.
 
@@ -84,7 +87,9 @@ Unless `--json` was explicitly passed, the main agent's final answer is a Markdo
 
 ### JSON mode
 
-Only when `--json` was explicitly passed, return findings as a JSON array of at most 10 objects:
+Only when `--json` was explicitly passed, follow this output contract:
+
+Return findings as a JSON array of at most 10 objects:
 
 ```json
 [
@@ -97,11 +102,13 @@ Only when `--json` was explicitly passed, return findings as a JSON array of at 
 ]
 ```
 
-Ranked most-severe first. If more than 10 survive, keep the 10 most severe. If nothing survives verification, return `[]`. Do not use a host-specific findings-reporting tool even if one is available.
+Ranked most-severe first. If more than 10 survive, keep the 10 most severe. If nothing survives verification, return `[]`. Do not call the host-specific findings-reporting tool even if it is available - this review's output contract is the JSON block above.
 
 ## Applying fixes (--fix)
 
-Only apply anything when `--fix` was passed. After producing the findings list, apply the
+Only apply anything when `--fix` was passed. Otherwise skip this entire section.
+
+After producing the findings list, apply the
 findings to the working tree instead of stopping at the report: fix each one
 directly — correctness bugs and reuse/simplification/efficiency cleanups alike.
 Skip any finding whose fix would change intended behavior, require changes well

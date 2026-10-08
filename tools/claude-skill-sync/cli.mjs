@@ -6,13 +6,10 @@ import { spawnSync } from "node:child_process";
 
 import {
   CURRENT_FILE,
-  MirrorPendingError,
   PENDING_FILE,
   REPORT_FILE,
   ROOT,
-  compareSnapshots,
   discoverLatestVersion,
-  discoverLatestMirrorVersion,
   fetchUpstream,
   readJson,
   renderReport,
@@ -20,7 +17,7 @@ import {
   writePending,
 } from "./lib.mjs";
 import { SKILLS } from "./manifest.mjs";
-import { LOCAL_LOCKED_HASHES, renderSkills } from "./render.mjs";
+import { renderSkills } from "./render.mjs";
 
 function usage() {
   console.error("usage: cli.mjs <fetch|inspect|apply|check> [--version X] [--write] [--dry-run]");
@@ -55,7 +52,7 @@ function unifiedDiff(file, generated) {
 
 function snapshotForApply() {
   if (!fs.existsSync(PENDING_FILE)) {
-    throw new Error("No pending upstream update. Run claude-skills:fetch after the mirror catches up.");
+    throw new Error("No pending upstream update. Run claude-skills:fetch first.");
   }
   return readJson(PENDING_FILE);
 }
@@ -83,8 +80,8 @@ function showGeneratedDiff(snapshot) {
       console.log("No generated change.");
     }
   }
-  console.log("\nLocal-locked fragments:");
-  for (const [name, hash] of Object.entries(LOCAL_LOCKED_HASHES)) console.log(`  ${name}: ${hash}`);
+  console.log(`\nOfficial source: ${snapshot.source.package}@${snapshot.source.version}`);
+  for (const [name, content] of Object.entries(snapshot.texts)) console.log(`  ${name}: ${content.sha256}`);
   return { generated, changed };
 }
 
@@ -92,32 +89,11 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (!options.command) return usage();
   if (options.command === "fetch") {
-    const npmVersion = options.version || (await discoverLatestVersion());
-    let version = npmVersion;
-    let sourceCommit;
-    if (!options.version) {
-      const mirror = await discoverLatestMirrorVersion(npmVersion);
-      if (!mirror) throw new Error(`Piebald has no prompt version at or below Claude Code ${npmVersion}`);
-      version = mirror.version;
-      sourceCommit = mirror.commit;
-      if (version !== npmVersion) {
-        console.log(`npm latest is Claude Code ${npmVersion}; Piebald mirror currently reaches ${version}.`);
-        console.log(`Using the newest available mirrored version, ${version}.`);
-      }
-    }
-    let snapshot;
-    try {
-      snapshot = await fetchUpstream(version, { commit: sourceCommit });
-    } catch (error) {
-      if (!(error instanceof MirrorPendingError)) throw error;
-      console.log(`Piebald mirror pending for Claude Code ${error.version}.`);
-      printNoPending();
-      console.log("No files were written. Retry after Piebald publishes the matching prompt JSON.");
-      return;
-    }
+    const version = options.version || (await discoverLatestVersion());
+    const snapshot = await fetchUpstream(version);
     const { changes, wrote } = writePending(snapshot);
-    console.log(`Fetched Claude Code ${version} from ${snapshot.source.repository}@${snapshot.source.commit}`);
-    console.log(`${changes.length} selected prompt(s) differ from current.`);
+    console.log(`Fetched Claude Code ${version} from ${snapshot.source.package}@${snapshot.source.version}`);
+    console.log(`${changes.length} selected content section(s) differ from current.`);
     console.log(wrote ? path.relative(ROOT, REPORT_FILE) : "No pending update was written.");
     return;
   }

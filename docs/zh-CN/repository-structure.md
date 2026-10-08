@@ -21,3 +21,5 @@ agent-tools/
 ├── tools/             # 仅供维护者使用的上游同步和仓库工具.
 └── scripts/           # 安装, 同步, 校验和仓库维护脚本.
 ```
+
+同步 Action 直接从官方 Claude Code npm 最新包提取内容. 请审查生成的草稿 PR. 失败时从该 run 下载 `claude-skill-sync-diagnostics`. 参见[维护流程](../../tools/claude-skill-sync/README.md).

@@ -1,0 +1,51 @@
+// @bun @bytecode
+const reviewName="code-review",simplifyName="simplify",Agent="Agent",Report="ReportFindings";
+function plural(count,word,other=word+"s"){return count===1?word:other}
+export{reviewName,simplifyName,Agent,Report,plural};
+// MODULE
+// @bun @bytecode
+import{reviewName,simplifyName,Agent,Report,plural}from"/bundle/runtime.js";
+const reuse="Reuse original",simplification="Simplification original",altitude="Altitude original";
+const cleanup=`${reuse}
+${simplification}
+${altitude}`;
+const output=(limit)=>`## Output
+
+Return ${limit} ${plural(limit,"finding")}. Do not call ${Report}.`;
+const hostOutput=(limit)=>`Use host reporting for ${limit}.`;
+const high=(format,agents=true,limit=10)=>{
+  if(!agents)return "Wrong inline variant";
+  return `High review via the ${Agent} tool.
+${cleanup}
+${format(limit)}`;
+};
+function route(level,format,agents=true,host=false,limit){
+  switch(level){
+    case "low":return "Wrong low variant";
+    case "medium":return "Wrong medium variant";
+    case "high":return high(format,agents,limit);
+    case "xhigh":return "Wrong xhigh variant";
+    case "max":return "Wrong max variant";
+  }
+}
+function fixInstructions(host){return `## Applying fixes (--fix)
+
+The \`--fix\` flag was passed. Fix original. ${host?"Wrong host branch":"Summarize fixes."}`}
+function agentCheck(context){throw new Error("Runtime must not execute")}
+function hostCheck(context){throw new Error("Runtime must not execute")}
+async function reviewCommand(args,context){
+  let options=readUserFlags(args),{fix:fix}=options;
+  let agents=agentCheck(context),host=hostCheck(context),format=host?hostOutput:output;
+  return [{type:"text",text:`${route("high",format,agents,host,10)}${fix?fixInstructions(host):""}`}];
+}
+const simplifyText=`/simplify
+${cleanup}
+Use the ${Agent} tool.`;
+function register(){
+  install({name:reviewName,getPromptForCommand:reviewCommand});
+  install({name:simplifyName,async getPromptForCommand(args,context){
+    let target=args.trim(),prefix=target?`Target ${target}`:"",text=agentCheck(context)?simplifyText:"Wrong simplify branch";
+    return [{type:"text",text:`${prefix}${text}`}];
+  }});
+}
+export{register};
