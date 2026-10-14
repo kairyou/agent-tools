@@ -108,8 +108,8 @@ node <skill-root>/scripts/zentao-cli.mjs finish task <id>
 Input shapes:
 
 ```json
-{"comment":"Root cause and result."}
-{"resolution":"fixed","resolvedBuild":"trunk","comment":"Root cause: stale session cache; Fix: refresh it during renewal; Commit: abc1234."}
+{"comment":"Cause and result."}
+{"resolution":"fixed","resolvedBuild":"trunk","comment":"Cause: stale session cache\nFix: refresh it during renewal\nScope: requests after session renewal\nTest suggestions: renew a session, then confirm the next request succeeds\nCommit: abc1234"}
 {"realStarted":"2026-08-11 09:00:00","comment":"Started implementation."}
 {"date":"2026-08-11","consumed":2,"left":14,"work":"Implemented the first part of the task."}
 {"work":"Corrected work description, commit abc1234."}
@@ -229,13 +229,22 @@ write-back comment follows the current user request, then
 `writeback.commentPrompt`. Otherwise use the item or user's language and these
 defaults:
 
-- For a fixed Bug, use `Root cause`, `Fix`, optional `Verification`, and the
-  real `Commit`.
-- For a finished Task, use `Completed`, optional `Verification`, and `Commit`
-  only when the work has a related commit.
+- For a fixed Bug, use `Cause`, `Fix`, optional `Scope` and `Test suggestions`,
+  then the real `Commit`.
+- For a finished Task, use `Completed`, optional `Scope` and `Test suggestions`,
+  then `Commit` only when the work has a related commit.
 - For other Bug resolutions, use `Conclusion` and applicable `Reason` or
   `Evidence`.
 - Keep standalone and lifecycle comments free-form but concise.
+
+Under these defaults, use one `Label: content` per line. Match labels to the
+comment language, keeping `Commit` in English.
+`Scope` names affected features, entry points, or scenarios supported by the
+code and item context. `Test suggestions` gives concrete manual acceptance or
+regression scenarios still worth checking, not completed test results or a
+generic request to run unit tests. Omit optional fields with nothing useful
+to add. Do not include a routine `Verification` field; still disclose failed
+checks, unverified critical paths, or environment limits when relevant.
 
 Formatting controls wording and layout only. Never invent missing facts;
 surface required gaps and put `Commit: <hash>` last.

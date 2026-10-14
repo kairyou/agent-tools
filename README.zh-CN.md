@@ -81,8 +81,8 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
     "account": "user",
     "password": "your-password",
     // "password": { "env": "ZENTAO_PASSWORD" }, // 或者从环境变量读取密码.
-    // 需要自定义 bug/task 评论(备注)格式时, 可配置 commentPrompt.
-    // "commentPrompt": "严格使用以下多行格式和字段顺序:\n原因: ...\n修复: ...\n分支: ...\n验证: ...(未验证时省略)\nCommit: ..."
+    // 可选. 不配置时, 字段标签默认跟随条目或用户的语言.
+    // "commentPrompt": "修复 Bug 时使用中文, 按以下格式回写:\n原因: ...\n修复: ...\n影响范围: ...\n测试建议: ...\nCommit: <hash>\n每项简短, 影响范围和测试建议无实质内容时省略. 使用真实提交号."
   }
 }
 ```

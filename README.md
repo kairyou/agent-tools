@@ -82,8 +82,8 @@ Configure `~/.agent-tools/config.jsonc`:
     "account": "user",
     "password": "your-password",
     // "password": { "env": "ZENTAO_PASSWORD" }, // Or read the password from an environment variable.
-    // Configure commentPrompt to customize bug/task comment formatting.
-    // "commentPrompt": "Use exactly this multiline format and field order:\nRoot cause: ...\nFix: ...\nBranch: ...\nVerification: ... (omit when not performed)\nCommit: ..."
+    // Optional. Without this, labels follow the item or user's language.
+    // "commentPrompt": "For fixed Bugs, write in English using this format:\nCause: ...\nFix: ...\nScope: ...\nTest suggestions: ...\nCommit: <hash>\nKeep each field brief. Omit Scope and Test suggestions when there is nothing useful to add. Use a real commit hash."
   }
 }
 ```
