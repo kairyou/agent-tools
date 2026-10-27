@@ -2,6 +2,8 @@
 
 [Provider usage](../../README.zh-CN.md#provider-usage) 的高级指南: 为内置 preset 覆盖不到的中转(比如 cookie 认证的网关)编写自己的用量探测, 无需修改包内代码.
 
+Pi 0.99.1 用户安装 `usage -a pi` 后, 重启 Pi 或运行 `/reload`. 原生底栏使用当前模型的端点和解析后的 API key. 使用前请与实际网关核对显示的用量.
+
 ## 声明路由
 
 编写路由模块, 并在 `providerUsage.routes` 里声明(相对 `~/.agent-tools` 解析). 声明的路由优先探测; `"preset"` 填路由 id 可直接选中.

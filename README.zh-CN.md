@@ -103,9 +103,9 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 | Runtime capability | 支持的 Agent |
 | --- | --- |
 | `statusline` | Claude Code |
-| `usage` | Claude Code, Codex, OpenCode |
+| `usage` | Claude Code, Codex, OpenCode, Pi |
 | `vision` | Claude Code, Codex, OpenCode, Pi, ZCode, DeepSeek Harness |
-| `log` | Claude Code, Codex, OpenCode |
+| `log` | Claude Code, Codex, OpenCode, Pi |
 
 ### Statusline
 
@@ -134,7 +134,7 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 取决于网关版本及其是否开放相应接口.
 
 ```bash
-npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
+npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 ```
 
 - **Claude Code** — 调用 `/at-usage` 在对话中查看当前用量.
@@ -142,6 +142,8 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
   不显示 hook 输出的客户端可调用 `$at-usage` 查询.
 - **OpenCode** — 空闲时自动刷新并以 toast 显示, 也可调用 `/at-usage` 查询.
   安装或更新后需要重启 opencode.
+- **Pi** — 在原生底栏显示当前中转的用量, 会话启动, 模型切换和每轮运行结束时触发刷新, 同一账号最多每分钟查询一次.
+  安装或更新后重启 Pi 或运行 `/reload`. 适配目标为 Pi 0.99.1.
 
 默认会从 Codex 和 Claude Code 的现有配置中自动发现中转端点, 并跳过官方端点.
 如果结果是 `Provider usage is unavailable.`, 可用

@@ -4,6 +4,10 @@ Advanced guide for [provider usage](../../README.md#provider-usage): write your 
 usage probe for relays the built-in presets cannot reach (e.g. cookie-authenticated
 gateways) without modifying package code.
 
+For Pi 0.99.1, install `usage -a pi`, then restart Pi or run `/reload`. The native
+footer uses the active model's endpoint and resolved API key. Verify the displayed
+usage against your gateway before relying on it.
+
 ## Declare a route
 
 Write a route module and list it in `providerUsage.routes` (paths resolve against

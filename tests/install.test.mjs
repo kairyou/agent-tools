@@ -29,6 +29,39 @@ function runInstallRaw(args, env) {
   });
 }
 
+for (const capability of ["usage", "log"]) test(`Pi ${capability} install, update, dry-run and uninstall preserve other extensions`, () => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-pi-install-"));
+  const home = join(temp, "runtime with spaces");
+  const agentDir = join(temp, "pi agent");
+  const env = { AGENT_TOOLS_HOME: home };
+  const args = [capability, "-a", "pi", "--pi-agent-dir", agentDir];
+  const stub = join(agentDir, "extensions", `agent-tools-${capability}.js`);
+  runInstall([...args, "--dry-run"], env);
+  assert.equal(existsSync(home), false);
+  assert.equal(existsSync(agentDir), false);
+  runInstall(args, env);
+  const original = readFileSync(stub, "utf8");
+  assert.ok(original.includes(`dist/${capability}/pi-extension.mjs`));
+  assert.match(original, /runtime%20with%20spaces/);
+  assert.ok(existsSync(join(home, "dist", capability, "pi-extension.mjs")));
+  assert.ok(existsSync(join(home, "dist", capability, capability === "usage" ? "core.mjs" : "hook.mjs")));
+  const other = join(agentDir, "extensions", "other.js");
+  writeFileSync(other, "// user extension\n");
+  runInstall(args, env);
+  assert.equal(readFileSync(stub, "utf8"), original);
+  runInstall([...args, "--uninstall", "--dry-run"], env);
+  assert.ok(existsSync(stub));
+  runInstall([...args, "--uninstall"], env);
+  assert.equal(existsSync(stub), false);
+  assert.equal(readFileSync(other, "utf8"), "// user extension\n");
+  writeFileSync(stub, "// user-owned usage extension\n");
+  const conflict = runInstallRaw(args, env);
+  assert.notEqual(conflict.status, 0);
+  assert.match(conflict.stderr, /unmanaged Pi extension/);
+  runInstall([...args, "--uninstall"], env);
+  assert.equal(readFileSync(stub, "utf8"), "// user-owned usage extension\n");
+});
+
 test("installer wires and unwires Codex usage without removing unrelated hooks", () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
   const runtime = join(temp, "runtime");

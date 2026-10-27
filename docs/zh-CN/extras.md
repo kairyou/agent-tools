@@ -64,12 +64,13 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 和上面的 `at-daily-log` 独立互补, 可一起使用或单独使用.
 
 ```bash
-npx -y @kairyou/agent-tools@latest log -a claude codex opencode
+npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi
 ```
 
 - `format: "detailed"` (默认): 每天生成一份详细报告, 记录每轮请求与结果, 修改的文件, 以及新增/删除代码行数的估算
 - `format: "daily"`: 写入单个 Markdown 文件, 并按日期归档; 每个已完成且有实质结果的回答记录为一行, 不记录未完成的提问; 内容可能因长度限制被截断, 因此仅适合作为轻量活动索引
 - Codex 安装后运行 `/hooks` 批准一次; opencode 安装或更新后需要重启
+- Pi 0.99.1 安装或更新后重启或运行 `/reload`. 自动记录已处理的用户消息, 成功的文件修改和命令执行, 在回答完成后写入结果; 中止的回答不作为完成结果记录.
 
 `detailed` 输出示例(节选):
 

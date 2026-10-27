@@ -105,9 +105,9 @@ keys without touching your edits or comments.
 | Runtime capability | Supported agents |
 | --- | --- |
 | `statusline` | Claude Code |
-| `usage` | Claude Code, Codex, OpenCode |
+| `usage` | Claude Code, Codex, OpenCode, Pi |
 | `vision` | Claude Code, Codex, OpenCode, Pi, ZCode, DeepSeek Harness |
-| `log` | Claude Code, Codex, OpenCode |
+| `log` | Claude Code, Codex, OpenCode, Pi |
 
 ### Statusline
 
@@ -138,7 +138,7 @@ Command Code; compatibility depends on the gateway version and enabled usage
 endpoints.
 
 ```bash
-npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
+npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 ```
 
 - **Claude Code** — invoke `/at-usage` to show the current usage.
@@ -146,6 +146,9 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode
   displays usage automatically; clients that hide hook output can use `$at-usage`.
 - **OpenCode** — usage refreshes when the session goes idle and appears as a
   toast; `/at-usage` shows it on demand. Restart opencode after installing or updating.
+- **Pi** — displays usage in the native footer. Session startup, model changes and
+  completed runs trigger refreshes, at most once a minute per account. Restart Pi
+  or run `/reload` after installing or updating. Targets Pi 0.99.1.
 
 The relay endpoint is auto-discovered from the existing Codex and Claude Code
 configuration; official (non-relay) endpoints are skipped. If it reports

@@ -66,12 +66,16 @@ once installed.
 Independent of and complementary to `at-daily-log` above; use them together or alone.
 
 ```bash
-npx -y @kairyou/agent-tools@latest log -a claude codex opencode
+npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi
 ```
 
 - `format: "detailed"` (default): one detailed report per day with each turn's request and outcome, the files changed, and estimated lines added and removed
 - `format: "daily"`: writes to a single Markdown file grouped by date; each completed answer with substantive results is recorded as one line, while pending prompts are omitted; content may be truncated by the length limit, so use it only as a lightweight activity index
 - Codex: run `/hooks` once after installing to approve it; opencode: restart after installing or updating
+- Pi 0.99.1: restart or run `/reload` after installing or updating. Accepted user
+  messages and successful file changes and commands are recorded automatically.
+  Outcomes are saved when the response settles; aborted responses are not saved
+  as completed outcomes.
 
 `detailed` output example (excerpt):
 

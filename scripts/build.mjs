@@ -23,6 +23,7 @@ const TARGETS = {
       "codex-hook": path.join(ROOT, "capabilities", "usage", "codex-hook.mjs"),
       "opencode-plugin": path.join(ROOT, "capabilities", "usage", "opencode-plugin.mjs"),
       "opencode-tui": path.join(ROOT, "capabilities", "usage", "opencode-tui.mjs"),
+      "pi-extension": path.join(ROOT, "capabilities", "usage", "pi-extension.mjs"),
     },
     // core.mjs detects "run as a script" via process.argv[1]; inlining it into
     // the other entries would re-trigger that check inside their bundles, so it
@@ -40,6 +41,7 @@ const TARGETS = {
     entryPoints: {
       hook: path.join(ROOT, "capabilities", "log", "hook.mjs"),
       "opencode-plugin": path.join(ROOT, "capabilities", "log", "opencode-plugin.mjs"),
+      "pi-extension": path.join(ROOT, "capabilities", "log", "pi-extension.mjs"),
     },
   },
 };
