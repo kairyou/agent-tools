@@ -25,6 +25,8 @@ Command registration identifies the entrypoints. The review call site supplies
 the effort router, output formatter, and Agent/host-reporting predicates. Local
 selection values choose the high recipe and the fix-flag branch. The simplify
 handler is interpreted with an empty target and Agent availability enabled.
+When reporting availability compares a mode with `void 0`, its predicate is
+constrained to `undefined`, so both formatting and fixes keep host reporting off.
 
 The static reader supports literals, strings, templates, references, imported
 bindings, function calls/default arguments, conditionals, logical expressions,
@@ -54,7 +56,7 @@ instructions within the high recipe, remains intact.
 
 ## Verification boundary
 
-Real packages 2.1.260, 2.1.292, and 2.1.293 were verified. The older monolithic
+Real packages 2.1.260, 2.1.292, 2.1.293, 2.1.314, and 2.1.316 were verified. The older monolithic
 2.1.235 layout is unsupported. The module format and command/router interfaces
 are internal implementation details, so future structural changes can still
 require maintenance. Unknown cases stop generation instead of guessing or

@@ -23,6 +23,35 @@ test("official command graph selects high effort, Agent, JSON, and fixes without
   assert.doesNotMatch(JSON.stringify(result.texts), /Wrong|Runtime must not execute/);
 });
 
+const reportingModeFixture = fixture.replace("host=hostCheck(context),", "mode=hostCheck(context),host=mode!==void 0,");
+
+test("reporting mode presence selects the same portable review, fixes and simplify texts", () => {
+  assert.deepEqual(extract(reportingModeFixture).texts, extract().texts);
+  let renamed = reportingModeFixture;
+  for (const name of ["mode", "host", "hostCheck", "agentCheck"]) {
+    renamed = renamed.replaceAll(new RegExp(`\\b${name}\\b`, "g"), `renamed_${name}`);
+  }
+  assert.deepEqual(extract(renamed.replaceAll("/bundle/runtime.js", "/renamed/chunk.js")).texts, extract().texts);
+});
+
+test("unknown or mutable runtime selectors fail closed before symbolic overrides", () => {
+  for (const [label, changed] of [
+    ...["mode!=void 0", "mode!==null", "mode!==dynamicValue", "mode!==void dangerous()", "mode===void 0"]
+      .map((expression) => [expression, reportingModeFixture.replace("mode!==void 0", expression)]),
+    ["computed call", reportingModeFixture.replace("mode=hostCheck(context)", "mode=runtime[method](context)")],
+    ["optional call", reportingModeFixture.replace("mode=hostCheck(context)", "mode=hostCheck?.(context)")],
+    ["spread call", reportingModeFixture.replace("mode=hostCheck(context)", "mode=hostCheck(...context)")],
+    ["await wrapper", reportingModeFixture.replace("mode=hostCheck(context)", "mode=await hostCheck(context)")],
+    ["mutable mode", reportingModeFixture.replace('return [{type:"text",text:`${route', 'mode="spawn";return [{type:"text",text:`${route')],
+    ["mutable selector", reportingModeFixture.replace('return [{type:"text",text:`${route', 'host=true;return [{type:"text",text:`${route')],
+    ["mutable predicate", reportingModeFixture.replace('function register(){', 'hostCheck=other;function register(){')],
+    ["duplicate mode", reportingModeFixture.replace("let agents=", "var mode;var agents=")],
+    ["conflicting predicates", reportingModeFixture.replace("mode=hostCheck(context)", "mode=agentCheck(context)")],
+    ["nonfunction predicate", reportingModeFixture.replace('function hostCheck(context){throw new Error("Runtime must not execute")}', 'const hostCheck=42;')],
+    ["cyclic mode", reportingModeFixture.replace("mode=hostCheck(context)", "mode=mode")],
+  ]) assert.throws(() => extract(changed), undefined, label);
+});
+
 test("renamed symbols, moved modules, and changed fragment prose need no metadata mirror", () => {
   let changed = fixture;
   for (const name of ["reuse", "simplification", "altitude", "high", "route", "reviewCommand", "Agent", "agentCheck", "hostCheck"]) {

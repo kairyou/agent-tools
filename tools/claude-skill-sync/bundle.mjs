@@ -171,7 +171,9 @@ class StaticReader {
     // Only direct declarations belong to this function's execution environment.
     for (const statement of fn.node.body.body || []) if (statement.type === "VariableDeclaration") {
       for (const declaration of statement.declarations) if (declaration.id.type === "Identifier") {
-        env.set(declaration.id.name, { node: declaration.init, module: fn.module, env });
+        env.set(declaration.id.name, {
+          node: declaration.init, module: fn.module, env, duplicate: env.has(declaration.id.name),
+        });
       }
     }
     rejectWrittenBindings(fn.node.body, env);
@@ -219,6 +221,38 @@ function one(values, label) {
   return values[0];
 }
 
+function runtimeInitializer(binding) {
+  if (binding.written || binding.duplicate) throw new Error("Mutable or duplicate official runtime binding");
+  return binding.node;
+}
+
+function constrainRuntimePredicate(reader, argument, module, env, value, hostReporting = false) {
+  if (argument?.type !== "Identifier") throw new Error("Review runtime selector changed");
+  let predicate = runtimeInitializer(reader.binding(argument.name, module, env));
+  // Reporting is enabled when its mode is present. Constrain the producer to
+  // undefined: substituting false would make `mode !== void 0` select the host.
+  if (hostReporting && predicate?.type === "BinaryExpression" && predicate.operator === "!==" &&
+      predicate.left.type === "Identifier" && predicate.right.type === "UnaryExpression" &&
+      predicate.right.operator === "void" && predicate.right.argument.type === "Literal" &&
+      predicate.right.argument.value === 0) {
+    if (!env.has(predicate.left.name)) throw new Error("Review reporting mode is not a local binding");
+    predicate = runtimeInitializer(reader.binding(predicate.left.name, module, env));
+    value = undefined;
+  }
+  if (predicate?.type !== "CallExpression" || predicate.callee.type !== "Identifier" ||
+      predicate.optional || predicate.arguments.some((arg) => arg.type === "SpreadElement")) {
+    throw new Error("Review runtime predicate changed");
+  }
+  const target = reader.binding(predicate.callee.name, module, env);
+  runtimeInitializer(target);
+  if (reader.overrides.has(target)) {
+    if (reader.overrides.get(target).value !== value) throw new Error("Conflicting review runtime predicates");
+  } else if (reader.read(target)?.kind !== "function") {
+    throw new Error("Review runtime predicate is not a static function");
+  }
+  reader.overrides.set(target, { kind: "constant-function", value });
+}
+
 export function extractOfficialSkills(bundle) {
   const modules = modulesFromBundle(bundle);
   const reader = new StaticReader(modules);
@@ -252,12 +286,7 @@ export function extractOfficialSkills(bundle) {
   // The router's explicit interface selects the portable variant. Resolve its
   // runtime predicates from the command call site rather than minified names.
   for (const [index, value] of [[2, true], [3, false]]) {
-    const argument = call.arguments[index];
-    if (argument?.type !== "Identifier") throw new Error("Review runtime selector changed");
-    const binding = reader.binding(argument.name, review.module, env);
-    const predicate = binding.node;
-    if (predicate?.type !== "CallExpression" || predicate.callee.type !== "Identifier") throw new Error("Review runtime predicate changed");
-    reader.overrides.set(reader.binding(predicate.callee.name, review.module, env), { kind: "constant-function", value });
+    constrainRuntimePredicate(reader, call.arguments[index], review.module, env, value, index === 3);
   }
   const output = reader.eval(call.arguments[1], review.module, env);
   const reviewText = reader.call(router, ["high", output, true, false, 10]);

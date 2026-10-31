@@ -43,7 +43,8 @@ The selected review variant is the explicit `high` recipe with agents available,
 host reporting disabled, and a ten-finding limit. It is not the model-dependent
 default routing of a live Claude Code session. See `RULES.md` for local adaptations.
 
-Real-package extraction was verified against 2.1.260, 2.1.292, and 2.1.293. The
+Real-package extraction was verified against 2.1.260, 2.1.292, 2.1.293, 2.1.314,
+and 2.1.316. The
 older 2.1.235 package layout is unsupported. Changes to packaging, command routing,
 or selected runtime expressions may require an extractor update; ordinary prose,
 fragment changes, and symbol renaming do not require sentence patches.
