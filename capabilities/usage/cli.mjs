@@ -19,7 +19,9 @@ if (agent !== "claude" && agent !== "codex") {
   process.exitCode = 2;
 } else {
   try {
-    const result = await queryAgentProviderUsage(agent);
+    const args = process.argv.slice(2);
+    const index = args.indexOf("--transcript");
+    const result = await queryAgentProviderUsage(agent, { transcriptPath: index >= 0 ? args[index + 1] : undefined });
     if (result?.text) process.stdout.write(`${result.text}\n`);
   } catch (error) {
     // Usage is informational. Leave stdout empty so the skill can report the

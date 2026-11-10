@@ -1,22 +1,36 @@
 import { createHash } from "node:crypto";
 import { queryProviderUsage } from "./core.mjs";
 import { isOfficialBaseUrl } from "./lib/urls.mjs";
+import { agentConfig } from "./lib/config.mjs";
+import { formatOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
 
 // Refresh on session/model changes and completed runs, at most once a minute
 // per account. No timer is needed while Pi is idle.
 const REFRESH_MS = 60_000;
 const STATUS_KEY = "agent-tools-usage";
 
-export function createPiUsageExtension({ query = queryProviderUsage, now = Date.now } = {}) {
+export function createPiUsageExtension({ query = queryProviderUsage, now = Date.now, config = agentConfig } = {}) {
   return function agentToolsUsage(pi) {
     const accounts = new Map();
     let generation = 0;
+    let speed = "";
+    let quota = "";
+    let responseStart;
+
+    function resetSpeed() {
+      speed = "";
+      quota = "";
+      responseStart = undefined;
+    }
 
     async function refresh(ctx, model = ctx.model) {
       if (ctx.mode !== "tui") return;
       const current = generation;
       const show = (text) => {
-        if (current === generation) ctx.ui.setStatus(STATUS_KEY, text || undefined);
+        if (current === generation) {
+          quota = text || "";
+          ctx.ui.setStatus(STATUS_KEY, withOutputSpeed(quota, speed) || undefined);
+        }
       };
       try {
         if (!model) return show();
@@ -58,16 +72,34 @@ export function createPiUsageExtension({ query = queryProviderUsage, now = Date.
 
     pi.on("session_start", (_event, ctx) => {
       generation += 1;
+      resetSpeed();
       void refresh(ctx);
     });
     pi.on("model_select", (event, ctx) => {
       generation += 1;
+      resetSpeed();
       if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, undefined);
       void refresh(ctx, event.model);
     });
     pi.on("agent_end", (_event, ctx) => { void refresh(ctx); });
+    pi.on("message_start", (event) => {
+      if (event.message?.role === "assistant") responseStart = { time: now(), generation };
+    });
+    pi.on("message_end", async (event, ctx) => {
+      if (event.message?.role !== "assistant") return;
+      const started = responseStart;
+      responseStart = undefined;
+      const finished = now();
+      if (!started || started.generation !== generation || ctx.mode !== "tui") return;
+      const enabled = (await config()).outputSpeed === true;
+      if (started.generation !== generation) return;
+      speed = enabled && !["aborted", "error"].includes(event.message.stopReason)
+        ? formatOutputSpeed(event.message.usage?.output, finished - started.time) : "";
+      ctx.ui.setStatus(STATUS_KEY, withOutputSpeed(quota, speed) || undefined);
+    });
     pi.on("session_shutdown", (_event, ctx) => {
       generation += 1;
+      resetSpeed();
       accounts.clear();
       if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, undefined);
     });

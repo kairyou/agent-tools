@@ -1,11 +1,14 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { readOpenCodeDisplay } from "./lib/opencode-display.mjs";
 
 const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(homedir(), ".agent-tools");
 const SNAPSHOT_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-snapshot.json");
 
 function latestUsage() {
+  const display = readOpenCodeDisplay(process.cwd());
+  if (display !== null) return display;
   try {
     const data = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8"));
     return Object.values(data?.items || {})

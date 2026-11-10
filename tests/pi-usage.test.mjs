@@ -181,3 +181,33 @@ test("Pi usage honors explicit endpoint and credential overrides", async () => {
     }
   }
 });
+
+
+test("Pi output speed updates with cached quota and clears on model/session changes", async () => {
+  let time = 0;
+  let calls = 0;
+  const h = harness({ now: () => time, config: async () => ({ outputSpeed: true }), query: async () => {
+    calls += 1;
+    return { text: "balance $10" };
+  } });
+  await h.emit("session_start");
+  await h.emit("message_start", { message: { role: "assistant" } });
+  time = 10_000;
+  await h.emit("message_end", { message: { role: "assistant", usage: { output: 382 }, stopReason: "stop" } });
+  assert.equal(h.statuses.at(-1).text, "balance $10 | 38.2 tok/s");
+  await h.emit("agent_end");
+  assert.equal(calls, 1);
+  assert.equal(h.statuses.at(-1).text, "balance $10 | 38.2 tok/s");
+  await h.emit("model_select", { model: { provider: "openai", baseUrl: "https://api.openai.com/v1" } });
+  assert.equal(h.statuses.at(-1).text, undefined);
+  await h.emit("message_start", { message: { role: "assistant" } });
+  time = 12_000;
+  await h.emit("message_end", { message: { role: "assistant", usage: { output: 20 }, stopReason: "stop" } });
+  assert.equal(h.statuses.at(-1).text, "10.0 tok/s");
+  await h.emit("message_start", { message: { role: "assistant" } });
+  time = 14_000;
+  await h.emit("message_end", { message: { role: "assistant", usage: { output: 100 }, stopReason: "aborted" } });
+  assert.equal(h.statuses.at(-1).text, undefined);
+  await h.emit("session_shutdown");
+  assert.equal(h.statuses.at(-1).text, undefined);
+});

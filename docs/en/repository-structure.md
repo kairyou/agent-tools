@@ -6,7 +6,7 @@ agent-tools/
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, one directory each.
-│   ├── statusline/    # Agent status line: branch, model, usage.
+│   ├── statusline/    # Agent status line: branch, model, usage, output speed.
 │   ├── usage/         # Provider balance / quota display.
 │   ├── vision/        # Cross-model image understanding and host adapters.
 │   └── log/           # Session work-log hooks and plugins.

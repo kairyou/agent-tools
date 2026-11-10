@@ -89,10 +89,12 @@ async function runUsageScript() {
       {
         cwd: process.cwd(),
         env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       }
     );
+    child.stdin.on("error", () => {});
+    process.stdin.pipe(child.stdin);
     let stdout = "";
     let stderr = "";
     let settled = false;

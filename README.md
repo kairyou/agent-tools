@@ -130,7 +130,15 @@ Here `5h` and `w` are Claude's rolling usage windows and `⟳` is the reset
 countdown; see [Provider usage](#provider-usage) below for relay quota
 compatibility and configuration.
 
+Add `"outputSpeed"` to `statusline.fields` to show `38.2 tok/s`.
+This estimates the latest response's output tokens per second from transcript
+timestamps, including request wait time. It is hidden when timing data is unavailable.
+
 ### Provider usage
+
+Set `providerUsage.outputSpeed` to `true` in `~/.agent-tools/config.jsonc` to
+append `38.2 tok/s` to usage output in Claude Code, Codex, OpenCode, and Pi.
+See [output speed](docs/en/extras.md#output-speed) for timing and session selection.
 
 Shows API relay / gateway balance and quota inside the agent. Supports Sub2API,
 One API (including OneHub and DoneHub), New API, Claude Code Hub, OpenRouter, and

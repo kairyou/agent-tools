@@ -15,6 +15,7 @@ import fs from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseJsonc } from "jsonc-parser";
+import { claudeOutputSpeed } from "../usage/lib/output-speed.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(SCRIPT_DIR, "..", "..");
@@ -182,6 +183,7 @@ function shortModelName(name) {
     .trim();
 }
 
+
 function renderField(field, data, config) {
   const dir = data?.workspace?.current_dir || data?.cwd || process.cwd() || "";
   const projectDir = data?.workspace?.project_dir || dir;
@@ -210,6 +212,8 @@ function renderField(field, data, config) {
     }
     case "directory":
       return dir ? basename(dir) : "";
+    case "outputSpeed":
+      return claudeOutputSpeed(data);
     default:
       return "";
   }

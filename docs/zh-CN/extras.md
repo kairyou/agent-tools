@@ -142,3 +142,21 @@ Changes
   }
 }
 ```
+# 输出速度
+
+Claude Code 状态栏可配置 `statusline.fields: ["branch", "model", "outputSpeed"]`,
+usage 显示可配置 `providerUsage.outputSpeed: true`. 两者都显示 `38.2 tok/s`,
+缺少 token 或计时数据时隐藏速度.
+
+- Claude Code — 由会话记录的时间戳估算最近一次响应的速度, 包含请求等待时间.
+  `/at-usage` 选择当前项目目录下最近更新的会话记录. 要指定会话, 对已安装的
+  usage CLI 使用 `--agent claude --transcript <path>`.
+- Codex — 计算当前轮或最近完成轮的平均输出速度, 包含工具耗时. Hook 使用
+  自身的会话记录路径或会话 ID, usage CLI 使用 `CODEX_THREAD_ID`.
+  也可用 `--transcript <path>` 指定记录.
+- OpenCode — 使用最近完成的 assistant 消息的输出量与耗时. 空闲通知对应
+  该会话, `/at-usage` 显示当前项目最近进入空闲的会话. 网关查询仍按原有频率刷新.
+- Pi — 使用最近一次 assistant 响应的输出量与消息耗时. 切换会话或模型后清空速度.
+
+速度是包含等待时间的平均估算值. 无法查询网关额度时, 仍可单独显示本地速度.
+更新已安装的 capability 后, 请重启 OpenCode 或重新加载 Pi.
