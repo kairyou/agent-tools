@@ -130,15 +130,10 @@ Here `5h` and `w` are Claude's rolling usage windows and `⟳` is the reset
 countdown; see [Provider usage](#provider-usage) below for relay quota
 compatibility and configuration.
 
-Add `"outputSpeed"` to `statusline.fields` to show `38.2 tok/s`.
-This estimates the latest response's output tokens per second from transcript
-timestamps, including request wait time. It is hidden when timing data is unavailable.
+Add `"outputSpeed"` to `statusline.fields` in `~/.agent-tools/config.jsonc`
+to show estimated output speed, e.g. `38.2 tok/s`.
 
 ### Provider usage
-
-Set `providerUsage.outputSpeed` to `true` in `~/.agent-tools/config.jsonc` to
-append `38.2 tok/s` to usage output in Claude Code, Codex, OpenCode, and Pi.
-See [output speed](docs/en/extras.md#output-speed) for timing and session selection.
 
 Shows API relay / gateway balance and quota inside the agent. Supports Sub2API,
 One API (including OneHub and DoneHub), New API, Claude Code Hub, OpenRouter, and
@@ -171,10 +166,13 @@ configuration; official (non-relay) endpoints are skipped. If it reports
     // done-hub | new-api | claude-code-hub | openrouter | commandcode | <custom-route-id>
     "preset": "auto", // auto-detect, or select one protocol listed above
     "days": 30,       // how many recent days of spend to count
+    "outputSpeed": false, // true: show estimated output speed (tok/s)
     "debug": false    // true: log probes to ~/.agent-tools/logs/usage-debug.log
   }
 }
 ```
+
+Speed includes wait time (and tool time in Codex) and is hidden until timing data is available.
 
 Keep `preset` set to `auto` for automatic detection. Select a specific protocol
 only when you know which usage endpoint the gateway exposes; a configured custom

@@ -127,15 +127,10 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 其中 `5h` / `w` 是 Claude 的滚动用量窗口, `⟳` 后面是重置倒计时;
 中转额度信息的兼容性与配置见下方 [Provider usage](#provider-usage).
 
-在 `statusline.fields` 中加入 `"outputSpeed"`, 即可显示 `38.2 tok/s`.
-速度根据会话记录的时间戳估算最近一次响应的每秒输出 token 数, 包含请求等待时间.
-缺少计时数据时隐藏.
+在 `~/.agent-tools/config.jsonc` 的 `statusline.fields` 中加入 `"outputSpeed"`,
+即可显示估算输出速度, 如 `38.2 tok/s`.
 
 ### Provider usage
-
-在 `~/.agent-tools/config.jsonc` 中设置 `providerUsage.outputSpeed: true`,
-即可在 Claude Code, Codex, OpenCode 和 Pi 的 usage 输出中追加 `38.2 tok/s`.
-计时口径与会话选择见[输出速度](docs/zh-CN/extras.md#输出速度).
 
 在 agent 内查看 API 中转网关的余额和额度. 支持 Sub2API, One API (包括 OneHub
 与 DoneHub), New API, Claude Code Hub, OpenRouter 和 Command Code. 具体兼容性
@@ -165,10 +160,13 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
     // done-hub | new-api | claude-code-hub | openrouter | commandcode | <自定义 route id>
     "preset": "auto", // 自动探测, 也可指定上面列出的协议
     "days": 30,       // 统计最近多少天的消耗
+    "outputSpeed": false, // true: 显示估算输出速度 (tok/s)
     "debug": false    // true: 探测过程写入 ~/.agent-tools/logs/usage-debug.log
   }
 }
 ```
+
+速度包含等待时间 (Codex 还包含工具耗时), 缺少计时数据时隐藏.
 
 保持 `preset: "auto"` 即可自动探测. 只有明确知道网关开放的是哪种用量协议时,
 才指定相应的内置 preset 或已配置的自定义 route id. Command Code 用量查询依赖

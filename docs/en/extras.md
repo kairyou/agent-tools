@@ -148,26 +148,3 @@ All in `~/.agent-tools/config.jsonc`:
   }
 }
 ```
-
-## Output speed
-
-Enable `statusline.fields: ["branch", "model", "outputSpeed"]` for Claude Code's
-status line, or `providerUsage.outputSpeed: true` for usage displays. Both show
-`38.2 tok/s` and hide speed when token or timing data is unavailable.
-
-- Claude Code — estimates the last response from transcript timestamps, including
-  request wait time. `/at-usage` selects the most recently updated transcript in
-  the current project directory. For an exact session, run the installed usage
-  CLI with `--agent claude --transcript <path>`.
-- Codex — averages output over the current or last completed turn, including
-  tool time. Hooks use their transcript path or session ID; the usage CLI uses
-  `CODEX_THREAD_ID`. An explicit `--transcript <path>` also works.
-- OpenCode — uses the last completed assistant message's output count and elapsed
-  time. Idle notifications use that session; `/at-usage` shows the last idle
-  session's display for the current project. Gateway probes remain throttled.
-- Pi — uses the last assistant response's output count and elapsed message time.
-  Session and model changes clear the speed.
-
-These are estimated averages including waits, not instantaneous decoding speeds.
-Local speed can be shown even when gateway quota is unavailable. Restart OpenCode
-or reload Pi after updating the installed capability.

@@ -6,7 +6,7 @@ agent-tools/
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, 一个一目录.
-│   ├── statusline/    # Agent 状态栏: 分支, 模型, 用量, 输出速度.
+│   ├── statusline/    # Claude Code 状态栏.
 │   ├── usage/         # Provider 余额/额度显示.
 │   ├── vision/        # 跨模型识图与各 Agent adapter.
 │   └── log/           # Session work log hooks 与 plugins.
