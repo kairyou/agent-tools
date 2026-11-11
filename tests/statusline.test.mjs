@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -104,12 +104,13 @@ test("Claude statusline hides empty rate limit placeholders for relay base URLs"
   assert.equal(result.stdout, "Sonnet 4.5");
 });
 
-test("Claude statusline appends relay usage snapshot", () => {
+test("Claude statusline keeps appending complete relay usage for existing fields", (t) => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-statusline-"));
   const agentHome = join(temp, "agent");
   const cacheDir = join(agentHome, "cache");
   const configFile = join(agentHome, "config.jsonc");
   mkdirSync(cacheDir, { recursive: true });
+  t.after(() => rmSync(temp, { recursive: true, force: true }));
   writeFileSync(configFile, JSON.stringify({
     statusline: {
       fields: ["model", "fiveHour", "week"],
@@ -145,6 +146,53 @@ test("Claude statusline appends relay usage snapshot", () => {
     result.stdout,
     "Sonnet 4.5 | balance $362 | today $61.7 | 30d $566"
   );
+});
+
+test("showProviderUsage hides only gateway usage and skips background refresh", (t) => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-usage-block-"));
+  t.after(() => rmSync(temp, { recursive: true, force: true }));
+  mkdirSync(join(temp, "cache"));
+  mkdirSync(join(temp, "dist", "usage"), { recursive: true });
+  writeFileSync(join(temp, "dist", "usage", "core.mjs"), "process.exit(0);\n");
+  const snapshot = join(temp, "cache", "usage-snapshot.json");
+  const render = (showProviderUsage) => {
+    writeFileSync(join(temp, "config.jsonc"), JSON.stringify({ statusline: { fields: ["model"], showProviderUsage, separator: " / " } }));
+    const result = spawnSync(process.execPath, [STATUSLINE_SCRIPT], {
+      input: JSON.stringify({ model: { id: "custom-model" } }), encoding: "utf8",
+      env: { ...process.env, AGENT_TOOLS_HOME: temp, PROVIDER_USAGE_BASE_URL: "https://relay.example.com/v1", PROVIDER_USAGE_API_KEY: "fixture-key", AGENT_TOOLS_USAGE_REFRESH: "1" },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "");
+    return result.stdout;
+  };
+  writeFileSync(snapshot, JSON.stringify({ items: { "https://relay.example.com": { text: "balance $1 | today $2" } } }));
+  assert.equal(render(false), "custom-model");
+  assert.equal(existsSync(join(temp, "cache", "usage-refresh-state.json")), false);
+  writeFileSync(snapshot, JSON.stringify({ items: { "https://relay.example.com": { text: "balance $1 | today $2", updatedAt: new Date().toISOString() } } }));
+  assert.equal(render(undefined), "custom-model / balance $1 | today $2");
+  assert.equal(render(true), "custom-model / balance $1 | today $2");
+  assert.equal(existsSync(join(temp, "cache", "usage-refresh-state.json")), false);
+});
+
+test("custom-model speed uses transcript independently of provider usage settings and cache", (t) => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-custom-speed-"));
+  t.after(() => rmSync(temp, { recursive: true, force: true }));
+  const transcript = join(temp, "session.jsonl");
+  writeFileSync(transcript, [
+    { type: "user", timestamp: "2026-11-10T00:00:00Z" },
+    { type: "assistant", timestamp: "2026-11-10T00:00:10Z", message: { id: "custom-response", usage: { output_tokens: 344 } } },
+  ].map(JSON.stringify).join("\n"));
+  mkdirSync(join(temp, "cache"));
+  writeFileSync(join(temp, "cache", "usage-snapshot.json"), JSON.stringify({ items: { "https://relay.example.com": { text: "today $0.2 | 7d $16.5" } } }));
+  for (const enabled of [false, true]) for (const showProviderUsage of [false, true]) {
+    writeFileSync(join(temp, "config.jsonc"), JSON.stringify({ statusline: { fields: ["model", "outputSpeed"], showProviderUsage }, providerUsage: { outputSpeed: enabled } }));
+    const result = spawnSync(process.execPath, [STATUSLINE_SCRIPT], {
+      input: JSON.stringify({ model: { id: "custom-model" }, transcript_path: transcript }), encoding: "utf8",
+      env: { ...process.env, AGENT_TOOLS_HOME: temp, ANTHROPIC_BASE_URL: "https://relay.example.com/v1", PROVIDER_USAGE_BASE_URL: "", AGENT_TOOLS_USAGE_REFRESH: "0" },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `custom-model | 34.4 tok/s${showProviderUsage ? " | today $0.2 | 7d $16.5" : ""}`);
+  }
 });
 
 test("outputSpeed estimates the latest response and deduplicates streaming usage", (t) => {

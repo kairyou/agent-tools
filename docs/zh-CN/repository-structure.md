@@ -13,7 +13,9 @@ agent-tools/
 ├── skills/            # 可复用的 Agent Skills.
 │   ├── workflow/      # 工作流类 skills.
 │   │   ├── at-commit/   # 生成 Conventional Commits message.
+│   │   ├── at-daily-log/ # 根据 Git 历史生成工作日报.
 │   │   ├── at-review/   # 审查本地或托管改动中的 bug 与回归风险.
+│   │   ├── at-self-eval/ # 根据 Git 历史和日志生成绩效自评.
 │   │   └── at-simplify/ # 减少改动中的冗余和复杂度.
 │   └── systems/       # 面向外部系统的自包含 Skills.
 │       └── at-zentao/   # 自包含的禅道研发事项与任务生命周期工作流.
@@ -22,4 +24,4 @@ agent-tools/
 └── scripts/           # 安装, 同步, 校验和仓库维护脚本.
 ```
 
-同步 Action 直接从官方 Claude Code npm 最新包提取内容. 请审查生成的草稿 PR. 失败时从该 run 下载 `claude-skill-sync-diagnostics`. 参见[维护流程](../../tools/claude-skill-sync/README.md).
+上游 skill 的维护参见[同步流程](../../tools/claude-skill-sync/README.md).

@@ -97,8 +97,7 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 ```
 
 `--dry-run` 预览, `--uninstall` 移除对应 capability, 重新执行安装命令即为更新.
-安装器只改动自己写入的配置项, 更新 `config.jsonc` 时只补充缺失的默认键,
-不会动你的修改和注释.
+更新 `config.jsonc` 时只补充缺失的默认值, 保留已有值和注释.
 
 | Runtime capability | 支持的 Agent |
 | --- | --- |
@@ -113,22 +112,22 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 npx -y @kairyou/agent-tools@latest statusline -a claude
 ```
 
-安装器会把 `statusLine` 写入 `~/.claude/settings.json`. 输出示例:
+安装器会把 `statusLine` 写入 `~/.claude/settings.json`. 显示效果:
 
 ```text
-# 显示项与顺序由 ~/.agent-tools/config.jsonc 的 statusline.fields 控制:
+# 官方订阅:
 ⎇ main | Opus 4.8 | 5h 7% ⟳ 2h54m | w 41% ⟳ 3d1h
 
-# 使用兼容的 API 中转时, 也会显示中转额度:
+# 中转 API:
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
-
 ```
 
-其中 `5h` / `w` 是 Claude 的滚动用量窗口, `⟳` 后面是重置倒计时;
-中转额度信息的兼容性与配置见下方 [Provider usage](#provider-usage).
+`5h` / `w`: Claude 的 5小时 / 7天滚动用量窗口; `⟳`: 重置倒计时.
 
-在 `~/.agent-tools/config.jsonc` 的 `statusline.fields` 中加入 `"outputSpeed"`,
-即可显示估算输出速度, 如 `38.2 tok/s`.
+在 `~/.agent-tools/config.jsonc` 的 `statusline.fields` 中设置显示项及顺序;
+加入 `"outputSpeed"` 可显示估算输出速度 (如 `38.2 tok/s`).
+
+中转网关用量的支持范围与配置见 [Provider usage](#provider-usage).
 
 ### Provider usage
 
@@ -140,15 +139,15 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 ```
 
-- **Claude Code** — 调用 `/at-usage` 在对话中查看当前用量.
+- **Claude Code** — `/at-usage` 在对话中查询; 安装 `statusline` 后也会自动追加到状态栏.
+  设置 `statusline.showProviderUsage: false` 可隐藏状态栏的中转网关用量.
 - **Codex** — 安装后运行 `/hooks` 批准一次. Codex CLI 会自动显示用量;
   不显示 hook 输出的客户端可调用 `$at-usage` 查询.
 - **OpenCode** — 空闲时自动刷新并以 toast 显示, 也可调用 `/at-usage` 查询.
   安装或更新后需要重启 opencode.
-- **Pi** — 在原生底栏显示当前中转的用量, 会话启动, 模型切换和每轮运行结束时触发刷新, 同一账号最多每分钟查询一次.
-  安装或更新后重启 Pi 或运行 `/reload`. 适配目标为 Pi 0.99.1.
+- **Pi** — 在底栏显示用量. 安装或更新后重启 Pi 或运行 `/reload`.
 
-默认会从 Codex 和 Claude Code 的现有配置中自动发现中转端点, 并跳过官方端点.
+自动从 Agent 当前模型或已有配置获取端点和密钥, 跳过官方端点.
 如果结果是 `Provider usage is unavailable.`, 可用
 `PROVIDER_USAGE_BASE_URL` / `PROVIDER_USAGE_API_KEY` 显式指定端点和密钥.
 需要调整探测方式时, 在 `~/.agent-tools/config.jsonc` 中配置 `providerUsage`:
@@ -168,30 +167,27 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 
 速度包含等待时间 (Codex 还包含工具耗时), 缺少计时数据时隐藏.
 
-保持 `preset: "auto"` 即可自动探测. 只有明确知道网关开放的是哪种用量协议时,
-才指定相应的内置 preset 或已配置的自定义 route id. Command Code 用量查询依赖
-未包含在公开 Provider API 中的接口, 可能随版本变化.
+Command Code 使用未公开的用量接口, 可能随版本变化.
 
 显示效果示例:
 
 ```text
-# 套餐限额 (sub2api / openai-compatible).
+# 套餐限额:
 D $0.0/$100 | W $0.0/$300 ⟳ 3d1h | Exp 07-08
 
-# 多窗口限额 (claude-code-hub).
+# 多窗口限额:
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
-# 余额与用量 (one-api / one-hub / done-hub / new-api / openrouter).
+# 余额与用量:
 balance $15.0 | used $5.0/$20.0 | ⟳ 3d1h
 
-# 钱包与近期消耗 (sub2api).
+# 钱包与近期消耗:
 balance $362 | today $61.7 | 30d $566
 ```
 
 字段含义: `5h/D/W/M/T` 是 5 小时/日/周/月/总消耗与上限, `⟳` 后面是已知限额的
 重置倒计时, `Exp` 是套餐到期日, `balance` 是钱包余额, `used` 是已用额度,
-`today` / `30d` 是今日与近 30 天 API 消耗. 只有网关返回的信息足以可靠确定
-重置时间时才会显示倒计时.
+`today` / `30d` 是今日与近 30 天 API 消耗. 重置倒计时需要网关提供计时数据.
 
 #### 自定义网关路由
 
@@ -209,11 +205,10 @@ npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
 ```
 
 卸载时默认保留 vision provider 配置.
-Pi 使用原生 extension; 其他 Agent 通过各自的 MCP 配置接入.
 
 #### 配置
 
-`~/.agent-tools/config.jsonc` 是唯一配置入口:
+在 `~/.agent-tools/config.jsonc` 中配置 `vision`:
 
 ```jsonc
 {
@@ -228,7 +223,7 @@ Pi 使用原生 extension; 其他 Agent 通过各自的 MCP 配置接入.
 }
 ```
 
-`apiKey` 可以直接填写密钥字符串, 例如 `"apiKey": "sk-..."`; 也可以使用 `{ "env": "OPENAI_API_KEY" }` 从环境变量读取. 网关不需要密钥时可以省略. 建议优先使用环境变量, 避免把密钥写入配置文件.
+`apiKey` 可填密钥字符串, 或按上例引用环境变量. 网关不需要密钥时可省略.
 
 #### 使用
 
@@ -249,12 +244,12 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背�
 
 ### 为什么安装 skills 时提示 PromptScript 不支持?
 
-`PromptScript does not support global skill installation` 表示 PromptScript Agent 不支持全局
-安装, 不影响其他 Agent, 可忽略. 参见 [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
+`PromptScript does not support global skill installation` 只针对 PromptScript,
+不影响其他 Agent 的安装. 参见 [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
 
 ### 无法访问 GitHub 时如何安装 skills?
 
-直接从 npm 包安装(`at-commit` 换成你要装的 skill):
+在 Bash 中从 npm 包安装 (`at-commit` 换成你要装的 skill):
 
 ```bash
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
@@ -270,6 +265,6 @@ cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx 
   [GitLens](https://github.com/gitkraken/vscode-gitlens) 的提交消息生成思路,
   并针对 Agent Skill 工作流重新实现.
 - `at-review` 和 `at-simplify` 基于 Claude Code 内置的 `code-review` 和
-  `simplify` 工作流提示词整理并适配为可安装的 Agent Skill. 自动同步直接读取官方 npm 包.
+  `simplify` 工作流提示词整理并适配为可安装的 Agent Skill.
 
 上游 skill 更新请审查自动生成的草稿 PR, 参见[同步流程](tools/claude-skill-sync/README.md).

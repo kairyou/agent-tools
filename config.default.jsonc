@@ -3,6 +3,7 @@
     // Shown in this order; available: branch, model, fiveHour, week, context, directory, outputSpeed
     // outputSpeed: estimated last-response output tok/s, including request wait time.
     "fields": ["branch", "model", "fiveHour", "week"],
+    "showProviderUsage": true, // false: hide the gateway usage block
     "separator": " | ",
     "symbols": {
       "branch": "⎇",

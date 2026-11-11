@@ -52,30 +52,23 @@ Recorded output example:
 <!-- daily-log:2026-08-03:end -->
 ```
 
-The `<!-- ... -->` comments are boundary markers: an update rewrites only what sits
-between them, and everything else in the file (such as your own notes) is left alone.
+Updates replace only the content between the `<!-- ... -->` markers, preserving your notes elsewhere.
 
-Paired with the `log` capability below, work that ships no code, such as troubleshooting, also reaches the report.
-Review the generated result before use.
+To record sessions without Git commits, use `log` below.
 
 ## log
 
 Record each day's AI sessions across projects into a work log; runs automatically
 once installed.
 
-Independent of and complementary to `at-daily-log` above; use them together or alone.
-
 ```bash
 npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi
 ```
 
 - `format: "detailed"` (default): one detailed report per day with each turn's request and outcome, the files changed, and estimated lines added and removed
-- `format: "daily"`: writes to a single Markdown file grouped by date; each completed answer with substantive results is recorded as one line, while pending prompts are omitted; content may be truncated by the length limit, so use it only as a lightweight activity index
+- `format: "daily"`: one file grouped by date; each completed answer with substantive results contributes one line of closing reply text, truncated when long
 - Codex: run `/hooks` once after installing to approve it; opencode: restart after installing or updating
-- Pi 0.99.1: restart or run `/reload` after installing or updating. Accepted user
-  messages and successful file changes and commands are recorded automatically.
-  Outcomes are saved when the response settles; aborted responses are not saved
-  as completed outcomes.
+- Pi: restart or run `/reload` after installing or updating
 
 `detailed` output example (excerpt):
 
@@ -114,9 +107,7 @@ Changes
 <!-- log:2026-08-03:end -->
 ```
 
-One line per turn, taken verbatim from the closing text of that turn's AI reply
-(truncated when long); no distilling, no cross-turn consolidation. Updates likewise
-rewrite only what sits between the markers.
+Reply text is copied verbatim, without summarizing across turns. Updates replace only content between the markers.
 
 ## Configuration
 

@@ -98,9 +98,8 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 ```
 
 `--dry-run` previews, `--uninstall` removes the capability from the agent, and
-re-running the install command updates. The installer only touches config
-entries it wrote itself, and `config.jsonc` updates only add missing default
-keys without touching your edits or comments.
+re-running the install command updates. Updates to `config.jsonc` add missing
+defaults while preserving your values and comments.
 
 | Runtime capability | Supported agents |
 | --- | --- |
@@ -118,20 +117,19 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
 
 ```text
-# Pick and order the fields via statusline.fields in ~/.agent-tools/config.jsonc:
+# Claude subscription:
 ⎇ main | Opus 4.8 | 5h 7% ⟳ 2h54m | w 41% ⟳ 3d1h
 
-# With a compatible API relay, quota info is shown too:
+# API relay:
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
-
 ```
 
-Here `5h` and `w` are Claude's rolling usage windows and `⟳` is the reset
-countdown; see [Provider usage](#provider-usage) below for relay quota
-compatibility and configuration.
+`5h` / `w`: Claude's rolling 5-hour / 7-day usage windows; `⟳`: time until reset.
 
-Add `"outputSpeed"` to `statusline.fields` in `~/.agent-tools/config.jsonc`
-to show estimated output speed, e.g. `38.2 tok/s`.
+Set visible fields and order via `statusline.fields` in `~/.agent-tools/config.jsonc`;
+add `"outputSpeed"` for estimated output speed (e.g. `38.2 tok/s`).
+
+For supported relay gateways and usage configuration, see [Provider usage](#provider-usage).
 
 ### Provider usage
 
@@ -144,17 +142,16 @@ endpoints.
 npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 ```
 
-- **Claude Code** — invoke `/at-usage` to show the current usage.
+- **Claude Code** — `/at-usage` shows usage in chat; installing `statusline` also adds it to the status line.
+  Set `statusline.showProviderUsage` to `false` to hide relay gateway usage from the status line.
 - **Codex** — run `/hooks` once after installation to approve it. The Codex CLI
   displays usage automatically; clients that hide hook output can use `$at-usage`.
 - **OpenCode** — usage refreshes when the session goes idle and appears as a
   toast; `/at-usage` shows it on demand. Restart opencode after installing or updating.
-- **Pi** — displays usage in the native footer. Session startup, model changes and
-  completed runs trigger refreshes, at most once a minute per account. Restart Pi
-  or run `/reload` after installing or updating. Targets Pi 0.99.1.
+- **Pi** — displays usage in the footer. Restart Pi or run `/reload` after installing or updating.
 
-The relay endpoint is auto-discovered from the existing Codex and Claude Code
-configuration; official (non-relay) endpoints are skipped. If it reports
+The endpoint and key come from the agent's current model or existing configuration;
+official endpoints are skipped. If it reports
 `Provider usage is unavailable.`, set `PROVIDER_USAGE_BASE_URL` and
 `PROVIDER_USAGE_API_KEY` to override the endpoint and key. Configure
 `providerUsage` in `~/.agent-tools/config.jsonc` only when needed:
@@ -174,32 +171,28 @@ configuration; official (non-relay) endpoints are skipped. If it reports
 
 Speed includes wait time (and tool time in Codex) and is hidden until timing data is available.
 
-Keep `preset` set to `auto` for automatic detection. Select a specific protocol
-only when you know which usage endpoint the gateway exposes; a configured custom
-route id is also accepted. Command Code usage relies on a version-sensitive
-endpoint that is not part of its documented Provider API.
+Command Code uses an undocumented usage endpoint that may change between versions.
 
 Output examples:
 
 ```text
-# Plan limits (sub2api / openai-compatible).
+# Plan limits:
 D $0.0/$100 | W $0.0/$300 ⟳ 3d1h | Exp 07-08
 
-# Multi-window limits (claude-code-hub).
+# Multi-window limits:
 5h $2.1/$10.0 | D $8.0/$20.0 | T $19.0/$100 | Exp 08-31
 
-# Balance and usage (one-api / one-hub / done-hub / new-api / openrouter).
+# Balance and usage:
 balance $15.0 | used $5.0/$20.0 | ⟳ 3d1h
 
-# Wallet and recent spend (sub2api).
+# Wallet and recent spend:
 balance $362 | today $61.7 | 30d $566
 ```
 
 Fields: `5h/D/W/M/T` are five-hour/daily/weekly/monthly/total spend against
 limits; `⟳` is the time until a known limit reset; `Exp` is the plan expiry;
 `balance` is wallet credit; `used` is consumed credit; `today` and `30d` are
-today's and the last 30 days' API spend. A reset countdown is shown only when
-the gateway returns enough timing information to determine it reliably.
+today's and the last 30 days' API spend. Reset countdowns require gateway timing data.
 
 #### Custom gateway routes
 
@@ -217,12 +210,10 @@ npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
 ```
 
 Uninstalling keeps your vision provider config by default.
-Pi uses a native extension; the other agents use their MCP configuration
-surfaces.
 
 #### Configure
 
-`~/.agent-tools/config.jsonc` is the only config entry point:
+Configure `vision` in `~/.agent-tools/config.jsonc`:
 
 ```jsonc
 {
@@ -237,7 +228,7 @@ surfaces.
 }
 ```
 
-`apiKey` can be a key string such as `"apiKey": "sk-..."`, or an environment variable reference such as `{ "env": "OPENAI_API_KEY" }`. Omit it if your gateway requires no key. Prefer an environment variable to avoid storing the key in the config file.
+`apiKey` accepts a key string or an environment variable reference as above. Omit it for gateways that require no key.
 
 #### Use
 
@@ -258,13 +249,12 @@ See [extras](docs/en/extras.md) for optional tools outside the day-to-day develo
 
 ### Why does installing skills report PromptScript as unsupported?
 
-`PromptScript does not support global skill installation` means that the
-PromptScript agent does not support global installation. It does not affect
-other agents and can be ignored. See [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
+`PromptScript does not support global skill installation` applies only to
+PromptScript; installation for other agents is unaffected. See [`skills` issue #1352](https://github.com/vercel-labs/skills/issues/1352).
 
 ### How do I install skills without GitHub access?
 
-Install from the npm package instead (swap `at-commit` for the skills you want):
+In Bash, install from the npm package (swap `at-commit` for the skills you want):
 
 ```bash
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
@@ -283,6 +273,5 @@ See the [repository structure](docs/en/repository-structure.md).
 - `at-review` and `at-simplify` are installable Agent Skills derived and
   adapted from Claude Code's built-in `code-review` and `simplify` workflow
   prompts.
-  Automated upstream tracking reads the official Claude Code npm package directly.
 
 For upstream skill updates, review the generated draft PR; see the [sync workflow](tools/claude-skill-sync/README.md).

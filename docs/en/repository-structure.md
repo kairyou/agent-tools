@@ -13,7 +13,9 @@ agent-tools/
 ├── skills/            # Reusable Agent Skills.
 │   ├── workflow/      # Workflow-oriented skills.
 │   │   ├── at-commit/   # Conventional Commit message skill.
+│   │   ├── at-daily-log/ # Daily work reports from Git history.
 │   │   ├── at-review/   # Review local or hosted changes for bugs and regressions.
+│   │   ├── at-self-eval/ # Performance self-evaluations from Git history and logs.
 │   │   └── at-simplify/ # Reduce complexity and duplication in changes.
 │   └── systems/       # Self-contained Skills for external systems.
 │       └── at-zentao/   # Self-contained ZenTao development and task-lifecycle workflow.
@@ -22,4 +24,4 @@ agent-tools/
 └── scripts/           # Install, sync, validation, and maintenance scripts.
 ```
 
-The sync Action reads npm latest directly from the official Claude Code package. Review its draft PR. On failure, download `claude-skill-sync-diagnostics` from the run. See the [maintainer workflow](../../tools/claude-skill-sync/README.md).
+For upstream skill maintenance, see the [sync workflow](../../tools/claude-skill-sync/README.md).

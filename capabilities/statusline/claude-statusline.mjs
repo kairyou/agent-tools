@@ -31,6 +31,7 @@ const DEFAULT_FAILURE_BACKOFF_MS = 120_000;
 
 const DEFAULT_CONFIG = {
   fields: ["branch", "model", "fiveHour", "week"],
+  showProviderUsage: true,
   separator: " | ",
   symbols: {
     branch: "⎇",
@@ -355,7 +356,7 @@ function render(data, config) {
   const fields = config.fields
     .map((field) => renderField(field, data, config))
     .filter(Boolean);
-  const providerUsage = providerUsageStatus();
+  const providerUsage = config.showProviderUsage !== false ? providerUsageStatus() : "";
   if (providerUsage) fields.push(providerUsage);
   return fields.join(config.separator);
 }
