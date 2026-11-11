@@ -83,18 +83,28 @@ export function createPiUsageExtension({ query = queryProviderUsage, now = Date.
     });
     pi.on("agent_end", (_event, ctx) => { void refresh(ctx); });
     pi.on("message_start", (event) => {
-      if (event.message?.role === "assistant") responseStart = { time: now(), generation };
+      if (event.message?.role === "assistant") responseStart = { generation };
+    });
+    pi.on("message_update", (event) => {
+      const delta = event.assistantMessageEvent;
+      if (!responseStart || responseStart.generation !== generation || event.message?.role !== "assistant" ||
+          !["text_delta", "thinking_delta", "toolcall_delta"].includes(delta?.type) ||
+          typeof delta.delta !== "string" || !delta.delta) return;
+      // Count actual generation, including thinking and tool arguments, rather
+      // than the wait before the first delta or final message bookkeeping.
+      const time = now();
+      responseStart.time ??= time;
+      responseStart.end = time;
     });
     pi.on("message_end", async (event, ctx) => {
       if (event.message?.role !== "assistant") return;
       const started = responseStart;
       responseStart = undefined;
-      const finished = now();
       if (!started || started.generation !== generation || ctx.mode !== "tui") return;
       const enabled = (await config()).outputSpeed === true;
       if (started.generation !== generation) return;
       speed = enabled && !["aborted", "error"].includes(event.message.stopReason)
-        ? formatOutputSpeed(event.message.usage?.output, finished - started.time) : "";
+        ? formatOutputSpeed(event.message.usage?.output, started.end - started.time) : "";
       ctx.ui.setStatus(STATUS_KEY, withOutputSpeed(quota, speed) || undefined);
     });
     pi.on("session_shutdown", (_event, ctx) => {

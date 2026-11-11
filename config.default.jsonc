@@ -1,7 +1,7 @@
 {
   "statusline": {
     // Shown in this order; available: branch, model, fiveHour, week, context, directory, outputSpeed
-    // outputSpeed: estimated last-response output tok/s, including request wait time.
+    // outputSpeed: estimated output speed (tok/s).
     "fields": ["branch", "model", "fiveHour", "week"],
     "showProviderUsage": true, // false: hide the gateway usage block
     "separator": " | ",
@@ -15,7 +15,7 @@
     }
   },
   "providerUsage": {
-    "outputSpeed": false, // true: append estimated output tok/s from local session data
+    "outputSpeed": false, // true: show estimated output speed (tok/s)
     "days": 30,     // recent days of spend to count
     "debug": false  // true: log probes to ~/.agent-tools/logs/usage-debug.log
   },

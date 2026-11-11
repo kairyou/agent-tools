@@ -36,15 +36,66 @@ const event = (seconds, type, fields = {}) => ({
 const count = (seconds, total, last) => event(seconds, "token_count", {
   info: { total_token_usage: { output_tokens: total }, last_token_usage: { output_tokens: last } },
 });
+const item = (seconds, type, fields = {}) => ({
+  type: "response_item", timestamp: new Date(seconds * 1000).toISOString(), payload: { type, ...fields },
+});
+const usage = (seconds, tokens, responseId = "response") => ({
+  type: "token_usage_record", timestamp: new Date(seconds * 1000).toISOString(),
+  payload: { response_id: responseId, usage: { output_tokens: tokens } },
+});
+const answer = (seconds) => item(seconds, "message", { role: "assistant" });
 
-test("Codex turn speed deduplicates token events and ignores previous-turn totals", (t) => {
+test("Codex measures the latest API response, excluding tools and turn finalization", (t) => {
   const f = fixture(t);
-  f.write([count(0, 1000, 1000), event(10, "task_started"), count(12, 1020, 20), count(12, 1020, 20), count(14, 1040, 20), event(15, "task_complete")]);
-  assert.equal(codexOutputSpeed(f.transcript), "8.0 tok/s");
-  assert.equal(f.run(cli, ["--agent", "codex", "--transcript", f.transcript]), "8.0 tok/s");
-  f.write([event(10, "task_started"), count(12, 1020, 20)]);
+  const entries = [
+    count(0, 1000, 1000), event(10, "task_started"),
+    item(12, "reasoning"), item(14, "custom_tool_call", { call_id: "tool" }), usage(14, 40, "first"),
+    item(74, "custom_tool_call_output", { call_id: "tool" }), count(74, 1040, 40),
+    answer(78), usage(79, 100, "last"), count(80, 1140, 100), count(90, 1140, 100),
+    event(150, "task_complete"),
+  ];
+  f.write(entries);
+  assert.equal(codexOutputSpeed(f.transcript), "20.0 tok/s");
+  assert.equal(f.run(cli, ["--agent", "codex", "--transcript", f.transcript]), "20.0 tok/s");
+  f.write([...entries, usage(160, 100, "last")]);
+  assert.equal(codexOutputSpeed(f.transcript), "20.0 tok/s");
+  f.write(entries.slice(0, 5));
   assert.equal(codexOutputSpeed(f.transcript), "10.0 tok/s");
-  f.write([count(12, 1020, 20)]);
+});
+
+test("Codex token counts use response-item boundaries even after parallel tools", (t) => {
+  const f = fixture(t);
+  f.write([
+    count(0, 1000, 1000), event(10, "task_started"),
+    item(12, "function_call", { call_id: "a" }), item(14, "function_call", { call_id: "b" }),
+    item(44, "function_call_output", { call_id: "a" }), count(44, 1040, 40),
+    item(74, "function_call_output", { call_id: "b" }), count(74, 1040, 40),
+    answer(79), count(80, 1140, 100), event(120, "task_complete"),
+  ]);
+  assert.equal(codexOutputSpeed(f.transcript), "20.0 tok/s");
+  f.write([event(10, "task_started"), answer(12), count(15, 1020, 20)]);
+  assert.equal(codexOutputSpeed(f.transcript), "10.0 tok/s");
+  f.write([count(0, 1000, 1000), event(10, "task_started"), answer(12), count(15, 1020)]);
+  assert.equal(codexOutputSpeed(f.transcript), "10.0 tok/s");
+});
+
+test("Codex does not estimate missing, aborted, or mismatched response timing", (t) => {
+  const f = fixture(t);
+  for (const entries of [
+    [count(12, 1020, 20)],
+    [event(10, "task_started"), count(12, 1020, 20)],
+    [answer(12), usage(12, 20)],
+    [event(12, "task_started"), answer(12), usage(12, 20)],
+    [event(13, "task_started"), answer(12), usage(12, 20)],
+    [event(10, "task_started"), answer(12), usage(12, -1)],
+    [event(10, "task_started"), answer(12), count(13, 1020, -1)],
+    [event(10, "task_started"), answer(12), usage(12, 20), event(15, "turn_aborted")],
+    [event(10, "task_started", { turn_id: "current" }), answer(12), { ...usage(12, 20), payload: { turn_id: "other", usage: { output_tokens: 20 } } }],
+  ]) {
+    f.write(entries);
+    assert.equal(codexOutputSpeed(f.transcript), "", JSON.stringify(entries));
+  }
+  f.write([event(10, "task_started"), "x".repeat(1024 * 1024), answer(12), usage(12, 20)]);
   assert.equal(codexOutputSpeed(f.transcript), "");
   for (const tokens of [null, undefined, -1, "20", Infinity]) assert.equal(formatOutputSpeed(tokens, 1000), "");
   for (const time of [null, undefined, 0, -1, Infinity]) assert.equal(formatOutputSpeed(20, time), "");
@@ -72,7 +123,7 @@ test("Claude usage CLI shares statusline speed and honors the usage opt-in", (t)
 
 test("Codex wrapper forwards hook session context and CLI selects its thread", (t) => {
   const f = fixture(t);
-  f.write([event(0, "task_started"), count(2, 20, 20), event(2, "task_complete")]);
+  f.write([event(0, "task_started"), answer(2), count(2, 20, 20), event(2, "task_complete")]);
   // Prevent unrelated background refreshes: this test only checks local display.
   mkdirSync(join(f.dir, "cache"));
   writeFileSync(join(f.dir, "cache", "usage-refresh-state.json"), JSON.stringify({ items: {
@@ -83,7 +134,7 @@ test("Codex wrapper forwards hook session context and CLI selects its thread", (
   assert.equal(JSON.parse(f.run(hook, ["--silent"], payload)).systemMessage, undefined);
   const sessions = join(f.dir, "sessions", "2026", "11", "10");
   mkdirSync(sessions, { recursive: true });
-  writeFileSync(join(sessions, "rollout-test-thread-a.jsonl"), [event(0, "task_started"), count(2, 20, 20), event(2, "task_complete")].map(JSON.stringify).join("\n"));
+  writeFileSync(join(sessions, "rollout-test-thread-a.jsonl"), [event(0, "task_started"), answer(2), count(2, 20, 20), event(2, "task_complete")].map(JSON.stringify).join("\n"));
   f.env.CODEX_THREAD_ID = "thread-a";
   assert.equal(f.run(cli, ["--agent", "codex"]), "10.0 tok/s");
   f.env.CODEX_THREAD_ID = "thread-b";

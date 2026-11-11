@@ -233,6 +233,11 @@ test("outputSpeed estimates the latest response and deduplicates streaming usage
   // Idle repaints and partial JSONL writes do not change the last response's speed.
   assert.equal(render([...entries, user(200), '{"type":']), "Opus 4.8 | 38.2 tok/s | ctx 42%");
   assert.equal(render([...entries, user(200), assistant("next", 202, 20)]), "Opus 4.8 | 10.0 tok/s | ctx 42%");
+  assert.equal(render([
+    user(0), assistant("tool-call", 5, 50),
+    { ...user(65), message: { role: "user", content: [{ type: "tool_result", tool_use_id: "tool", content: "done" }] } },
+    assistant("after-tool", 75, 100),
+  ]), "Opus 4.8 | 10.0 tok/s | ctx 42%");
   assert.equal(render([user(0), assistant("zero", 2, 0)]), "Opus 4.8 | 0.0 tok/s | ctx 42%");
   const hidden = "Opus 4.8 | ctx 42%";
   assert.equal(render(entries, { transcript_path: join(temp, "missing") }), hidden);

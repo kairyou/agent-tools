@@ -7,7 +7,7 @@ agent-tools/
 ├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, 一个一目录.
 │   ├── statusline/    # Claude Code 状态栏.
-│   ├── usage/         # Provider 余额/额度显示.
+│   ├── usage/         # Provider 余额/额度和本地输出速度.
 │   ├── vision/        # 跨模型识图与各 Agent adapter.
 │   └── log/           # Session work log hooks 与 plugins.
 ├── skills/            # 可复用的 Agent Skills.

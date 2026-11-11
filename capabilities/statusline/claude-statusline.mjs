@@ -214,7 +214,7 @@ function renderField(field, data, config) {
     case "directory":
       return dir ? basename(dir) : "";
     case "outputSpeed":
-      return claudeOutputSpeed(data);
+      return claudeOutputSpeed(data, { cacheDir: join(AGENT_TOOLS_HOME, "cache", "claude-output-speed") });
     default:
       return "";
   }

@@ -183,7 +183,7 @@ test("Pi usage honors explicit endpoint and credential overrides", async () => {
 });
 
 
-test("Pi output speed updates with cached quota and clears on model/session changes", async () => {
+test("Pi output speed excludes initial wait, tools and finalization while retaining cached quota", async () => {
   let time = 0;
   let calls = 0;
   const h = harness({ now: () => time, config: async () => ({ outputSpeed: true }), query: async () => {
@@ -192,7 +192,15 @@ test("Pi output speed updates with cached quota and clears on model/session chan
   } });
   await h.emit("session_start");
   await h.emit("message_start", { message: { role: "assistant" } });
-  time = 10_000;
+  const delta = async (at, type = "text_delta", text = "output") => {
+    time = at;
+    await h.emit("message_update", { message: { role: "assistant" }, assistantMessageEvent: { type, delta: text } });
+  };
+  await delta(1000, "text_start");
+  await delta(1500, "text_delta", "");
+  await delta(2000, "thinking_delta");
+  await delta(12000);
+  time = 20000;
   await h.emit("message_end", { message: { role: "assistant", usage: { output: 382 }, stopReason: "stop" } });
   assert.equal(h.statuses.at(-1).text, "balance $10 | 38.2 tok/s");
   await h.emit("agent_end");
@@ -201,13 +209,49 @@ test("Pi output speed updates with cached quota and clears on model/session chan
   await h.emit("model_select", { model: { provider: "openai", baseUrl: "https://api.openai.com/v1" } });
   assert.equal(h.statuses.at(-1).text, undefined);
   await h.emit("message_start", { message: { role: "assistant" } });
-  time = 12_000;
+  await delta(21000, "toolcall_delta");
+  await delta(23000, "toolcall_delta");
+  time = 29000;
   await h.emit("message_end", { message: { role: "assistant", usage: { output: 20 }, stopReason: "stop" } });
   assert.equal(h.statuses.at(-1).text, "10.0 tok/s");
   await h.emit("message_start", { message: { role: "assistant" } });
-  time = 14_000;
+  await delta(30000);
+  await delta(31000);
+  time = 32000;
   await h.emit("message_end", { message: { role: "assistant", usage: { output: 100 }, stopReason: "aborted" } });
   assert.equal(h.statuses.at(-1).text, undefined);
   await h.emit("session_shutdown");
+  assert.equal(h.statuses.at(-1).text, undefined);
+});
+
+test("Pi hides speed without usable streaming timing and discards replaced responses", async () => {
+  let time = 0;
+  const h = harness({ now: () => time, config: async () => ({ outputSpeed: true }) });
+  h.ctx.model = { provider: "openai", baseUrl: "https://api.openai.com/v1" };
+  await h.emit("session_start");
+  const update = (type = "text_delta", delta = "output") => h.emit("message_update", {
+    message: { role: "assistant" }, assistantMessageEvent: { type, delta },
+  });
+  const end = () => h.emit("message_end", { message: { role: "assistant", usage: { output: 100 }, stopReason: "stop" } });
+  for (const updates of [[], ["text_delta"], ["text_delta", "text_delta"], ["text_start", "text_end"]]) {
+    await h.emit("message_start", { message: { role: "assistant" } });
+    for (const type of updates) await update(type);
+    time += 1000;
+    await end();
+    assert.equal(h.statuses.at(-1).text, undefined);
+  }
+  await h.emit("message_start", { message: { role: "assistant" } });
+  await update();
+  time += 1000;
+  await h.emit("model_select", { model: h.ctx.model });
+  await update();
+  await end();
+  assert.equal(h.statuses.at(-1).text, undefined);
+  await h.emit("message_start", { message: { role: "assistant" } });
+  await update();
+  time += 1000;
+  await update();
+  await h.emit("session_shutdown");
+  await end();
   assert.equal(h.statuses.at(-1).text, undefined);
 });

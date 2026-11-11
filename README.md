@@ -169,10 +169,6 @@ official endpoints are skipped. If it reports
 }
 ```
 
-Speed includes wait time (and tool time in Codex) and is hidden until timing data is available.
-
-Command Code uses an undocumented usage endpoint that may change between versions.
-
 Output examples:
 
 ```text

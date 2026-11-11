@@ -44,6 +44,7 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
   const refreshMs = refreshInterval(options);
   const speedEnabled = (await agentConfig()).outputSpeed === true;
   const speeds = new Map();
+  const responses = new Map();
   const quotas = new Map();
 
   async function showUsage(text) {
@@ -95,20 +96,46 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
       const previous = contexts.get(input.sessionID);
       if (previous && (previous.modelID !== context.modelID || previous.baseUrl !== context.baseUrl || previous.key !== context.key)) {
         speeds.delete(input.sessionID);
+        responses.delete(input.sessionID);
       }
       contexts.set(input.sessionID, context);
     },
     event: async ({ event }) => {
       if (event.type === "message.updated" && speedEnabled) {
         const info = event.properties.info;
-        if (info?.role === "assistant" && info.time?.completed !== undefined) {
-          speeds.set(info.sessionID, info.error ? "" : formatOutputSpeed(info.tokens?.output, info.time.completed - info.time.created));
+        if (info?.role !== "assistant" || !info.id) return;
+        let response = responses.get(info.sessionID);
+        if (response?.id !== info.id) {
+          response = { id: info.id };
+          responses.set(info.sessionID, response);
+        }
+        if (info.time?.completed !== undefined) {
+          // Reasoning has its own token counter, but shares the output stream.
+          const output = info.tokens?.output;
+          const reasoning = info.tokens?.reasoning ?? 0;
+          const tokens = Number.isFinite(output) && output >= 0 && Number.isFinite(reasoning) && reasoning >= 0
+            ? output + reasoning : NaN;
+          speeds.set(info.sessionID, info.error || response.hasTools ? "" :
+            formatOutputSpeed(tokens, response.end - response.start));
+        }
+      } else if (speedEnabled && event.type === "message.part.updated") {
+        const part = event.properties.part;
+        const response = responses.get(part?.sessionID);
+        if (response && response.id === part?.messageID && part?.type === "tool") response.hasTools = true;
+      } else if (speedEnabled && event.type === "message.part.delta") {
+        const delta = event.properties;
+        const response = responses.get(delta.sessionID);
+        if (response && response.id === delta.messageID && delta.field === "text" && typeof delta.delta === "string" && delta.delta) {
+          const time = Date.now();
+          response.start ??= time;
+          response.end = time;
         }
       } else if (event.type === "session.idle") {
         void refreshSession(event.properties.sessionID);
       } else if (event.type === "session.deleted") {
         contexts.delete(event.properties.sessionID);
         speeds.delete(event.properties.sessionID);
+        responses.delete(event.properties.sessionID);
       }
     },
   };

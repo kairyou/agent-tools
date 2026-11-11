@@ -7,7 +7,7 @@ agent-tools/
 ├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, one directory each.
 │   ├── statusline/    # Claude Code status line.
-│   ├── usage/         # Provider balance / quota display.
+│   ├── usage/         # Provider balance / quota and local output speed.
 │   ├── vision/        # Cross-model image understanding and host adapters.
 │   └── log/           # Session work-log hooks and plugins.
 ├── skills/            # Reusable Agent Skills.

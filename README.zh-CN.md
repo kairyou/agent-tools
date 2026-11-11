@@ -165,10 +165,6 @@ npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
 }
 ```
 
-速度包含等待时间 (Codex 还包含工具耗时), 缺少计时数据时隐藏.
-
-Command Code 使用未公开的用量接口, 可能随版本变化.
-
 显示效果示例:
 
 ```text

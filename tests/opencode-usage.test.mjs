@@ -27,7 +27,7 @@ function withServer(handler, run) {
   });
 }
 
-test("opencode usage plugins query the resolved provider and expose the shared snapshot", async () => {
+test("opencode usage plugins time streaming output independently of provider quota", async (t) => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-opencode-usage-"));
   const previousHome = process.env.AGENT_TOOLS_HOME;
   const previousPreset = process.env.PROVIDER_USAGE_PRESET;
@@ -46,6 +46,8 @@ test("opencode usage plugins query the resolved provider and expose the shared s
       res.end("{}");
     }, async (baseUrl) => {
       const { AgentToolsUsage } = await import(`${pathToFileURL(SERVER_PLUGIN).href}?test=${Date.now()}`);
+      let time = 0;
+      t.mock.method(Date, "now", () => time);
       let resolveToast;
       const toasts = [];
       const toast = new Promise((resolve) => {
@@ -71,6 +73,13 @@ test("opencode usage plugins query the resolved provider and expose the shared s
         } finally { clearTimeout(timeout); }
         assert.equal(toasts.length, count + 1);
       }
+      const start = (sessionID, id) => hooks.event({ event: { type: "message.updated", properties: { info: {
+        id, sessionID, role: "assistant", time: { created: 0 },
+      } } } });
+      const chunk = (at, sessionID, messageID, delta = "output", field = "text") => {
+        time = at;
+        return hooks.event({ event: { type: "message.part.delta", properties: { sessionID, messageID, delta, field } } });
+      };
 
       await hooks["chat.params"]({
         sessionID: "session-1",
@@ -80,9 +89,16 @@ test("opencode usage plugins query the resolved provider and expose the shared s
           options: { baseURL: `${baseUrl}/v1`, apiKey: "test-secret" },
         },
       });
+      await start("session-1", "answer");
+      await chunk(0, "other-session", "answer");
+      await chunk(100, "session-1", "answer", "ignored", "metadata");
+      await chunk(200, "session-1", "answer", "");
+      await chunk(1000, "session-1", "answer");
+      await chunk(11000, "session-1", "answer");
+      time = 60000;
       await hooks.event({ event: { type: "message.updated", properties: { info: {
         id: "answer", sessionID: "session-1", role: "assistant",
-        time: { created: 1000, completed: 11000 }, tokens: { output: 382 },
+        time: { created: 0, completed: 60000 }, tokens: { output: 382 },
       } } } });
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "session-1" } } });
 
@@ -116,12 +132,47 @@ test("opencode usage plugins query the resolved provider and expose the shared s
       layer.commands[0].run();
       assert.equal(tuiToast.message, "balance $27.5");
       // Speed also works without gateway context and is removed with the session.
+      await start("local", "local-answer");
+      await chunk(61000, "local", "local-answer");
+      await chunk(63000, "local", "local-answer");
       await hooks.event({ event: { type: "message.updated", properties: { info: {
-        sessionID: "local", role: "assistant", time: { created: 0, completed: 2000 }, tokens: { output: 20 },
+        id: "local-answer", sessionID: "local", role: "assistant",
+        time: { created: 0, completed: 65000 }, tokens: { output: 10, reasoning: 10 },
       } } } });
       await idle("local");
       layer.commands[0].run();
       assert.equal(tuiToast.message, "10.0 tok/s");
+      // Repeated final metadata does not lose the observed timing.
+      await hooks.event({ event: { type: "message.updated", properties: { info: {
+        id: "local-answer", sessionID: "local", role: "assistant",
+        time: { completed: 90000 }, tokens: { output: 10, reasoning: 10 },
+      } } } });
+      await idle("local");
+      layer.commands[0].run();
+      assert.equal(tuiToast.message, "10.0 tok/s");
+      for (const sample of [
+        { id: "missing", chunks: [] },
+        { id: "single", chunks: [1000] },
+        { id: "same-time", chunks: [1000, 1000] },
+        { id: "tool", chunks: [1000, 11000], tool: true },
+        { id: "error", chunks: [1000, 11000], error: { name: "MessageAbortedError" } },
+      ]) {
+        await start("session-1", sample.id);
+        for (const at of sample.chunks) await chunk(at, "session-1", sample.id);
+        if (sample.tool) await hooks.event({ event: { type: "message.part.updated", properties: { part: {
+          id: "tool-part", sessionID: "session-1", messageID: sample.id, type: "tool", state: { status: "completed" },
+        } } } });
+        await hooks.event({ event: { type: "message.updated", properties: { info: {
+          id: sample.id, sessionID: "session-1", role: "assistant", error: sample.error,
+          time: { created: 0, completed: 90000 }, tokens: { output: 382 },
+        } } } });
+        await idle("session-1");
+        assert.equal(toasts.at(-1).message, "balance $27.5", sample.id);
+      }
+      await hooks.event({ event: { type: "session.deleted", properties: { sessionID: "local" } } });
+      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "local" } } });
+      layer.commands[0].run();
+      assert.equal(tuiToast.variant, "warning");
     });
   } finally {
     if (previousHome === undefined) delete process.env.AGENT_TOOLS_HOME;
