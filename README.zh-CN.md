@@ -232,9 +232,11 @@ npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背景色和高度是多少"
 ```
 
-## Extras
+## 更多工具与文档
 
-[extras](docs/zh-CN/extras.md) 介绍日常开发主流程之外的可选工具.
+- [工作辅助工具](docs/zh-CN/extras.md) — 工作日报, 会话日志, 绩效自评.
+- [输出速度统计](docs/zh-CN/output-speed.md)
+- [仓库结构](docs/zh-CN/repository-structure.md)
 
 ## FAQ
 
@@ -251,10 +253,6 @@ npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背�
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
 ```
 
-### 想参与开发?
-
-参见[仓库结构](docs/zh-CN/repository-structure.md).
-
 ## 参考与致谢
 
 - `at-commit` 借鉴了 [OpenCommit](https://github.com/di-sukharev/opencommit) 和
@@ -262,5 +260,4 @@ cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx 
   并针对 Agent Skill 工作流重新实现.
 - `at-review` 和 `at-simplify` 基于 Claude Code 内置的 `code-review` 和
   `simplify` 工作流提示词整理并适配为可安装的 Agent Skill.
-
-上游 skill 更新请审查自动生成的草稿 PR, 参见[同步流程](tools/claude-skill-sync/README.md).
+  上游提示词的同步方式见[同步流程](tools/claude-skill-sync/README.md).

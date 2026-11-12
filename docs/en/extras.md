@@ -1,6 +1,4 @@
-# Extras
-
-This page lists optional tools outside the day-to-day development workflow.
+# Work utilities
 
 ## at-self-eval
 

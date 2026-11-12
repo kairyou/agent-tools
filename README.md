@@ -237,9 +237,11 @@ To diagnose the provider setup or test recognition quality manually:
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the navbar background color and height?"
 ```
 
-## Extras
+## More tools and documentation
 
-See [extras](docs/en/extras.md) for optional tools outside the day-to-day development workflow.
+- [Work utilities](docs/en/extras.md) — Work reports, session logs, and self-evaluations.
+- [Output speed](docs/en/output-speed.md)
+- [Repository structure](docs/en/repository-structure.md)
 
 ## FAQ
 
@@ -256,10 +258,6 @@ In Bash, install from the npm package (swap `at-commit` for the skills you want)
 cd "$(mktemp -d)" && tar -xf "$(npm pack @kairyou/agent-tools --silent)" && npx -y skills@latest add ./package --skill at-commit -g -y
 ```
 
-### Want to contribute?
-
-See the [repository structure](docs/en/repository-structure.md).
-
 ## Acknowledgements
 
 - `at-commit` draws on commit-message generation ideas from
@@ -269,5 +267,4 @@ See the [repository structure](docs/en/repository-structure.md).
 - `at-review` and `at-simplify` are installable Agent Skills derived and
   adapted from Claude Code's built-in `code-review` and `simplify` workflow
   prompts.
-
-For upstream skill updates, review the generated draft PR; see the [sync workflow](tools/claude-skill-sync/README.md).
+  The [sync workflow](tools/claude-skill-sync/README.md) describes how upstream prompts are tracked.
