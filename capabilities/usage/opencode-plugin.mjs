@@ -1,8 +1,9 @@
 import { queryProviderUsage } from "./core.mjs";
-import { createHash } from "node:crypto";
-import { agentConfig } from "./lib/config.mjs";
+import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
+import { agentConfig, HOOK_SNAPSHOT_MAX_AGE_MS } from "./lib/config.mjs";
 import { formatOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
-import { rememberOpenCodeDisplay } from "./lib/opencode-display.mjs";
+import { readUsageSnapshot } from "./lib/cache.mjs";
+import { rememberOpenCodeSession } from "./lib/opencode-session.mjs";
 
 const DEFAULT_REFRESH_MS = 60_000;
 
@@ -45,7 +46,6 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
   const speedEnabled = (await agentConfig()).outputSpeed === true;
   const speeds = new Map();
   const responses = new Map();
-  const quotas = new Map();
 
   async function showUsage(text) {
     if (!text) return;
@@ -65,15 +65,20 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
 
   async function refreshSession(sessionID) {
     const context = contexts.get(sessionID);
+    if (!context && !speeds.has(sessionID)) return;
     const show = async (quota = "") => {
       if (contexts.get(sessionID) !== context) return;
-      const text = withOutputSpeed(quota, speeds.get(sessionID));
-      rememberOpenCodeDisplay(directory, text);
+      const outputSpeed = speeds.get(sessionID) || "";
+      const text = withOutputSpeed(quota, outputSpeed);
+      await rememberOpenCodeSession(directory, sessionID, {
+        accountKey: quota ? usageAccountCacheKey(context) : "", outputSpeed,
+      }, () => contexts.get(sessionID) === context);
+      if (contexts.get(sessionID) !== context) return;
       await showUsage(text);
     };
     if (!context?.baseUrl || !context?.key) return await show();
 
-    const cacheKey = createHash("sha256").update(JSON.stringify([context.baseUrl.replace(/\/+$/, ""), context.key])).digest("hex");
+    const cacheKey = usageAccountCacheKey(context);
     const now = Date.now();
     if (!inFlight.has(cacheKey) && now - (refreshedAt.get(cacheKey) || 0) >= refreshMs) {
       refreshedAt.set(cacheKey, now);
@@ -81,13 +86,14 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
         agent: "opencode",
         rememberSnapshot: true,
       })
-        .then((result) => quotas.set(cacheKey, result?.text || ""))
-        .catch(() => quotas.delete(cacheKey))
+        .catch(() => null)
         .finally(() => inFlight.delete(cacheKey));
       inFlight.set(cacheKey, task);
     }
-    await inFlight.get(cacheKey);
-    await show(quotas.get(cacheKey));
+    const pending = inFlight.get(cacheKey);
+    const result = pending ? await pending : await readUsageSnapshot(context);
+    const fresh = pending || Date.now() - Date.parse(result?.updatedAt || "") < HOOK_SNAPSHOT_MAX_AGE_MS;
+    await show(fresh ? result?.text : "");
   }
 
   return {
@@ -99,6 +105,9 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
         responses.delete(input.sessionID);
       }
       contexts.set(input.sessionID, context);
+      if (!previous || previous.modelID !== context.modelID || previous.baseUrl !== context.baseUrl || previous.key !== context.key) {
+        await rememberOpenCodeSession(directory, input.sessionID, {});
+      }
     },
     event: async ({ event }) => {
       if (event.type === "message.updated" && speedEnabled) {
@@ -136,6 +145,7 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
         contexts.delete(event.properties.sessionID);
         speeds.delete(event.properties.sessionID);
         responses.delete(event.properties.sessionID);
+        await rememberOpenCodeSession(directory, event.properties.sessionID, null);
       }
     },
   };

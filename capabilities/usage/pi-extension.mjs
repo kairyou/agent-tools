@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
 import { queryProviderUsage } from "./core.mjs";
 import { isOfficialBaseUrl } from "./lib/urls.mjs";
 import { agentConfig } from "./lib/config.mjs";
@@ -43,7 +43,7 @@ export function createPiUsageExtension({ query = queryProviderUsage, now = Date.
         const baseUrl = baseUrlOverride || auth?.baseUrl || model.baseUrl;
         const key = keyOverride || (auth?.ok && auth.apiKey);
         if (!baseUrl || !key || isOfficialBaseUrl(baseUrl)) return show();
-        const id = createHash("sha256").update(JSON.stringify([model.provider, baseUrl, key])).digest("hex");
+        const id = usageAccountCacheKey({ baseUrl, key });
         let account = accounts.get(id);
         if (!account) {
           account = { startedAt: -Infinity, text: undefined, pending: null };

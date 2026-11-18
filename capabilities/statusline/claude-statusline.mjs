@@ -16,6 +16,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseJsonc } from "jsonc-parser";
 import { claudeOutputSpeed } from "../usage/lib/output-speed.mjs";
+import { retainedCacheEntries, usageAccountCacheKey } from "../usage/lib/cache-policy.mjs";
+import { HOOK_SNAPSHOT_MAX_AGE_MS } from "../usage/lib/config.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(SCRIPT_DIR, "..", "..");
@@ -240,21 +242,6 @@ function isOfficialBaseUrl(baseUrl) {
   ].includes(clean);
 }
 
-function usageRouteCacheKey(baseUrl) {
-  try {
-    const url = new URL(cleanBaseUrl(baseUrl));
-    url.hash = "";
-    url.search = "";
-    url.pathname = url.pathname
-      .replace(/\/+$/, "")
-      .replace(/\/api\/v1$/i, "")
-      .replace(/\/v1$/i, "");
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return cleanBaseUrl(baseUrl).endsWith("/v1") ? cleanBaseUrl(baseUrl).slice(0, -3) : cleanBaseUrl(baseUrl);
-  }
-}
-
 function readJsonFileRaw(file) {
   try {
     if (!fs.existsSync(file)) return {};
@@ -269,24 +256,24 @@ function activeRelayBaseUrl() {
   return process.env.PROVIDER_USAGE_BASE_URL || process.env.ANTHROPIC_BASE_URL || "";
 }
 
-function hasClaudeUsageToken() {
-  return Boolean(
+function claudeUsageKey() {
+  return (
     process.env.PROVIDER_USAGE_API_KEY ||
       process.env.ANTHROPIC_AUTH_TOKEN ||
-      process.env.ANTHROPIC_API_KEY
+      process.env.ANTHROPIC_API_KEY || ""
   );
 }
 
 function snapshotForBaseUrl(baseUrl) {
   const snapshot = readJsonFileRaw(SNAPSHOT_FILE);
-  const key = usageRouteCacheKey(baseUrl);
+  const key = usageAccountCacheKey({ baseUrl, key: claudeUsageKey() });
   const item = snapshot?.items?.[key];
   return item?.text ? item : null;
 }
 
 function refreshStateForBaseUrl(baseUrl) {
   const state = readJsonFileRaw(REFRESH_STATE_FILE);
-  return state?.items?.[usageRouteCacheKey(baseUrl)] || {};
+  return retainedCacheEntries(state?.items)[usageAccountCacheKey({ baseUrl, key: claudeUsageKey() })] || {};
 }
 
 function ageMs(isoDate) {
@@ -294,28 +281,10 @@ function ageMs(isoDate) {
   return Number.isFinite(time) ? Date.now() - time : Number.POSITIVE_INFINITY;
 }
 
-function writeRefreshAttempt(baseUrl) {
-  try {
-    const state = readJsonFileRaw(REFRESH_STATE_FILE);
-    const key = usageRouteCacheKey(baseUrl);
-    state.version = 1;
-    state.items = state.items && typeof state.items === "object" ? state.items : {};
-    state.items[key] = {
-      ...(state.items[key] || {}),
-      baseUrl,
-      lastAttemptAt: new Date().toISOString(),
-    };
-    fs.mkdirSync(dirname(REFRESH_STATE_FILE), { recursive: true });
-    fs.writeFileSync(REFRESH_STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
-  } catch {
-    // Statusline must stay non-blocking and fail-open.
-  }
-}
-
 function shouldRefreshUsage(baseUrl, snapshot) {
   if (process.env.AGENT_TOOLS_USAGE_REFRESH === "0") return false;
   if (!baseUrl || isOfficialBaseUrl(baseUrl)) return false;
-  if (!hasClaudeUsageToken()) return false;
+  if (!claudeUsageKey()) return false;
   if (!fs.existsSync(USAGE_RUNTIME)) return false;
 
   const ttlMs = numberFromEnv("AGENT_TOOLS_USAGE_SNAPSHOT_TTL_MS", DEFAULT_SNAPSHOT_TTL_MS);
@@ -323,14 +292,13 @@ function shouldRefreshUsage(baseUrl, snapshot) {
   const failureBackoffMs = numberFromEnv("AGENT_TOOLS_USAGE_FAILURE_BACKOFF_MS", DEFAULT_FAILURE_BACKOFF_MS);
   const state = refreshStateForBaseUrl(baseUrl);
 
-  if (ageMs(state.lastAttemptAt) < cooldownMs) return false;
+  if (ageMs(state.lastStartedAt) < cooldownMs) return false;
   if (state.lastError && ageMs(state.lastFailureAt) < failureBackoffMs) return false;
   return !snapshot || ageMs(snapshot.updatedAt) >= ttlMs;
 }
 
 function refreshUsageInBackground(baseUrl) {
   if (!shouldRefreshUsage(baseUrl, snapshotForBaseUrl(baseUrl))) return;
-  writeRefreshAttempt(baseUrl);
   try {
     const child = spawn(process.execPath, [USAGE_RUNTIME, "refresh", "--agent", "claude"], {
       detached: true,
@@ -349,7 +317,7 @@ function providerUsageStatus() {
   if (!baseUrl || isOfficialBaseUrl(baseUrl)) return "";
   const snapshot = snapshotForBaseUrl(baseUrl);
   if (shouldRefreshUsage(baseUrl, snapshot)) refreshUsageInBackground(baseUrl);
-  return snapshot?.text || "";
+  return ageMs(snapshot?.updatedAt) < HOOK_SNAPSHOT_MAX_AGE_MS ? snapshot?.text || "" : "";
 }
 
 function render(data, config) {

@@ -741,21 +741,21 @@ async function lockApi() {
 test("refresh locks are per relay, not global", async () => {
   const { acquireUsageRefreshLease } = await lockApi();
 
-  const first = await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" });
-  const second = await acquireUsageRefreshLease({ baseUrl: "https://relay-b.example.test/v1" });
+  const first = await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1", key: "test-key" });
+  const second = await acquireUsageRefreshLease({ baseUrl: "https://relay-b.example.test/v1", key: "test-key" });
   assert.ok(first, "first relay should get its lock");
   assert.ok(second, "a different relay must not be blocked by the first");
 
   // The same relay is still mutually exclusive, and /v1 normalizes to one key.
-  assert.equal(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test" }), null);
+  assert.equal(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test", key: "test-key" }), null);
   await first();
-  assert.ok(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1" }));
+  assert.ok(await acquireUsageRefreshLease({ baseUrl: "https://relay-a.example.test/v1", key: "test-key" }));
   await second();
 });
 
 test("a holder heartbeating its lock outlives the stale window", async () => {
   const { acquireUsageRefreshLease } = await lockApi();
-  const context = { baseUrl: "https://relay-live.example.test/v1" };
+  const context = { baseUrl: "https://relay-live.example.test/v1", key: "test-key" };
 
   // 300ms lease keeps the lock warm every 100ms, so waiting well past the
   // window must not let anyone else in.
@@ -773,7 +773,7 @@ test("a holder heartbeating its lock outlives the stale window", async () => {
 
 test("a stale takeover keeps the new holder's lock", async () => {
   const { acquireUsageRefreshLease } = await lockApi();
-  const context = { baseUrl: "https://relay-stale.example.test/v1" };
+  const context = { baseUrl: "https://relay-stale.example.test/v1", key: "test-key" };
 
   // leaseMs 0 declares any existing lock stale; the 20ms wait stays under the
   // 50ms heartbeat floor so the lock is genuinely not refreshed in between.

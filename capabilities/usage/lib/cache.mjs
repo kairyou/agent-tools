@@ -2,7 +2,7 @@
 // gateway, the latest usage snapshot, and refresh bookkeeping.
 
 import { writeFile, mkdir, open, unlink, rename, stat, utimes } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import {
   CACHE_DIR,
@@ -13,18 +13,19 @@ import {
   debugLog,
 } from "./config.mjs";
 import { usageRouteCacheKey } from "./urls.mjs";
+import { retainedCacheEntries, usageAccountCacheKey } from "./cache-policy.mjs";
 
 const CACHE_VERSION = 1;
 const WRITE_LOCK_PATH = join(CACHE_DIR, "usage-cache-write.lock");
 
-// Every cache file is { version, <field>: { [gatewayKey]: entry } }.
+// Route keys identify gateways; quota and refresh keys identify accounts.
 async function readJsonCache(path, field) {
   try {
     const raw = await readTextIfExists(path);
     const entries = raw.trim() ? JSON.parse(raw)?.[field] : null;
     return {
       version: CACHE_VERSION,
-      [field]: entries && typeof entries === "object" ? entries : {},
+      [field]: retainedCacheEntries(entries),
     };
   } catch {
     return { version: CACHE_VERSION, [field]: {} };
@@ -32,10 +33,10 @@ async function readJsonCache(path, field) {
 }
 
 // Read-modify-write serialized across processes: the gateway refresh lock
-// covers only one relay, and skill/CLI queries hold no lock at all, so
+// covers only one account, and skill/CLI queries hold no lock at all, so
 // concurrent writers would otherwise drop each other's entries. The temp file
 // plus rename keeps readers from ever seeing a half-written file.
-async function updateJsonCache(path, field, source, mutate) {
+export async function updateJsonCache(path, field, source, mutate) {
   const release = await acquireWriteLock();
   if (!release) {
     // Losing one update is safer than an unlocked read-modify-write, which
@@ -46,6 +47,7 @@ async function updateJsonCache(path, field, source, mutate) {
   try {
     const cache = await readJsonCache(path, field);
     mutate(cache[field]);
+    cache[field] = retainedCacheEntries(cache[field]);
     await mkdir(dirname(path), { recursive: true });
     const temp = `${path}.${process.pid}.tmp`;
     await writeFile(temp, `${JSON.stringify(cache, null, 2)}\n`);
@@ -73,14 +75,21 @@ export async function rememberUsageRoute(context, route, result) {
 }
 
 export async function readUsageSnapshot(context) {
+  const key = usageAccountCacheKey(context);
+  return await readUsageSnapshotByKey(key);
+}
+
+export async function readUsageSnapshotByKey(key) {
+  if (!key) return null;
   const cache = await readJsonCache(SNAPSHOT_PATH, "items");
-  return cache.items[usageRouteCacheKey(context.baseUrl)] || null;
+  return cache.items[key] || null;
 }
 
 export async function rememberUsageSnapshot(context, result) {
-  if (!result?.text) return;
+  const key = usageAccountCacheKey(context);
+  if (!key || !result?.text) return;
   await updateJsonCache(SNAPSHOT_PATH, "items", "snapshot-cache", (items) => {
-    items[usageRouteCacheKey(context.baseUrl)] = {
+    items[key] = {
       text: result.text,
       source: result.source,
       baseUrl: context.baseUrl,
@@ -90,16 +99,19 @@ export async function rememberUsageSnapshot(context, result) {
 }
 
 export async function rememberRefreshState(context, patch) {
+  const key = usageAccountCacheKey(context);
+  if (!key) return;
   await updateJsonCache(REFRESH_STATE_PATH, "items", "refresh-state", (items) => {
-    const key = usageRouteCacheKey(context.baseUrl);
-    items[key] = { ...(items[key] || {}), ...patch, baseUrl: context.baseUrl };
+    items[key] = { ...(items[key] || {}), ...patch, baseUrl: context.baseUrl, updatedAt: new Date().toISOString() };
   });
 }
 
 export async function canRefreshUsage(context, minIntervalMs) {
+  const key = usageAccountCacheKey(context);
+  if (!key) return false;
   if (minIntervalMs <= 0) return true;
   const state = await readJsonCache(REFRESH_STATE_PATH, "items");
-  const item = state.items[usageRouteCacheKey(context.baseUrl)] || {};
+  const item = state.items[key] || {};
   const latest = Math.max(
     ...[item.lastStartedAt, item.lastSuccessAt, item.lastFailureAt]
       .map((value) => Date.parse(value || ""))
@@ -170,18 +182,12 @@ async function tryLock(lockPath, staleMs, details = {}) {
   return null;
 }
 
-// One lock per gateway, keyed like the route and snapshot caches, so
-// refreshing one relay never blocks another.
-function refreshLockPath(context) {
-  const key = usageRouteCacheKey(context.baseUrl);
-  const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
-  return join(CACHE_DIR, `usage-refresh-${hash}.lock`);
-}
-
 // The holder keeps its lock warm, so this window mostly decides how soon a
 // crashed refresh is reclaimed rather than how long a slow one may run.
 export async function acquireUsageRefreshLease(context, leaseMs = 60_000) {
-  return await tryLock(refreshLockPath(context), leaseMs, { baseUrl: context.baseUrl });
+  const key = usageAccountCacheKey(context);
+  if (!key) return null;
+  return await tryLock(join(CACHE_DIR, `usage-refresh-${key}.lock`), leaseMs);
 }
 
 // Writers wait briefly for each other; null means "skip this write" so a cache

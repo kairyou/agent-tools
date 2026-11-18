@@ -97,7 +97,7 @@ export async function usagePreset() {
 // every other caller either runs detached or is an explicit user request.
 // Past this age a snapshot is too stale to show instead of nothing.
 export const HOOK_SNAPSHOT_MAX_AGE_MS = 10 * 60_000;
-// Minimum gap between gateway queries, however many hooks fire.
+// Minimum gap between queries for one gateway account, however many hooks fire.
 export const REFRESH_INTERVAL_MS = 60_000;
 
 export async function newApiQuotaScale() {

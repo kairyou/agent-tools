@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { usageAccountCacheKey } from "../capabilities/usage/lib/cache-policy.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STATUSLINE_SCRIPT = join(ROOT, "dist", "statusline", "claude-statusline.mjs");
@@ -119,7 +120,7 @@ test("Claude statusline keeps appending complete relay usage for existing fields
   writeFileSync(join(cacheDir, "usage-snapshot.json"), JSON.stringify({
     version: 1,
     items: {
-      "https://relay.example.com": {
+      [usageAccountCacheKey({ baseUrl: "https://relay.example.com", key: "fixture-key" })]: {
         text: "balance $362 | today $61.7 | 30d $566",
         source: "v1-usage",
         baseUrl: "https://relay.example.com/v1",
@@ -133,6 +134,7 @@ test("Claude statusline keeps appending complete relay usage for existing fields
     env: {
       ...process.env,
       AGENT_TOOLS_HOME: agentHome,
+      PROVIDER_USAGE_API_KEY: "fixture-key",
       ANTHROPIC_BASE_URL: "https://relay.example.com/v1",
       PROVIDER_USAGE_BASE_URL: "",
       AGENT_TOOLS_USAGE_REFRESH: "0",
@@ -165,13 +167,45 @@ test("showProviderUsage hides only gateway usage and skips background refresh", 
     assert.equal(result.stderr, "");
     return result.stdout;
   };
-  writeFileSync(snapshot, JSON.stringify({ items: { "https://relay.example.com": { text: "balance $1 | today $2" } } }));
+  const accountKey = usageAccountCacheKey({ baseUrl: "https://relay.example.com", key: "fixture-key" });
+  writeFileSync(snapshot, JSON.stringify({ items: { [accountKey]: { text: "balance $1 | today $2" } } }));
   assert.equal(render(false), "custom-model");
   assert.equal(existsSync(join(temp, "cache", "usage-refresh-state.json")), false);
-  writeFileSync(snapshot, JSON.stringify({ items: { "https://relay.example.com": { text: "balance $1 | today $2", updatedAt: new Date().toISOString() } } }));
+  writeFileSync(snapshot, JSON.stringify({ items: { [accountKey]: { text: "balance $1 | today $2", updatedAt: new Date().toISOString() } } }));
   assert.equal(render(undefined), "custom-model / balance $1 | today $2");
   assert.equal(render(true), "custom-model / balance $1 | today $2");
   assert.equal(existsSync(join(temp, "cache", "usage-refresh-state.json")), false);
+});
+
+test("Claude statusline only reads the current account and hides expired quota", (t) => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-statusline-accounts-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, "cache"));
+  const a = { baseUrl: "https://relay-a.example/v1", key: "fixture-a" };
+  const b = { baseUrl: a.baseUrl, key: "fixture-b" };
+  const c = { baseUrl: "https://relay-b.example/v1", key: a.key };
+  const file = join(home, "cache", "usage-snapshot.json");
+  const items = Object.fromEntries([a, b, c].map((context, i) => [
+    usageAccountCacheKey(context), { text: `balance $${i + 1}`, updatedAt: new Date().toISOString() },
+  ]));
+  writeFileSync(file, JSON.stringify({ items }));
+  const render = ({ baseUrl, key }) => {
+    const result = spawnSync(process.execPath, [STATUSLINE_SCRIPT, "--fields", "model"], {
+      input: JSON.stringify({ model: { id: "fixture-model" } }), encoding: "utf8",
+      env: { ...process.env, AGENT_TOOLS_HOME: home, PROVIDER_USAGE_BASE_URL: baseUrl,
+        PROVIDER_USAGE_API_KEY: key, ANTHROPIC_AUTH_TOKEN: "", ANTHROPIC_API_KEY: "", AGENT_TOOLS_USAGE_REFRESH: "0" },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  assert.equal(render(a), "fixture-model | balance $1");
+  assert.equal(render(b), "fixture-model | balance $2");
+  assert.equal(render(c), "fixture-model | balance $3");
+  assert.equal(render({ ...a, key: "changed-key" }), "fixture-model");
+  assert.equal(render({ ...a, key: "" }), "fixture-model");
+  items[usageAccountCacheKey(a)].updatedAt = new Date(Date.now() - 11 * 60_000).toISOString();
+  writeFileSync(file, JSON.stringify({ items }));
+  assert.equal(render(a), "fixture-model");
 });
 
 test("custom-model speed uses transcript independently of provider usage settings and cache", (t) => {
@@ -183,12 +217,13 @@ test("custom-model speed uses transcript independently of provider usage setting
     { type: "assistant", timestamp: "2026-11-10T00:00:10Z", message: { id: "custom-response", usage: { output_tokens: 344 } } },
   ].map(JSON.stringify).join("\n"));
   mkdirSync(join(temp, "cache"));
-  writeFileSync(join(temp, "cache", "usage-snapshot.json"), JSON.stringify({ items: { "https://relay.example.com": { text: "today $0.2 | 7d $16.5" } } }));
+  const accountKey = usageAccountCacheKey({ baseUrl: "https://relay.example.com", key: "fixture-key" });
+  writeFileSync(join(temp, "cache", "usage-snapshot.json"), JSON.stringify({ items: { [accountKey]: { text: "today $0.2 | 7d $16.5", updatedAt: new Date().toISOString() } } }));
   for (const enabled of [false, true]) for (const showProviderUsage of [false, true]) {
     writeFileSync(join(temp, "config.jsonc"), JSON.stringify({ statusline: { fields: ["model", "outputSpeed"], showProviderUsage }, providerUsage: { outputSpeed: enabled } }));
     const result = spawnSync(process.execPath, [STATUSLINE_SCRIPT], {
       input: JSON.stringify({ model: { id: "custom-model" }, transcript_path: transcript }), encoding: "utf8",
-      env: { ...process.env, AGENT_TOOLS_HOME: temp, ANTHROPIC_BASE_URL: "https://relay.example.com/v1", PROVIDER_USAGE_BASE_URL: "", AGENT_TOOLS_USAGE_REFRESH: "0" },
+      env: { ...process.env, AGENT_TOOLS_HOME: temp, ANTHROPIC_BASE_URL: "https://relay.example.com/v1", PROVIDER_USAGE_BASE_URL: "", PROVIDER_USAGE_API_KEY: "fixture-key", AGENT_TOOLS_USAGE_REFRESH: "0" },
     });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, `custom-model | 34.4 tok/s${showProviderUsage ? " | today $0.2 | 7d $16.5" : ""}`);

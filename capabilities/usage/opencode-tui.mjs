@@ -1,23 +1,4 @@
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { readOpenCodeDisplay } from "./lib/opencode-display.mjs";
-
-const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(homedir(), ".agent-tools");
-const SNAPSHOT_PATH = join(AGENT_TOOLS_HOME, "cache", "usage-snapshot.json");
-
-function latestUsage() {
-  const display = readOpenCodeDisplay(process.cwd());
-  if (display !== null) return display;
-  try {
-    const data = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8"));
-    return Object.values(data?.items || {})
-      .filter((item) => typeof item?.text === "string" && item.text)
-      .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0]?.text || "";
-  } catch {
-    return "";
-  }
-}
+import { readOpenCodeUsage } from "./lib/opencode-session.mjs";
 
 const tui = async (api) => {
   api.keymap.registerLayer({
@@ -28,8 +9,14 @@ const tui = async (api) => {
         category: "Agent Tools",
         namespace: "palette",
         slashName: "at-usage",
-        run() {
-          const message = latestUsage();
+        async run() {
+          const route = api.route.current;
+          const directory = api.state.path.directory;
+          const sessionID = route.name === "session" ? route.params.sessionID : "";
+          const message = await readOpenCodeUsage(directory, sessionID);
+          const current = api.route.current;
+          if (current.name !== route.name || (current.name === "session" && current.params.sessionID !== sessionID) ||
+              api.state.path.directory !== directory) return;
           api.ui.toast({
             title: "Provider usage",
             message: message || "Provider usage is not available yet",
