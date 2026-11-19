@@ -1,12 +1,15 @@
 // Discovers the active relay endpoint and credentials for each agent.
 
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   AUTH_PATH,
   CODEX_CONFIG_PATH,
   readJson,
   readTextIfExists,
 } from "./config.mjs";
+import { readZcodeSessionProvider } from "./zcode-session.mjs";
 
 function stripInlineComment(value) {
   let inSingle = false;
@@ -120,8 +123,31 @@ function contextForClaude() {
   };
 }
 
-export async function usageContext(agent) {
-  return agent === "claude" ? contextForClaude() : await contextForCodex();
+export async function usageContext(agent, options) {
+  if (agent === "claude") return contextForClaude();
+  if (agent === "codex") return await contextForCodex();
+  if (agent === "zcode") return await contextForZcode(options);
+  throw new Error(`Provider context requires the ${agent} native adapter`);
+}
+
+async function contextForZcode({ providerId } = {}) {
+  const file = process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE || join(homedir(), ".zcode", "v2", "provider_config.json");
+  const stored = existsSync(file) ? await readJson(file) : {};
+  const config = stored.schemaVersion === 1 ? stored.config : null;
+  const rules = config?.providerConfigRules?.providerRules;
+  const providers = Array.isArray(rules) ? rules : [];
+  // Order describes the list, not which provider the session selected.
+  const providerName = providerId || (config && readZcodeSessionProvider()) || config?.defaultModelSelection?.providerId ||
+    (providers.length === 1 ? providers[0]?.providerId : null) || "zcode";
+  const rule = providers.find((entry) => entry?.providerId === providerName);
+  const provider = rule?.config || {};
+  return normalizeUsageContext({
+    providerName,
+    label: rule?.providerName || providerName,
+    baseUrl: process.env.PROVIDER_USAGE_BASE_URL || provider.api?.baseUrl || "",
+    key: process.env.PROVIDER_USAGE_API_KEY || process.env.SUB2API_API_KEY ||
+      (provider.access?.type === "api-key" ? provider.access.apiKey : ""),
+  });
 }
 
 export function normalizeUsageContext(input) {

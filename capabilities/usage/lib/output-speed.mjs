@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { readZcodeModelUsage } from "./zcode-session.mjs";
 
 export function formatOutputSpeed(tokens, durationMs) {
   if (!Number.isFinite(tokens) || tokens < 0 || !Number.isFinite(durationMs) || durationMs <= 0) return "";
@@ -89,8 +90,22 @@ export function codexOutputSpeed(file) {
   return result;
 }
 
-export function agentOutputSpeed(agent, { transcriptPath, cwd = process.cwd(), sessionId = process.env.CODEX_THREAD_ID } = {}) {
+export function zcodeOutputSpeed(options = {}) {
+  const row = readZcodeModelUsage(options);
+  if (!row || row.status !== "completed" || row.retry_count !== 0 || row.tool_call_count !== 0 ||
+      row.cancelled_by_user !== 0 || !Number.isSafeInteger(row.output_tokens) || row.output_tokens <= 0 ||
+      !Number.isSafeInteger(row.started_at) || !Number.isSafeInteger(row.first_token_at) ||
+      !Number.isSafeInteger(row.completed_at) || row.first_token_at < row.started_at) return "";
+  // ZCode's first_token_at covers text/reasoning, not tool arguments. A row
+  // containing tools or retries cannot isolate one complete output interval.
+  return formatOutputSpeed(row.output_tokens, row.completed_at - row.first_token_at);
+}
+
+export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId } = {}) {
   try {
+    if (agent === "zcode") return zcodeOutputSpeed({ sessionId, turnId, cwd });
+    cwd ??= process.cwd();
+    sessionId ??= process.env.CODEX_THREAD_ID;
     if (!transcriptPath && agent === "claude") {
       const project = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
       transcriptPath = fs.readdirSync(project).filter((name) => name.endsWith(".jsonl"))

@@ -22,10 +22,10 @@ after touching anything under `capabilities/`.
 - Every executable installed into `~/.agent-tools` by the capability installer
   comes from `dist/`; sources stay in `capabilities/`. Bundled scripts inside a
   self-contained Skill are installed with that Skill instead.
-- Capability-owned Skill templates that contain unrendered `{{TOKENS}}` live
-  in `capabilities/<capability>/skills/` and must not ship through
-  `npx skills add`. `config.default.jsonc` remains the installer-merged
-  exception from the repo root.
+- Capability-owned Skill templates live in `capabilities/<capability>/skills/`
+  as `*.md.tmpl`. The capability installer generates `SKILL.md`; recursive
+  `npx skills add` discovery must not find these runtime-dependent templates.
+  `config.default.jsonc` remains the installer-merged exception from the repo root.
 
 ## Settled decisions
 

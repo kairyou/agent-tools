@@ -14,8 +14,8 @@ function parseAgent(argv) {
 }
 
 const agent = parseAgent(process.argv.slice(2));
-if (agent !== "claude" && agent !== "codex") {
-  process.stderr.write(agent ? `Unsupported agent: ${agent}\n` : "Missing --agent <claude|codex>\n");
+if (!["claude", "codex", "zcode"].includes(agent)) {
+  process.stderr.write(agent ? `Unsupported agent: ${agent}\n` : "Missing --agent <claude|codex|zcode>\n");
   process.exitCode = 2;
 } else {
   try {

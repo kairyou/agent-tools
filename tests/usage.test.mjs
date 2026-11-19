@@ -338,7 +338,7 @@ test("local usage CLI rejects unsupported agents without querying", async () => 
   const missing = await runUsageCli(null, {});
   assert.equal(missing.status, 2);
   assert.equal(missing.stdout, "");
-  assert.equal(missing.stderr, "Missing --agent <claude|codex>\n");
+  assert.equal(missing.stderr, "Missing --agent <claude|codex|zcode>\n");
 });
 
 test("custom routes from config.jsonc probe first and are preset-selectable", async () => {

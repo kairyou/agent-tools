@@ -27,6 +27,7 @@ import {
 } from "./lib/cache.mjs";
 import { orderedUsageRoutes } from "./lib/routes.mjs";
 import { usageContext, normalizeUsageContext } from "./lib/context.mjs";
+import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
 import { agentOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
 
 function parseArgs(argv) {
@@ -122,6 +123,35 @@ export async function queryProviderUsage(input, options = {}) {
   return await queryUsageContext(normalizeUsageContext(input), options);
 }
 
+const pendingUsageRefreshes = new Map();
+
+// Native status surfaces and commands share snapshots and one refresh per account.
+export async function queryCachedProviderUsage(input, { agent, force = false, allowStale = true } = {}) {
+  const context = normalizeUsageContext(input);
+  if (!context.key || isOfficialBaseUrl(context.baseUrl)) return "";
+  const account = usageAccountCacheKey(context);
+  const cached = force && !allowStale ? null : await cachedUsage(context);
+  const fallback = allowStale && cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "";
+  let task = pendingUsageRefreshes.get(account);
+  if (!task) {
+    if (!force && cached && cached.ageMs < REFRESH_INTERVAL_MS) return cached.text;
+    task = refreshCachedProviderUsage(context, { agent, force }).finally(() => pendingUsageRefreshes.delete(account));
+    pendingUsageRefreshes.set(account, task);
+  }
+  return (await task) || fallback;
+}
+
+async function refreshCachedProviderUsage(context, { agent, force }) {
+  const release = await acquireUsageRefreshLease(context);
+  if (!release) return "";
+  try {
+    if (!force && !(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return "";
+    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
+    return (await queryUsageContext(context, { agent, rememberSnapshot: true }))?.text || "";
+  } catch { return ""; }
+  finally { await release(); }
+}
+
 async function refresh(agent = "codex") {
   const context = await usageContext(agent);
   const release = await acquireUsageRefreshLease(context);
@@ -178,7 +208,11 @@ async function hook(agent, { silent = false } = {}) {
       for await (const chunk of process.stdin) raw += chunk;
       input = JSON.parse(raw || "{}") || {};
     } catch { /* Missing hook context simply hides speed. */ }
-    speed = agentOutputSpeed(agent, { transcriptPath: input.transcript_path, cwd: input.cwd, sessionId: input.session_id });
+    speed = agentOutputSpeed(agent, {
+      transcriptPath: input.transcript_path, cwd: input.cwd,
+      sessionId: input.session_id || input.sessionId,
+      turnId: input.turn_id || input.turnId,
+    });
   }
   let context;
   try { context = await usageContext(agent); }

@@ -101,14 +101,16 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 re-running the install command updates. Updates to `config.jsonc` add missing
 defaults while preserving your values and comments.
 
-| Runtime capability | Supported agents |
-| --- | --- |
-| `statusline` | Claude Code |
-| `usage` | Claude Code, Codex, OpenCode, Pi |
-| `vision` | Claude Code, Codex, OpenCode, Pi, ZCode, DeepSeek Harness |
-| `log` | Claude Code, Codex, OpenCode, Pi |
+| Feature | Install name | Agent (`-a`) |
+| --- | --- | --- |
+| Claude Code status line | `statusline` | `claude` |
+| Gateway usage | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness) |
+| Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
+| Session work logs | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
-### Statusline
+### Status and usage
+
+#### Statusline
 
 ```bash
 npx -y @kairyou/agent-tools@latest statusline -a claude
@@ -131,27 +133,31 @@ add `"outputSpeed"` for estimated output speed (e.g. `38.2 tok/s`).
 
 For supported relay gateways and usage configuration, see [Provider usage](#provider-usage).
 
-### Provider usage
+#### Provider usage
 
-Shows API relay / gateway balance and quota inside the agent. Supports Sub2API,
+Shows gateway balance and usage in the agent. Supports Sub2API,
 One API (including OneHub and DoneHub), New API, Claude Code Hub, OpenRouter, and
 Command Code; compatibility depends on the gateway version and enabled usage
 endpoints.
 
 ```bash
-npx -y @kairyou/agent-tools@latest usage -a claude codex opencode pi
+# Claude Code example
+npx -y @kairyou/agent-tools@latest usage -a claude
 ```
 
-- **Claude Code** — `/at-usage` shows usage in chat; installing `statusline` also adds it to the status line.
+- **Claude Code** — `usage` installs `/at-usage` for manual queries. `statusline` displays gateway usage automatically.
   Set `statusline.showProviderUsage` to `false` to hide relay gateway usage from the status line.
-- **Codex** — run `/hooks` once after installation to approve it. The Codex CLI
-  displays usage automatically; clients that hide hook output can use `$at-usage`.
-- **OpenCode** — usage refreshes when the session goes idle and appears as a
-  toast; `/at-usage` shows it on demand. Restart opencode after installing or updating.
-- **Pi** — displays usage in the footer. Restart Pi or run `/reload` after installing or updating.
+- **Codex** — run `/hooks` in the CLI to approve automatic usage notices. Use `$at-usage` to query manually.
+- **OpenCode** — shows a toast when the session goes idle, or on demand with `/at-usage`.
+- **Pi** — displays usage in the footer.
+- **ZCode** — the desktop footer shows gateway usage and optional `tok/s`.
+- **DeepSeek Harness** — shows gateway usage in the footer or on demand with `/at-usage`.
 
-The endpoint and key come from the agent's current model or existing configuration;
-official endpoints are skipped. If it reports
+After installing or updating, restart OpenCode, Pi, ZCode, or DeepSeek Harness as applicable.
+Pi also supports `/reload`.
+
+The endpoint and key come from the agent's current model or existing configuration.
+Direct connections to OpenAI or Anthropic skip gateway queries. If a query returns
 `Provider usage is unavailable.`, set `PROVIDER_USAGE_BASE_URL` and
 `PROVIDER_USAGE_API_KEY` to override the endpoint and key. Configure
 `providerUsage` in `~/.agent-tools/config.jsonc` only when needed:
@@ -190,7 +196,7 @@ limits; `⟳` is the time until a known limit reset; `Exp` is the plan expiry;
 `balance` is wallet credit; `used` is consumed credit; `today` and `30d` are
 today's and the last 30 days' API spend. Reset countdowns require gateway timing data.
 
-#### Custom gateway routes
+##### Custom gateway routes
 
 Gateways not covered by the built-in probes can use a custom route. See
 [Custom gateway routes](docs/en/custom-gateway-routes.md).
@@ -202,10 +208,10 @@ Lets a main model that cannot see images use a multimodal model to analyze error
 #### Install
 
 ```bash
-npx -y @kairyou/agent-tools@latest vision -a claude codex opencode pi zcode dsh
+npx -y @kairyou/agent-tools@latest vision -a claude
 ```
 
-Uninstalling keeps your vision provider config by default.
+Uninstalling keeps your `vision` configuration.
 
 #### Configure
 

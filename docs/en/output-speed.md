@@ -1,6 +1,6 @@
 # Estimated output speed
 
-`tok/s` shows the latest model response's output tokens divided by its elapsed seconds.
+agent-tools reports `tok/s` as the latest model response's output tokens divided by its elapsed seconds.
 Token counts come from the agent's usage records.
 
 ## Timing by agent
@@ -11,6 +11,8 @@ Token counts come from the agent's usage records.
 | Codex | Transcript timestamps from the preceding user input or tool result to model response completion. |
 | Pi | Times the first through last output chunk, including text, thinking, and tool arguments. |
 | OpenCode | Times the first through last text or reasoning output. Responses containing tool calls have no speed reading. |
+| ZCode | From first output to request completion. |
+| DeepSeek Harness | Built-in session output speed in the footer. |
 
 Claude Code checks the response ID and token usage to confirm that the API duration covers only one response.
 When timing is missing or cannot be matched, it uses transcript timestamps from the preceding user input or tool result to response completion.

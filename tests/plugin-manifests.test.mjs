@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, copyFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -76,4 +76,10 @@ test("Claude and ZCode manifests expose every standalone skill", () => {
       assert.match(document, /^---\r?\nname: [a-z0-9-]+\r?\ndescription: .+/s, skill);
     }
   }
+});
+
+test("recursive Skill discovery cannot install runtime-dependent templates", () => {
+  const skills = readdirSync(join(ROOT, "capabilities"), { recursive: true })
+    .filter((file) => /(^|[/\\])SKILL\.md$/.test(file));
+  assert.deepEqual(skills, []);
 });

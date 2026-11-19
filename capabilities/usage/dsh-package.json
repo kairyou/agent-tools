@@ -1,0 +1,12 @@
+{
+  "name": "@kairyou/agent-tools-dsh-usage",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dsh-plugin.mjs",
+    "./client": "./dsh-client.mjs"
+  },
+  "dsh": {
+    "client": { "platform": "web" }
+  }
+}

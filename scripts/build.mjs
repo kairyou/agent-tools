@@ -9,6 +9,25 @@ import { build } from "esbuild";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
+const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
+
+async function buildZcodeMarketplace(stage, options) {
+  const dir = path.join(stage, "zcode-marketplace");
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "capabilities", "usage", "zcode-extension.json"), "utf8"));
+  const pluginDir = path.join(dir, manifest.name);
+  // ZCode copies a plugin into its cache, so bundle the runtime into its entry.
+  await build({ ...options, entryPoints: [path.join(ROOT, "capabilities", "usage", "zcode-extension.mjs")],
+    outfile: path.join(pluginDir, "zcode-extension.mjs") });
+  const manifestDir = path.join(pluginDir, ".zcode-plugin");
+  fs.mkdirSync(manifestDir, { recursive: true });
+  const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+  writeJson(path.join(manifestDir, "plugin.json"), { ...manifest, version: PACKAGE_VERSION });
+  writeJson(path.join(dir, "marketplace.json"), {
+    name: "agent-tools-local",
+    owner: manifest.author,
+    plugins: [{ name: manifest.name, source: `./${manifest.name}`, description: manifest.description, version: PACKAGE_VERSION }],
+  });
+}
 
 const TARGETS = {
   statusline: {
@@ -24,6 +43,8 @@ const TARGETS = {
       "opencode-plugin": path.join(ROOT, "capabilities", "usage", "opencode-plugin.mjs"),
       "opencode-tui": path.join(ROOT, "capabilities", "usage", "opencode-tui.mjs"),
       "pi-extension": path.join(ROOT, "capabilities", "usage", "pi-extension.mjs"),
+      "dsh-plugin": path.join(ROOT, "capabilities", "usage", "dsh-plugin.mjs"),
+      "dsh-client": path.join(ROOT, "capabilities", "usage", "dsh-client.mjs"),
     },
     // core.mjs detects "run as a script" via process.argv[1]; inlining it into
     // the other entries would re-trigger that check inside their bundles, so it
@@ -42,6 +63,8 @@ const TARGETS = {
       hook: path.join(ROOT, "capabilities", "log", "hook.mjs"),
       "opencode-plugin": path.join(ROOT, "capabilities", "log", "opencode-plugin.mjs"),
       "pi-extension": path.join(ROOT, "capabilities", "log", "pi-extension.mjs"),
+      "zcode-hook": path.join(ROOT, "capabilities", "log", "zcode-hook.mjs"),
+      "dsh-plugin": path.join(ROOT, "capabilities", "log", "dsh-plugin.mjs"),
     },
   },
 };
@@ -59,9 +82,7 @@ for (const [name, { entryPoints, external = [] }] of Object.entries(TARGETS)) {
   const outDir = path.join(DIST, name);
   const stage = path.join(DIST, `.${name}-build-${process.pid}-${Date.now()}`);
   try {
-    await build({
-      entryPoints,
-      outdir: stage,
+    const options = {
       bundle: true,
       platform: "node",
       format: "esm",
@@ -69,11 +90,15 @@ for (const [name, { entryPoints, external = [] }] of Object.entries(TARGETS)) {
       mainFields: ["module", "main"],
       outExtension: { ".js": ".mjs" },
       packages: "bundle",
-      external,
       sourcemap: false,
       legalComments: "none",
-    });
+    };
+    await build({ ...options, entryPoints, outdir: stage, external });
 
+    if (name === "usage") {
+      fs.copyFileSync(path.join(ROOT, "capabilities", "usage", "dsh-package.json"), path.join(stage, "package.json"));
+      await buildZcodeMarketplace(stage, options);
+    }
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.renameSync(stage, outDir);
     console.log(`built ${path.relative(ROOT, outDir)}`);

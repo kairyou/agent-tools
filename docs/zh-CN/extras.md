@@ -58,13 +58,14 @@ npx -y skills@latest add kairyou/agent-tools --skill at-daily-log -g -y
 按天把各项目的 AI 会话记录成工作日志, 安装后自动运行.
 
 ```bash
-npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi
+npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi zcode dsh
 ```
 
 - `format: "detailed"` (默认): 每天生成一份详细报告, 记录每轮请求与结果, 修改的文件, 以及新增/删除代码行数的估算
 - `format: "daily"`: 单个文件按日期归档; 每个已完成且有实质结果的回答摘录收尾原文为一行, 过长时截断
 - Codex 安装后运行 `/hooks` 批准一次; opencode 安装或更新后需要重启
 - Pi 安装或更新后重启或运行 `/reload`
+- 安装或更新后, ZCode 需新建会话, DeepSeek Harness 需重启
 
 `detailed` 输出示例(节选):
 

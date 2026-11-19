@@ -1,0 +1,17 @@
+{
+  "name": "agent-tools-usage",
+  "description": "Gateway usage in the ZCode composer",
+  "author": { "name": "kairyou" },
+  "license": "MIT",
+  "extension": {
+    "engines": { "zcode": "^1.4.0" },
+    "main": "zcode-extension.mjs",
+    "activationEvents": ["onAvailable"],
+    "contributes": {
+      "commands": [{ "id": "refresh-usage", "title": { "en": "Refresh gateway usage", "zh-CN": "刷新网关用量" } }]
+    }
+  },
+  "slots": {
+    "composer.status": [{ "id": "gateway-usage", "target": { "command": "refresh-usage" }, "icon": "chart-bar" }]
+  }
+}

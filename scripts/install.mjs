@@ -5,9 +5,9 @@
 //
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
-//   usage       Active API provider quota/balance (Claude/Codex/OpenCode/Pi).
+//   usage       API provider quota/balance via per-agent hooks or plugins.
 //   vision      inspect_image host adapter + at-vision skill.
-//   log         AI session work log via agent hooks (Claude/Codex/OpenCode/Pi).
+//   log         AI session work log via per-agent hooks or plugins.
 //
 // Standalone commands (dispatched before capability parsing):
 //   inspect-image <path|url> --question "..."   Human diagnostic for vision.
@@ -24,10 +24,10 @@
 //               vision MCP in opencode.json + skills/at-vision)
 //   pi       -> ~/.pi/agent/extensions/ (usage footer + session log + native vision tool)
 //               + ~/.pi/agent/skills/at-vision
-//   zcode    -> ~/.zcode/cli/config.json (vision MCP)
-//               + ~/.zcode/skills/at-vision
-//   dsh      -> ~/.dsh/cordis.patch.yml (official MCP client row)
-//               + ~/.dsh/skills/at-vision
+//   zcode    -> Desktop usage extension + ~/.zcode/cli/config.json (log hooks + vision MCP)
+//               + ~/.zcode/skills (at-usage, at-vision)
+//   dsh      -> ~/.dsh/cordis.patch.yml (usage/log plugins + vision MCP client)
+//               + ~/.dsh/skills (at-vision)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -50,6 +50,7 @@
 //   --pi-agent-dir <path>     Override ~/.pi/agent (for testing).
 //   --zcode-config <path>     Override ~/.zcode/cli/config.json (for testing).
 //   --zcode-skills-dir <path> Override ~/.zcode/skills (for testing).
+//   --zcode-cli <path>        Use this ZCode executable or bundled zcode.cjs.
 //   --dsh-home <path>         Override ~/.dsh (for testing).
 //   --uninstall               Remove what this installer added, restoring backups.
 //   --dry-run                 Print planned changes without writing anything.
@@ -61,7 +62,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { applyEdits, modify, parse as parseJsonc } from "jsonc-parser";
+import { applyEdits, createScanner, findNodeAtLocation, modify, parse as parseJsonc, parseTree, SyntaxKind } from "jsonc-parser";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_ROOT =
@@ -83,6 +84,8 @@ const SOURCE = {
   logHook: path.join(REPO_ROOT, "dist", "log", "hook.mjs"),
   logOpencodePlugin: path.join(REPO_ROOT, "dist", "log", "opencode-plugin.mjs"),
   logPiExtension: path.join(REPO_ROOT, "dist", "log", "pi-extension.mjs"),
+  logZcodeHook: path.join(REPO_ROOT, "dist", "log", "zcode-hook.mjs"),
+  logDshPlugin: path.join(REPO_ROOT, "dist", "log", "dsh-plugin.mjs"),
   codexUsageHook: path.join(REPO_ROOT, "dist", "usage", "codex-hook.mjs"),
   usageScript: path.join(REPO_ROOT, "dist", "usage", "core.mjs"),
   usageCli: path.join(REPO_ROOT, "dist", "usage", "cli.mjs"),
@@ -91,11 +94,16 @@ const SOURCE = {
   opencodeUsagePlugin: path.join(REPO_ROOT, "dist", "usage", "opencode-plugin.mjs"),
   opencodeUsageTui: path.join(REPO_ROOT, "dist", "usage", "opencode-tui.mjs"),
   piUsageExtension: path.join(REPO_ROOT, "dist", "usage", "pi-extension.mjs"),
+  dshUsagePlugin: path.join(REPO_ROOT, "dist", "usage", "dsh-plugin.mjs"),
+  dshUsageClient: path.join(REPO_ROOT, "dist", "usage", "dsh-client.mjs"),
+  dshUsagePackage: path.join(REPO_ROOT, "dist", "usage", "package.json"),
 };
 const RUNTIME = {
   logHook: path.join(INSTALL_ROOT, "dist", "log", "hook.mjs"),
   logOpencodePlugin: path.join(INSTALL_ROOT, "dist", "log", "opencode-plugin.mjs"),
   logPiExtension: path.join(INSTALL_ROOT, "dist", "log", "pi-extension.mjs"),
+  logZcodeHook: path.join(INSTALL_ROOT, "dist", "log", "zcode-hook.mjs"),
+  logDshPlugin: path.join(INSTALL_ROOT, "dist", "log", "dsh-plugin.mjs"),
   codexUsageHook: path.join(INSTALL_ROOT, "dist", "usage", "codex-hook.mjs"),
   usageScript: path.join(INSTALL_ROOT, "dist", "usage", "core.mjs"),
   usageCli: path.join(INSTALL_ROOT, "dist", "usage", "cli.mjs"),
@@ -104,6 +112,9 @@ const RUNTIME = {
   opencodeUsagePlugin: path.join(INSTALL_ROOT, "dist", "usage", "opencode-plugin.mjs"),
   opencodeUsageTui: path.join(INSTALL_ROOT, "dist", "usage", "opencode-tui.mjs"),
   piUsageExtension: path.join(INSTALL_ROOT, "dist", "usage", "pi-extension.mjs"),
+  dshUsagePlugin: path.join(INSTALL_ROOT, "dist", "usage", "dsh-plugin.mjs"),
+  dshUsageClient: path.join(INSTALL_ROOT, "dist", "usage", "dsh-client.mjs"),
+  dshUsagePackage: path.join(INSTALL_ROOT, "dist", "usage", "package.json"),
 };
 const ALL_CAPS = ["statusline", "usage", "vision", "log"];
 const ALL_AGENTS = ["claude", "codex", "opencode", "pi", "zcode", "dsh"];
@@ -112,8 +123,8 @@ const AGENT_CAPS = {
   codex: ["usage", "vision", "log"],
   opencode: ["usage", "vision", "log"],
   pi: ["usage", "vision", "log"],
-  zcode: ["vision"],
-  dsh: ["vision"],
+  zcode: ["usage", "vision", "log"],
+  dsh: ["usage", "vision", "log"],
 };
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
@@ -257,6 +268,8 @@ function installRuntimeAssets(opts) {
   }
   if (wants(opts, "log")) {
     addFile(SOURCE.logHook, RUNTIME.logHook);
+    if (opts.agents.includes("zcode")) addFile(SOURCE.logZcodeHook, RUNTIME.logZcodeHook);
+    if (opts.agents.includes("dsh")) addFile(SOURCE.logDshPlugin, RUNTIME.logDshPlugin);
     if (opts.agents.includes("pi")) {
       addFile(SOURCE.logPiExtension, RUNTIME.logPiExtension);
     }
@@ -266,6 +279,16 @@ function installRuntimeAssets(opts) {
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (wants(opts, "usage")) {
+    if (opts.agents.includes("zcode")) {
+      for (const file of ["marketplace.json", "agent-tools-usage/.zcode-plugin/plugin.json", "agent-tools-usage/zcode-extension.mjs"]) {
+        addFile(path.join(REPO_ROOT, ZCODE_USAGE_MARKETPLACE, file), path.join(INSTALL_ROOT, ZCODE_USAGE_MARKETPLACE, file));
+      }
+    }
+    if (opts.agents.includes("dsh")) {
+      addFile(SOURCE.dshUsagePlugin, RUNTIME.dshUsagePlugin);
+      addFile(SOURCE.dshUsageClient, RUNTIME.dshUsageClient);
+      addFile(SOURCE.dshUsagePackage, RUNTIME.dshUsagePackage);
+    }
     if (opts.agents.includes("pi")) {
       addFile(SOURCE.piUsageExtension, RUNTIME.piUsageExtension);
     }
@@ -297,6 +320,7 @@ function installRuntimeAssets(opts) {
 // repo do not linger (a stale file would still be loaded).
 const SOURCE_USAGE_ROUTES_DIR = path.join(REPO_ROOT, "dist", "usage", "routes");
 const RUNTIME_USAGE_ROUTES_DIR = path.join(INSTALL_ROOT, "dist", "usage", "routes");
+const ZCODE_USAGE_MARKETPLACE = path.join("dist", "usage", "zcode-marketplace");
 
 function syncUsageRoutesDir(dryRun) {
   const hasSource = fs.existsSync(SOURCE_USAGE_ROUTES_DIR);
@@ -326,6 +350,7 @@ function parseArgs(argv) {
     piAgentDir: null,
     zcodeConfig: null,
     zcodeSkillsDir: null,
+    zcodeCli: null,
     dshHome: null,
     uninstall: false,
     dryRun: false,
@@ -364,6 +389,11 @@ function parseArgs(argv) {
       case "--pi-agent-dir": opts.piAgentDir = argv[++i]; break;
       case "--zcode-config": opts.zcodeConfig = argv[++i]; break;
       case "--zcode-skills-dir": opts.zcodeSkillsDir = argv[++i]; break;
+      case "--zcode-cli": {
+        opts.zcodeCli = argv[++i];
+        if (!opts.zcodeCli || opts.zcodeCli.startsWith("--")) throw new Error("Missing path for --zcode-cli");
+        break;
+      }
       case "--dsh-home": opts.dshHome = argv[++i]; break;
       case "--uninstall": opts.uninstall = true; break;
       case "--dry-run": opts.dryRun = true; break;
@@ -824,18 +854,16 @@ function installManagedSkillDir(
     console.log(`  [dry-run] would copy ${source} -> ${dest}`);
     return;
   }
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.cpSync(source, dest, { recursive: true });
-  const skillFile = path.join(dest, "SKILL.md");
-  let skill = fs.readFileSync(skillFile, "utf8");
+  let skill = fs.readFileSync(path.join(source, "SKILL.md.tmpl"), "utf8");
   for (const [token, value] of Object.entries(replacements)) {
     if (!skill.includes(token)) {
-      fs.rmSync(dest, { recursive: true, force: true });
       throw new Error(`${name} skill template is missing ${token}`);
     }
     skill = skill.replaceAll(token, value);
   }
-  fs.writeFileSync(skillFile, skill);
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(source, dest, { recursive: true, filter: (entry) => !entry.endsWith(".tmpl") });
+  fs.writeFileSync(path.join(dest, "SKILL.md"), skill);
   recordManagedSkill(dest, identity);
   console.log(`  wrote ${dest}`);
 }
@@ -1265,7 +1293,207 @@ function updateZcodeVisionMcp(file, { remove, dryRun, mcp }) {
   writeText(file, updated, dryRun);
 }
 
+// Match the existing log-hook allowance: the recorder can wait five seconds
+// for a shared lock before it starts filesystem and Git work.
+const ZCODE_HOOK_TIMEOUT_MS = 30_000;
+
+// Delete only the managed item and its separator. JSONC's default deletion can
+// also consume comments between siblings.
+function removeZcodeConfigItem(text, segments) {
+  const value = findNodeAtLocation(parseTree(text), segments);
+  const item = value.parent.type === "property" ? value.parent : value;
+  const siblings = item.parent.children;
+  const previous = siblings[siblings.indexOf(item) - 1];
+  const scanner = createScanner(text, true);
+  const itemEnd = item.offset + item.length;
+  scanner.setPosition(itemEnd);
+  let comma = scanner.scan() === SyntaxKind.CommaToken ? scanner.getTokenOffset() : -1;
+  if (comma === -1 && previous) {
+    scanner.setPosition(previous.offset + previous.length);
+    if (scanner.scan() === SyntaxKind.CommaToken) comma = scanner.getTokenOffset();
+  }
+  let start = item.offset;
+  let end = itemEnd;
+  if (comma === end) { end++; comma = -1; }
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = text.indexOf("\n", end);
+  if (lineEnd !== -1 && !text.slice(lineStart, start).trim() && !text.slice(end, lineEnd).trim()) {
+    start = lineStart;
+    end = lineEnd + 1;
+  }
+  const edits = [{ offset: start, length: end - start, content: "" }];
+  if (comma !== -1) edits.push({ offset: comma, length: 1, content: "" });
+  return applyEdits(text, edits);
+}
+
+function runZcodeLog(opts) {
+  const file = opts.zcodeConfig || path.join(os.homedir(), ".zcode", "cli", "config.json");
+  const original = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "{}\n";
+  const hooks = readJsonc(file).hooks || {};
+  const events = hooks.events || {};
+  if (typeof hooks !== "object" || Array.isArray(hooks) ||
+      typeof events !== "object" || Array.isArray(events)) {
+    throw new Error(`Cannot update invalid ZCode hooks in ${file}`);
+  }
+  const entry = { type: "process", command: "node", args: [RUNTIME.logZcodeHook], timeoutMs: ZCODE_HOOK_TIMEOUT_MS };
+  const owned = (hook) => hook?.type === "process" && hook.command === "node" &&
+    fwd(hook.args?.[0] || "") === fwd(RUNTIME.logZcodeHook);
+  const eol = original.includes("\r\n") ? "\r\n" : "\n";
+  let updated = original;
+  const set = (segments, value, isArrayInsertion = false) => {
+    updated = applyEdits(updated, modify(updated, segments, value, {
+      formattingOptions: { insertSpaces: true, tabSize: 2, eol }, isArrayInsertion,
+    }));
+  };
+  const remove = (segments) => { updated = removeZcodeConfigItem(updated, segments); };
+  const removeEmpty = (segments) => {
+    const node = findNodeAtLocation(parseTree(updated), segments);
+    if (node && /^\s*$/.test(updated.slice(node.offset + 1, node.offset + node.length - 1))) remove(segments);
+  };
+
+  const state = readInstallState();
+  const stateKey = `zcode-log-hooks:${skillManifestKey(file)}`;
+  const hasHooks = Object.values(events).some((groups) => groups.some((group) => group.hooks?.length));
+  const enable = !opts.uninstall && hooks.enabled === undefined && !hasHooks;
+  if (enable) set(["hooks", "enabled"], true);
+  for (const event of ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]) {
+    const eventPath = ["hooks", "events", event];
+    const groups = events[event] || [];
+    const keep = opts.uninstall ? -1 : groups.findIndex((group) =>
+      Object.keys(group).length === 1 && group.hooks?.length === 1 && owned(group.hooks[0]));
+    let removedGroup = false;
+    for (let index = groups.length - 1; index >= 0; index--) {
+      const entries = groups[index].hooks || [];
+      const groupPath = [...eventPath, index];
+      if (index === keep) {
+        if (JSON.stringify(entries[0]) !== JSON.stringify(entry)) set([...groupPath, "hooks", 0], entry);
+      } else if (entries.length && entries.every(owned)) {
+        remove(groupPath);
+        removedGroup = true;
+      } else {
+        for (let hook = entries.length - 1; hook >= 0; hook--) {
+          if (owned(entries[hook])) remove([...groupPath, "hooks", hook]);
+        }
+      }
+    }
+    if (!opts.uninstall && keep === -1) set([...eventPath, 0], { hooks: [entry] }, true);
+    if (opts.uninstall && removedGroup) removeEmpty(eventPath);
+  }
+
+  const forgetToggle = opts.uninstall && state.artifacts[stateKey];
+  if (opts.uninstall && (updated !== original || forgetToggle)) {
+    const remaining = parseJsonc(updated).hooks?.events || {};
+    if (forgetToggle && hooks.enabled === true && !Object.values(remaining).some((groups) => groups.length)) {
+      remove(["hooks", "enabled"]);
+    }
+    removeEmpty(["hooks", "events"]);
+    removeEmpty(["hooks"]);
+  }
+  if (updated !== original) writeText(file, updated, opts.dryRun);
+  if (!opts.dryRun && (enable || forgetToggle)) {
+    if (enable) state.artifacts[stateKey] = { kind: "zcode-log-hooks" };
+    else delete state.artifacts[stateKey];
+    writeInstallState(state);
+  }
+  console.log(opts.uninstall ? "  - ZCode log hooks" : "  + ZCode log hooks (new sessions)");
+  if (!opts.uninstall && !enable && hooks.enabled !== true) {
+    console.log("  Enable hooks in ZCode to start recording work logs.");
+  }
+}
+
+const ZCODE_USAGE_MARKET_ID = "agent-tools-local";
+const ZCODE_USAGE_PLUGIN_ID = `agent-tools-usage@${ZCODE_USAGE_MARKET_ID}`;
+
+function zcodeCliForExecutable(file) {
+  if (!file || /\.[cm]?js$/i.test(file)) return file;
+  // Desktop launchers can share the CLI's name, notably a symlink in PATH
+  // from a Linux package. Use the bundled CLI next to the actual executable.
+  let real;
+  try { real = fs.realpathSync(file); } catch { return file; }
+  const dir = path.dirname(real);
+  const resources = process.platform === "darwin" && path.basename(dir) === "MacOS"
+    ? path.join(path.dirname(dir), "Resources") : path.join(dir, "resources");
+  const companion = path.join(resources, "glm", "zcode.cjs");
+  return fs.existsSync(companion) ? companion : file;
+}
+
+function findZcodeCli(opts) {
+  if (opts.zcodeCli) return zcodeCliForExecutable(path.resolve(opts.zcodeCli));
+  // An explicit test/profile path does not retarget ZCode's own plugin CLI.
+  if (opts.zcodeConfig || opts.zcodeSkillsDir) return null;
+  const desktopRoots = process.platform === "win32"
+    ? [process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs"), process.env.ProgramFiles]
+      .filter(Boolean).map((root) => path.join(root, "ZCode", "resources"))
+    : process.platform === "darwin"
+      ? ["/Applications", path.join(os.homedir(), "Applications")]
+        .map((root) => path.join(root, "ZCode.app", "Contents", "Resources"))
+      : [];
+  const executable = process.platform === "win32" ? "zcode.exe" : "zcode";
+  // Prefer the desktop application's companion, whose plugin schema matches it.
+  const bundled = desktopRoots.map((root) => path.join(root, "glm", "zcode.cjs")).find((file) => fs.existsSync(file));
+  if (bundled) return bundled;
+  const onPath = (process.env.PATH || "").split(path.delimiter).filter(path.isAbsolute)
+    .map((dir) => path.join(dir, executable)).find((file) => fs.existsSync(file));
+  return zcodeCliForExecutable(onPath);
+}
+
+function updateZcodeDesktopUsage(opts) {
+  const cli = findZcodeCli(opts);
+  const marketDir = path.resolve(INSTALL_ROOT, ZCODE_USAGE_MARKETPLACE);
+  const fallback = opts.uninstall ? "Remove agent-tools-usage in the ZCode Plugin Marketplace if enabled." :
+    `In the ZCode Plugin Marketplace, add ${marketDir}, then install and enable agent-tools-usage.`;
+  if (!cli) { console.log(`  ${fallback}`); return; }
+  if (opts.dryRun) {
+    console.log(`  [dry-run] would ${opts.uninstall ? "remove" : "install"} ${ZCODE_USAGE_PLUGIN_ID} using ${cli}`);
+    return;
+  }
+  const fromNode = /\.[cm]?js$/i.test(cli);
+  function run(...args) {
+    const command = fromNode ? process.execPath : cli;
+    const child = spawnSync(command, [...(fromNode ? [cli] : []), "plugins", ...args, "--json"], {
+      cwd: os.homedir(), encoding: "utf8", windowsHide: true,
+      // These commands manage a local source. A GUI launcher or stalled CLI
+      // should return control to the installer instead of blocking it forever.
+      timeout: 30_000,
+    });
+    if (child.error || child.status !== 0) {
+      throw new Error(child.error?.message || child.stderr?.trim() || `ZCode plugins ${args.slice(0, 2).join(" ")} failed`);
+    }
+    return JSON.parse(child.stdout);
+  }
+  try {
+    const marketplace = run("marketplace", "list").find(({ id }) => id === ZCODE_USAGE_MARKET_ID);
+    if (marketplace && (marketplace.source?.source !== "directory" ||
+      !marketplace.source.path || path.relative(marketDir, marketplace.source.path) !== "")) {
+      throw new Error(`the ${ZCODE_USAGE_MARKET_ID} marketplace already points to another source`);
+    }
+    if (opts.uninstall) {
+      if (!marketplace) return;
+      const installed = run("list", "--scope", "user").some(({ id }) => id === ZCODE_USAGE_PLUGIN_ID);
+      if (installed) run("uninstall", ZCODE_USAGE_PLUGIN_ID, "--scope", "user", "--force");
+      run("marketplace", "remove", ZCODE_USAGE_MARKET_ID);
+      console.log("  - ZCode Desktop usage extension");
+    } else {
+      if (marketplace) run("marketplace", "update", ZCODE_USAGE_MARKET_ID);
+      else run("marketplace", "add", marketDir, "--scope", "user");
+      const result = run("install", ZCODE_USAGE_PLUGIN_ID, "--scope", "user");
+      const installed = result.installed?.find(({ id }) => id === ZCODE_USAGE_PLUGIN_ID);
+      if (result.ok !== true || !installed) throw new Error("ZCode did not install agent-tools-usage");
+      if (!installed.enabled) run("enable", ZCODE_USAGE_PLUGIN_ID, "--scope", "user");
+      console.log("  + ZCode Desktop usage extension (restart ZCode to load)");
+    }
+  } catch (error) {
+    console.warn(`  ZCode Desktop extension: ${error.message}\n  ${fallback}`);
+  }
+}
+
 function runZcode(opts) {
+  if (wants(opts, "log")) runZcodeLog(opts);
+  if (wants(opts, "usage")) {
+    const skillsDir = opts.zcodeSkillsDir || path.join(os.homedir(), ".zcode", "skills");
+    installUsageSkillDir(skillsDir, "zcode", { remove: opts.uninstall, dryRun: opts.dryRun });
+    updateZcodeDesktopUsage(opts);
+  }
   if (!wants(opts, "vision")) return;
   const file = opts.zcodeConfig || path.join(os.homedir(), ".zcode", "cli", "config.json");
   const skillsDir = opts.zcodeSkillsDir || path.join(os.homedir(), ".zcode", "skills");
@@ -1309,26 +1537,34 @@ function dshVisionBlock(mcp) {
   ].join("\n");
 }
 
-function updateDshVisionPatch(file, { remove, dryRun, mcp }) {
+function updateDshPatch(file, { remove, dryRun, capability, block }) {
+  const begin = `# >>> agent-tools ${capability} >>>`;
+  const end = `# <<< agent-tools ${capability} <<<`;
+  const rowId = `agent-tools-${capability}`;
   const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "[]\n";
   const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const blockRe = new RegExp(
-    `\\r?\\n?${escape(DSH_VISION_BEGIN)}[\\s\\S]*?${escape(DSH_VISION_END)}\\r?\\n?`
+    `\\r?\\n?${escape(begin)}[\\s\\S]*?${escape(end)}\\r?\\n?`
   );
   const hadManagedBlock = blockRe.test(current);
-  let base = current.replace(blockRe, "\n").trim();
-  if (base !== "" && base !== "[]" && !base.startsWith("-")) {
+  const match = current.match(blockRe);
+  const base = match ? [
+    current.slice(0, match.index).trimEnd(),
+    current.slice(match.index + match[0].length).trimStart(),
+  ].filter(Boolean).join("\n\n") : current.trim();
+  const content = base.replace(/^\s*#.*$/gm, "").trim();
+  if (content !== "" && content !== "[]" && !content.startsWith("-")) {
     throw new Error(`Cannot update ${file}: the Cordis patch must be a top-level YAML array`);
   }
 
   if (!remove && !hadManagedBlock) {
     const conflict = new RegExp(
-      `^\\s*(?:-\\s*)?(?:id|serverName):\\s*['\"]?${escape(DSH_VISION_ROW_ID)}['\"]?\\s*$`,
+      `^\\s*(?:-\\s*)?(?:id|serverName):\\s*['\"]?${escape(rowId)}['\"]?\\s*$`,
       "m"
     );
     if (conflict.test(base)) {
       throw new Error(
-        `Found an existing unmanaged ${DSH_VISION_ROW_ID} Cordis row in ${file}. ` +
+        `Found an existing unmanaged ${rowId} Cordis row in ${file}. ` +
           "Remove or rename it, then re-run the install."
       );
     }
@@ -1337,13 +1573,15 @@ function updateDshVisionPatch(file, { remove, dryRun, mcp }) {
   let next;
   if (remove) {
     if (!hadManagedBlock) {
-      console.log(`  no managed ${DSH_VISION_ROW_ID} Cordis row found; nothing to remove.`);
+      console.log(`  no managed ${rowId} Cordis row found; nothing to remove.`);
       return;
     }
     next = base === "" ? "[]\n" : `${base}\n`;
   } else {
-    const block = dshVisionBlock(mcp);
-    next = base === "" || base === "[]" ? block : `${base}\n\n${block}`;
+    const prefix = content === "[]" ? base.replace(/^\s*\[\]\s*$/m, "").trim() : base;
+    next = hadManagedBlock
+      ? current.replace(blockRe, (_match, offset) => `${offset ? "\n" : ""}${block}`)
+      : prefix === "" ? block : `${prefix}\n\n${block}`;
   }
   if (next === current) {
     console.log(`  kept existing ${file}`);
@@ -1353,15 +1591,34 @@ function updateDshVisionPatch(file, { remove, dryRun, mcp }) {
 }
 
 function runDsh(opts) {
-  if (!wants(opts, "vision")) return;
   const home = dshHome(opts);
   const patchFile = path.join(home, "cordis.patch.yml");
+  if (wants(opts, "usage")) {
+    const block = [
+      "# >>> agent-tools usage >>>", "- insert:", "    - id: agent-tools-usage",
+      `      name: ${JSON.stringify(pathToFileURL(RUNTIME.dshUsagePlugin).href)}`,
+      "# <<< agent-tools usage <<<", "",
+    ].join("\n");
+    updateDshPatch(patchFile, { remove: opts.uninstall, dryRun: opts.dryRun, capability: "usage", block });
+    console.log(opts.uninstall ? "  - DSH usage plugin" : "  + DSH usage plugin (restart DSH to load)");
+  }
+  if (wants(opts, "log")) {
+    const block = [
+      "# >>> agent-tools log >>>", "- insert:", "    - id: agent-tools-log",
+      `      name: ${JSON.stringify(pathToFileURL(RUNTIME.logDshPlugin).href)}`,
+      "# <<< agent-tools log <<<", "",
+    ].join("\n");
+    updateDshPatch(patchFile, { remove: opts.uninstall, dryRun: opts.dryRun, capability: "log", block });
+    console.log(opts.uninstall ? "  - DSH log plugin" : "  + DSH log plugin (restart DSH to load)");
+  }
+  if (!wants(opts, "vision")) return;
   const skillsDir = path.join(home, "skills");
   console.log(`dsh vision: ${patchFile}`);
-  updateDshVisionPatch(patchFile, {
+  updateDshPatch(patchFile, {
     remove: opts.uninstall,
     dryRun: opts.dryRun,
-    mcp: visionMcpCommand(),
+    capability: "vision",
+    block: dshVisionBlock(visionMcpCommand()),
   });
   installVisionSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
   console.log(opts.uninstall ? "  - vision" : "  + vision (official MCP client row + at-vision skill)");

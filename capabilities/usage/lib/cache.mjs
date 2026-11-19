@@ -13,7 +13,7 @@ import {
   debugLog,
 } from "./config.mjs";
 import { usageRouteCacheKey } from "./urls.mjs";
-import { retainedCacheEntries, usageAccountCacheKey } from "./cache-policy.mjs";
+import { isUsageAccountCacheKey, retainedCacheEntries, usageAccountCacheKey } from "./cache-policy.mjs";
 
 const CACHE_VERSION = 1;
 const WRITE_LOCK_PATH = join(CACHE_DIR, "usage-cache-write.lock");
@@ -22,7 +22,10 @@ const WRITE_LOCK_PATH = join(CACHE_DIR, "usage-cache-write.lock");
 async function readJsonCache(path, field) {
   try {
     const raw = await readTextIfExists(path);
-    const entries = raw.trim() ? JSON.parse(raw)?.[field] : null;
+    let entries = raw.trim() ? JSON.parse(raw)?.[field] : null;
+    if (path === SNAPSHOT_PATH || path === REFRESH_STATE_PATH) {
+      entries = Object.fromEntries(Object.entries(entries || {}).filter(([key]) => isUsageAccountCacheKey(key)));
+    }
     return {
       version: CACHE_VERSION,
       [field]: retainedCacheEntries(entries),
@@ -80,7 +83,7 @@ export async function readUsageSnapshot(context) {
 }
 
 export async function readUsageSnapshotByKey(key) {
-  if (!key) return null;
+  if (!isUsageAccountCacheKey(key)) return null;
   const cache = await readJsonCache(SNAPSHOT_PATH, "items");
   return cache.items[key] || null;
 }

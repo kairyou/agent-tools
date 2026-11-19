@@ -60,13 +60,14 @@ Record each day's AI sessions across projects into a work log; runs automaticall
 once installed.
 
 ```bash
-npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi
+npx -y @kairyou/agent-tools@latest log -a claude codex opencode pi zcode dsh
 ```
 
 - `format: "detailed"` (default): one detailed report per day with each turn's request and outcome, the files changed, and estimated lines added and removed
 - `format: "daily"`: one file grouped by date; each completed answer with substantive results contributes one line of closing reply text, truncated when long
 - Codex: run `/hooks` once after installing to approve it; opencode: restart after installing or updating
 - Pi: restart or run `/reload` after installing or updating
+- After installing or updating, ZCode requires a new session and DeepSeek Harness requires a restart
 
 `detailed` output example (excerpt):
 
