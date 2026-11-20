@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 const root = new URL("../", import.meta.url);
 const home = mkdtempSync(join(tmpdir(), "agent-tools-native-usage-"));
@@ -27,6 +28,85 @@ async function withGateway(run, beforeResponse = async () => {}) {
   try { await run(`http://127.0.0.1:${server.address().port}`); }
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
+
+test("Paseo usage follows the selected session's native gateway and key", async (t) => {
+  const paseoHome = join(home, "paseo");
+  mkdirSync(paseoHome);
+  t.after(() => rmSync(paseoHome, { recursive: true, force: true }));
+  writeFileSync(join(paseoHome, "config.jsonc"), JSON.stringify({ providerUsage: { preset: "sub2api" } }));
+  const { outputFiles: [bundle] } = await build({
+    entryPoints: [fileURLToPath(new URL("dist/usage/paseo/index.server.ts", root))],
+    bundle: true, platform: "node", format: "esm", write: false,
+    plugins: [{
+      name: "paseo-test-sdk",
+      setup(builder) {
+        builder.onResolve({ filter: /^@getpaseo\/plugin$/ }, () => ({ path: "sdk", namespace: "paseo-test" }));
+        builder.onLoad({ filter: /^sdk$/, namespace: "paseo-test" }, () => ({
+          contents: "export const defineRpc = (definition) => definition;",
+        }));
+      },
+    }],
+  });
+  let contribute;
+  const originalHome = process.env.AGENT_TOOLS_HOME;
+  process.env.AGENT_TOOLS_HOME = paseoHome;
+  try {
+    ({ default: contribute } = await import(`data:text/javascript;base64,${Buffer.from(bundle.contents).toString("base64")}`));
+  } finally {
+    process.env.AGENT_TOOLS_HOME = originalHome;
+  }
+
+  await withGateway(async (base) => {
+    const claudeHome = join(paseoHome, "claude");
+    const codexHome = join(paseoHome, "codex");
+    mkdirSync(claudeHome);
+    mkdirSync(codexHome);
+    writeFileSync(join(claudeHome, "settings.json"), JSON.stringify({
+      env: { ANTHROPIC_BASE_URL: `${base}/a`, ANTHROPIC_AUTH_TOKEN: "fixture-a" },
+    }));
+    const writeCodexConfig = (key) => writeFileSync(join(codexHome, "config.toml"), [
+      'model_provider = "relay"', "[model_providers.relay]", `base_url = "${base}/b/v1"`,
+      `experimental_bearer_token = "${key}"`,
+    ].join("\n"));
+    writeCodexConfig("fixture-b");
+
+    const agents = new Map();
+    const paseo = {
+      config: { get: async () => ({ config: { providers: {} } }) },
+      agents: { ref: (id) => ({ refresh: async () => {}, current: () => agents.get(id) }) },
+    };
+    let open;
+    let readUsage;
+    const dispose = contribute({
+      before(_name, handler) { open = handler; return () => {}; },
+      on() { return () => {}; },
+      handle(_contract, handler) { readUsage = handler; },
+    });
+    const signal = new AbortController().signal;
+    async function launch(agentId, provider, env) {
+      agents.set(agentId, { provider });
+      await open({ request: { purpose: "interactive", agentId, provider, cwd: home, env: {
+        ANTHROPIC_API_KEY: "", OPENAI_BASE_URL: "", OPENAI_API_KEY: "",
+        PROVIDER_USAGE_BASE_URL: "", PROVIDER_USAGE_API_KEY: "", SUB2API_BASE_URL: "", SUB2API_API_KEY: "", ...env,
+      } } }, { paseo, signal });
+    }
+    const read = async (agentId) => (await readUsage({ agentId }, { paseo })).gateway;
+    try {
+      await launch("session-a", "claude", { CLAUDE_CONFIG_DIR: claudeHome });
+      await launch("session-b", "codex", { CODEX_HOME: codexHome });
+      assert.equal(await read("session-a"), "balance $10.0");
+      assert.equal(await read("session-b"), "balance $20.0");
+      assert.equal(await read("session-a"), "balance $10.0");
+      writeCodexConfig("fixture-c");
+      assert.equal(await read("session-b"), "balance $20.0");
+      await launch("session-b", "codex", { CODEX_HOME: codexHome });
+      assert.equal(await read("session-b"), "balance $30.0");
+      assert.equal(await read("session-a"), "balance $10.0");
+    } finally {
+      dispose();
+    }
+  });
+});
 
 function runZcode(file, mode = "print", env = {}) {
   const script = mode === "hook" ? new URL("dist/usage/core.mjs", root) : new URL("dist/usage/cli.mjs", root);

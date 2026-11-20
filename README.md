@@ -98,13 +98,12 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 ```
 
 `--dry-run` previews, `--uninstall` removes the capability from the agent, and
-re-running the install command updates. Updates to `config.jsonc` add missing
-defaults while preserving your values and comments.
+re-running the install command updates it.
 
 | Feature | Install name | Agent (`-a`) |
 | --- | --- | --- |
 | Claude Code status line | `statusline` | `claude` |
-| Gateway usage | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness) |
+| Gateway usage | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | Session work logs | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
@@ -152,6 +151,7 @@ npx -y @kairyou/agent-tools@latest usage -a claude
 - **Pi** — displays usage in the footer.
 - **ZCode** — the desktop footer shows gateway usage and optional `tok/s`.
 - **DeepSeek Harness** — shows gateway usage in the footer or on demand with `/at-usage`.
+- **Paseo** — enable plugins, then start or reload a Claude or Codex session. Click the usage above the input box for details.
 
 After installing or updating, restart OpenCode, Pi, ZCode, or DeepSeek Harness as applicable.
 Pi also supports `/reload`.

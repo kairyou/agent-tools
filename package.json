@@ -25,6 +25,7 @@
     "skills/"
   ],
   "dependencies": {
+    "cross-spawn": "7.0.6",
     "jsonc-parser": "3.3.1"
   },
   "devDependencies": {

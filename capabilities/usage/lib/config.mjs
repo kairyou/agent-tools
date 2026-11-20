@@ -7,10 +7,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { parse as parseJsonc } from "jsonc-parser";
 
-export const CODEX_HOME = process.env.CODEX_HOME || join(homedir(), ".codex");
 export const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(homedir(), ".agent-tools");
-export const AUTH_PATH = join(CODEX_HOME, "auth.json");
-export const CODEX_CONFIG_PATH = join(CODEX_HOME, "config.toml");
 export const AGENT_CONFIG_PATH = join(AGENT_TOOLS_HOME, "config.jsonc");
 export const DEBUG_PATH = join(AGENT_TOOLS_HOME, "logs", "usage-debug.log");
 export const CACHE_DIR = join(AGENT_TOOLS_HOME, "cache");

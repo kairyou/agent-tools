@@ -10,25 +10,20 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import {
-  debugLog,
   agentConfig,
-  usagePreset,
   HOOK_SNAPSHOT_MAX_AGE_MS,
   REFRESH_INTERVAL_MS,
 } from "./lib/config.mjs";
-import { isOfficialBaseUrl } from "./lib/urls.mjs";
 import {
-  readUsageSnapshot,
   acquireUsageRefreshLease,
   canRefreshUsage,
-  rememberUsageRoute,
-  rememberUsageSnapshot,
   rememberRefreshState,
 } from "./lib/cache.mjs";
-import { orderedUsageRoutes } from "./lib/routes.mjs";
-import { usageContext, normalizeUsageContext } from "./lib/context.mjs";
-import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
+import { usageContext } from "./lib/context.mjs";
+import { cachedUsage, queryUsageContext } from "./lib/query.mjs";
 import { agentOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
+
+export { queryCachedProviderUsage, queryProviderUsage } from "./lib/query.mjs";
 
 function parseArgs(argv) {
   const opts = { mode: "hook", agent: "codex", silent: false };
@@ -68,90 +63,6 @@ function failSoft(message, error) {
   else if (mode !== "refresh") textOut(`${message}${detail}`);
 }
 
-async function queryUsageContext(context, { agent = "external", rememberSnapshot = false } = {}) {
-  await debugLog({
-    mode,
-    agent,
-    providerName: context.providerName,
-    baseUrl: context.baseUrl,
-    preset: await usagePreset(),
-    providerEnvKey: context.provider?.env_key || "",
-    hasProviderUsageKey: Boolean(process.env.PROVIDER_USAGE_API_KEY),
-    hasSub2apiKey: Boolean(process.env.SUB2API_API_KEY),
-    hasProviderEnvKey: Boolean(context.provider?.env_key && process.env[context.provider.env_key]),
-    hasAnthropicAuthToken: Boolean(process.env.ANTHROPIC_AUTH_TOKEN),
-    hasAnthropicApiKey: Boolean(process.env.ANTHROPIC_API_KEY),
-    hasEnvOpenaiKey: Boolean(process.env.OPENAI_API_KEY),
-  });
-
-  if (!context.key || isOfficialBaseUrl(context.baseUrl)) {
-    return { skipped: true, text: "" };
-  }
-
-  let lastError;
-  for (const route of await orderedUsageRoutes(context)) {
-    try {
-      const result = await route.run(context);
-      await rememberUsageRoute(context, route, result);
-      if (rememberSnapshot) {
-        await rememberUsageSnapshot(context, result);
-        await rememberRefreshState(context, {
-          lastSuccessAt: new Date().toISOString(),
-          lastError: "",
-        });
-      }
-      return result;
-    } catch (error) {
-      lastError = error;
-      await debugLog({ route: route.id, path: route.path, error: error.message });
-    }
-  }
-
-  if (lastError) {
-    if (rememberSnapshot) {
-      await rememberRefreshState(context, {
-        lastFailureAt: new Date().toISOString(),
-        lastError: lastError.message,
-      });
-    }
-    throw lastError;
-  }
-  return { skipped: true, text: "" };
-}
-
-export async function queryProviderUsage(input, options = {}) {
-  return await queryUsageContext(normalizeUsageContext(input), options);
-}
-
-const pendingUsageRefreshes = new Map();
-
-// Native status surfaces and commands share snapshots and one refresh per account.
-export async function queryCachedProviderUsage(input, { agent, force = false, allowStale = true } = {}) {
-  const context = normalizeUsageContext(input);
-  if (!context.key || isOfficialBaseUrl(context.baseUrl)) return "";
-  const account = usageAccountCacheKey(context);
-  const cached = force && !allowStale ? null : await cachedUsage(context);
-  const fallback = allowStale && cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "";
-  let task = pendingUsageRefreshes.get(account);
-  if (!task) {
-    if (!force && cached && cached.ageMs < REFRESH_INTERVAL_MS) return cached.text;
-    task = refreshCachedProviderUsage(context, { agent, force }).finally(() => pendingUsageRefreshes.delete(account));
-    pendingUsageRefreshes.set(account, task);
-  }
-  return (await task) || fallback;
-}
-
-async function refreshCachedProviderUsage(context, { agent, force }) {
-  const release = await acquireUsageRefreshLease(context);
-  if (!release) return "";
-  try {
-    if (!force && !(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return "";
-    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
-    return (await queryUsageContext(context, { agent, rememberSnapshot: true }))?.text || "";
-  } catch { return ""; }
-  finally { await release(); }
-}
-
 async function refresh(agent = "codex") {
   const context = await usageContext(agent);
   const release = await acquireUsageRefreshLease(context);
@@ -159,16 +70,10 @@ async function refresh(agent = "codex") {
   try {
     if (!(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return { skipped: true, text: "" };
     await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
-    return await queryUsageContext(context, { agent, rememberSnapshot: true });
+    return await queryUsageContext(context, { agent, mode, rememberSnapshot: true });
   } finally {
     await release();
   }
-}
-
-async function cachedUsage(context) {
-  const cached = await readUsageSnapshot(context);
-  const ageMs = cached?.updatedAt ? Date.now() - Date.parse(cached.updatedAt) : Infinity;
-  return cached?.text && Number.isFinite(ageMs) ? { ...cached, ageMs } : null;
 }
 
 export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, ...session } = {}) {
@@ -179,7 +84,7 @@ export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, .
       const cached = await cachedUsage(context);
       if (cached && cached.ageMs < maxAgeMs) return { ...cached, text: withOutputSpeed(cached.text, speed), cached: true };
     }
-    const result = await queryUsageContext(context, { agent, rememberSnapshot: true });
+    const result = await queryUsageContext(context, { agent, mode, rememberSnapshot: true });
     return { ...result, text: withOutputSpeed(result.text, speed) };
   } catch (error) {
     if (speed) return { text: speed };

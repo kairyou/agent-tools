@@ -24,7 +24,7 @@ test("ZCode Desktop shows account usage per session and discards results after a
   const manifest = JSON.parse(readFileSync(new URL(".zcode-plugin/plugin.json", plugin), "utf8"));
   const { createZcodeUsageExtension } = await import(new URL(manifest.extension.main, plugin));
   assert.deepEqual(manifest.slots["composer.status"][0], {
-    id: "gateway-usage", target: { command: "refresh-usage" }, icon: "chart-bar",
+    id: "gateway-usage", target: { command: "refresh-usage" }, icon: "gauge",
   });
 
   let releaseB;

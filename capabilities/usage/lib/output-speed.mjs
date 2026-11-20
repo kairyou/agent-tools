@@ -101,20 +101,23 @@ export function zcodeOutputSpeed(options = {}) {
   return formatOutputSpeed(row.output_tokens, row.completed_at - row.first_token_at);
 }
 
-export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId } = {}) {
+export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId, agentHome } = {}) {
   try {
     if (agent === "zcode") return zcodeOutputSpeed({ sessionId, turnId, cwd });
     cwd ??= process.cwd();
-    sessionId ??= process.env.CODEX_THREAD_ID;
     if (!transcriptPath && agent === "claude") {
-      const project = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+      const project = join(agentHome || process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
       transcriptPath = fs.readdirSync(project).filter((name) => name.endsWith(".jsonl"))
+        .filter((name) => !sessionId || name === `${sessionId}.jsonl`)
         .map((name) => ({ file: join(project, name), mtime: fs.statSync(join(project, name)).mtimeMs }))
         .sort((a, b) => b.mtime - a.mtime)[0]?.file;
-    } else if (!transcriptPath && agent === "codex" && sessionId) {
-      const root = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
-      transcriptPath = fs.readdirSync(root, { recursive: true }).filter((name) => name.endsWith(`-${sessionId}.jsonl`))
-        .map((name) => join(root, name))[0];
+    } else if (!transcriptPath && agent === "codex") {
+      sessionId ??= process.env.CODEX_THREAD_ID;
+      if (sessionId) {
+        const root = join(agentHome || process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
+        transcriptPath = fs.readdirSync(root, { recursive: true }).filter((name) => name.endsWith(`-${sessionId}.jsonl`))
+          .map((name) => join(root, name))[0];
+      }
     }
     if (!transcriptPath) return "";
     return agent === "claude" ? claudeOutputSpeed({ transcript_path: transcriptPath }) :

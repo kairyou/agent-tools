@@ -29,6 +29,17 @@ async function buildZcodeMarketplace(stage, options) {
   });
 }
 
+async function buildPaseoPlugin(stage, options) {
+  const src = path.join(ROOT, "capabilities", "usage");
+  const dir = path.join(stage, "paseo");
+  const external = ["@getpaseo/plugin", "zod"];
+  await build({ ...options, external, entryPoints: [path.join(src, "paseo-server.mjs")],
+    outfile: path.join(dir, "index.server.ts") });
+  await build({ ...options, platform: "browser", target: "es2022", external: [...external, "react", "react-native"],
+    entryPoints: [path.join(src, "paseo-client.mjs")], outfile: path.join(dir, "index.client.tsx") });
+  fs.copyFileSync(path.join(src, "paseo-plugin.json"), path.join(dir, "paseo-plugin.json"));
+}
+
 const TARGETS = {
   statusline: {
     entryPoints: {
@@ -98,6 +109,7 @@ for (const [name, { entryPoints, external = [] }] of Object.entries(TARGETS)) {
     if (name === "usage") {
       fs.copyFileSync(path.join(ROOT, "capabilities", "usage", "dsh-package.json"), path.join(stage, "package.json"));
       await buildZcodeMarketplace(stage, options);
+      await buildPaseoPlugin(stage, options);
     }
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.renameSync(stage, outDir);

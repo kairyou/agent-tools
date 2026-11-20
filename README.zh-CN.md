@@ -97,12 +97,11 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 ```
 
 `--dry-run` 预览, `--uninstall` 移除对应 capability, 重新执行安装命令即为更新.
-更新 `config.jsonc` 时只补充缺失的默认值, 保留已有值和注释.
 
 | 功能 | 安装项 | Agent (`-a`) |
 | --- | --- | --- |
 | Claude Code 状态栏 | `statusline` | `claude` |
-| 网关用量 | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness) |
+| 网关用量 | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | 跨模型识图 | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | 会话工作日志 | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
@@ -149,6 +148,7 @@ npx -y @kairyou/agent-tools@latest usage -a claude
 - **Pi** — 在底栏显示用量.
 - **ZCode** — 桌面版底栏显示网关用量, 可选显示 `tok/s`.
 - **DeepSeek Harness** — 底栏显示网关用量, 也可用 `/at-usage` 查询.
+- **Paseo** — 启用插件后, 新开或重载 Claude / Codex 会话. 点击输入框上方的用量查看详情.
 
 安装或更新后, 重启对应的 OpenCode, Pi, ZCode 或 DeepSeek Harness. Pi 也可运行 `/reload`.
 

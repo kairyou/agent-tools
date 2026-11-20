@@ -28,6 +28,7 @@
 //               + ~/.zcode/skills (at-usage, at-vision)
 //   dsh      -> ~/.dsh/cordis.patch.yml (usage/log plugins + vision MCP client)
 //               + ~/.dsh/skills (at-vision)
+//   paseo    -> Paseo daemon plugin (usage only)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -38,7 +39,7 @@
 //   agent-tools <capabilities> [options]
 //
 // Options:
-//   -a, --agent <names>       Target agents: claude | codex | opencode | pi | zcode | dsh.
+//   -a, --agent <names>       Target agents: claude | codex | opencode | pi | zcode | dsh | paseo.
 //                             Default: claude.
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
@@ -62,6 +63,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import crossSpawn from "cross-spawn";
 import { applyEdits, createScanner, findNodeAtLocation, modify, parse as parseJsonc, parseTree, SyntaxKind } from "jsonc-parser";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -117,7 +119,7 @@ const RUNTIME = {
   dshUsagePackage: path.join(INSTALL_ROOT, "dist", "usage", "package.json"),
 };
 const ALL_CAPS = ["statusline", "usage", "vision", "log"];
-const ALL_AGENTS = ["claude", "codex", "opencode", "pi", "zcode", "dsh"];
+const ALL_AGENTS = ["claude", "codex", "opencode", "pi", "zcode", "dsh", "paseo"];
 const AGENT_CAPS = {
   claude: ["statusline", "usage", "vision", "log"],
   codex: ["usage", "vision", "log"],
@@ -125,6 +127,7 @@ const AGENT_CAPS = {
   pi: ["usage", "vision", "log"],
   zcode: ["usage", "vision", "log"],
   dsh: ["usage", "vision", "log"],
+  paseo: ["usage"],
 };
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
@@ -279,6 +282,11 @@ function installRuntimeAssets(opts) {
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (wants(opts, "usage")) {
+    if (opts.agents.includes("paseo")) {
+      for (const file of PASEO_USAGE_FILES) {
+        addFile(path.join(REPO_ROOT, PASEO_USAGE_DIR, file), path.join(INSTALL_ROOT, PASEO_USAGE_DIR, file));
+      }
+    }
     if (opts.agents.includes("zcode")) {
       for (const file of ["marketplace.json", "agent-tools-usage/.zcode-plugin/plugin.json", "agent-tools-usage/zcode-extension.mjs"]) {
         addFile(path.join(REPO_ROOT, ZCODE_USAGE_MARKETPLACE, file), path.join(INSTALL_ROOT, ZCODE_USAGE_MARKETPLACE, file));
@@ -321,6 +329,8 @@ function installRuntimeAssets(opts) {
 const SOURCE_USAGE_ROUTES_DIR = path.join(REPO_ROOT, "dist", "usage", "routes");
 const RUNTIME_USAGE_ROUTES_DIR = path.join(INSTALL_ROOT, "dist", "usage", "routes");
 const ZCODE_USAGE_MARKETPLACE = path.join("dist", "usage", "zcode-marketplace");
+const PASEO_USAGE_DIR = path.join("dist", "usage", "paseo");
+const PASEO_USAGE_FILES = ["index.client.tsx", "index.server.ts", "paseo-plugin.json"];
 
 function syncUsageRoutesDir(dryRun) {
   const hasSource = fs.existsSync(SOURCE_USAGE_ROUTES_DIR);
@@ -408,6 +418,7 @@ function parseArgs(argv) {
     }
   }
   if (opts.agents.length === 0) opts.agents = ["claude"];
+  if (opts.capabilities.length === 0 && opts.agents.every((agent) => agent === "paseo")) opts.capabilities = ["usage"];
   if (!opts.help && opts.capabilities.length === 0) {
     console.error(`Missing capability (available: ${ALL_CAPS.join(", ")})`);
     process.exit(2);
@@ -1627,6 +1638,48 @@ function runDsh(opts) {
   }
 }
 
+function runPaseo(opts) {
+  const pluginId = "agent-tools-usage";
+  const source = path.resolve(INSTALL_ROOT, PASEO_USAGE_DIR);
+  if (opts.dryRun) {
+    console.log(`  [dry-run] would ${opts.uninstall ? "remove" : "install or reload"} ${pluginId} in Paseo`);
+    return;
+  }
+  function run(command, ...args) {
+    const result = crossSpawn.sync("paseo", ["plugin", command, ...args, "--json"], {
+      encoding: "utf8", windowsHide: true, timeout: 30_000,
+    });
+    if (result.error?.code === "ENOENT") throw new Error("Paseo CLI was not found on PATH.");
+    if (result.error || result.status !== 0) {
+      let message;
+      try { message = JSON.parse(result.stdout)?.error?.message; } catch { /* Paseo can also print plain text. */ }
+      throw new Error(result.error?.message || message || result.stderr?.trim() || `paseo plugin ${command} failed`);
+    }
+    return JSON.parse(result.stdout);
+  }
+
+  try {
+    const existing = run("ls").find(({ id }) => id === pluginId);
+    const identity = existing?.installation?.identity;
+    if (existing && (identity?.kind !== "directory" || path.relative(source, identity.path) !== "")) {
+      throw new Error(`The existing ${pluginId} plugin uses another source. Remove it in Paseo before replacing it.`);
+    }
+    if (opts.uninstall) {
+      if (existing) run("remove", pluginId);
+      for (const file of PASEO_USAGE_FILES) fs.rmSync(path.join(source, file), { force: true });
+      console.log("  - Paseo usage plugin");
+      return;
+    }
+    const plugin = existing ? run("reload", pluginId) : run("install", source);
+    if (plugin.status === "failed") throw new Error(plugin.error || "The Paseo plugin failed to load.");
+    console.log("  + Paseo usage plugin");
+    if (plugin.status === "disabled") console.log("  Enable plugins in Paseo to load the usage plugin.");
+  } catch (error) {
+    console.error(`Paseo usage: ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+
 function visionRuntimeHasRemainingReference(opts) {
   const removed = new Set(opts.agents);
   if (!removed.has("claude")) {
@@ -1728,6 +1781,7 @@ const AGENTS = {
   pi: runPi,
   zcode: runZcode,
   dsh: runDsh,
+  paseo: runPaseo,
 };
 
 function main() {

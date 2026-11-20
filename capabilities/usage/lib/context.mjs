@@ -3,12 +3,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-  AUTH_PATH,
-  CODEX_CONFIG_PATH,
-  readJson,
-  readTextIfExists,
-} from "./config.mjs";
+import { readJson, readTextIfExists } from "./config.mjs";
 import { readZcodeSessionProvider } from "./zcode-session.mjs";
 
 function stripInlineComment(value) {
@@ -66,21 +61,21 @@ function activeProvider(config) {
   return { providerName, provider };
 }
 
-function apiKeyFor(auth, provider) {
-  if (process.env.PROVIDER_USAGE_API_KEY) return process.env.PROVIDER_USAGE_API_KEY;
-  if (process.env.SUB2API_API_KEY) return process.env.SUB2API_API_KEY;
-  if (provider.env_key && process.env[provider.env_key]) return process.env[provider.env_key];
+function apiKeyFor(auth, provider, env) {
+  if (env.PROVIDER_USAGE_API_KEY) return env.PROVIDER_USAGE_API_KEY;
+  if (env.SUB2API_API_KEY) return env.SUB2API_API_KEY;
+  if (provider.env_key && env[provider.env_key]) return env[provider.env_key];
   if (provider.experimental_bearer_token) return provider.experimental_bearer_token;
   if (auth.OPENAI_API_KEY) return auth.OPENAI_API_KEY;
-  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+  if (env.OPENAI_API_KEY) return env.OPENAI_API_KEY;
   return "";
 }
 
-function apiKeyForClaude() {
+function apiKeyForClaude(env) {
   return (
-    process.env.PROVIDER_USAGE_API_KEY ||
-    process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_API_KEY ||
+    env.PROVIDER_USAGE_API_KEY ||
+    env.ANTHROPIC_AUTH_TOKEN ||
+    env.ANTHROPIC_API_KEY ||
     ""
   );
 }
@@ -89,17 +84,19 @@ function providerLabel(providerName, provider) {
   return String(provider.name || providerName || "API").toUpperCase();
 }
 
-async function contextForCodex() {
-  const auth = existsSync(AUTH_PATH) ? await readJson(AUTH_PATH) : {};
-  const codexConfig = parseTomlLite(await readTextIfExists(CODEX_CONFIG_PATH));
+async function contextForCodex({ env = process.env } = {}) {
+  const home = env.CODEX_HOME || join(homedir(), ".codex");
+  const authFile = join(home, "auth.json");
+  const auth = existsSync(authFile) ? await readJson(authFile) : {};
+  const codexConfig = parseTomlLite(await readTextIfExists(join(home, "config.toml")));
   const { providerName, provider } = activeProvider(codexConfig);
   const baseUrl =
-    process.env.PROVIDER_USAGE_BASE_URL ||
-    process.env.SUB2API_BASE_URL ||
-    process.env.OPENAI_BASE_URL ||
+    env.PROVIDER_USAGE_BASE_URL ||
+    env.SUB2API_BASE_URL ||
+    env.OPENAI_BASE_URL ||
     provider.base_url ||
     "";
-  const key = apiKeyFor(auth, provider);
+  const key = apiKeyFor(auth, provider, env);
   return {
     providerName,
     provider,
@@ -109,23 +106,23 @@ async function contextForCodex() {
   };
 }
 
-function contextForClaude() {
+function contextForClaude({ env = process.env } = {}) {
   const baseUrl =
-    process.env.PROVIDER_USAGE_BASE_URL ||
-    process.env.ANTHROPIC_BASE_URL ||
+    env.PROVIDER_USAGE_BASE_URL ||
+    env.ANTHROPIC_BASE_URL ||
     "";
   return {
     providerName: "claude",
     provider: { name: "Claude" },
     baseUrl,
-    key: apiKeyForClaude(),
+    key: apiKeyForClaude(env),
     label: "Claude",
   };
 }
 
 export async function usageContext(agent, options) {
-  if (agent === "claude") return contextForClaude();
-  if (agent === "codex") return await contextForCodex();
+  if (agent === "claude") return contextForClaude(options);
+  if (agent === "codex") return await contextForCodex(options);
   if (agent === "zcode") return await contextForZcode(options);
   throw new Error(`Provider context requires the ${agent} native adapter`);
 }

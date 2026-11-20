@@ -1,0 +1,5 @@
+{
+  "id": "agent-tools-usage",
+  "description": "Show gateway usage in the agent composer",
+  "requirements": { "paseo": ">=0.9.1" }
+}

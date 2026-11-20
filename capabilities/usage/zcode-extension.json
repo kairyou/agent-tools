@@ -12,6 +12,6 @@
     }
   },
   "slots": {
-    "composer.status": [{ "id": "gateway-usage", "target": { "command": "refresh-usage" }, "icon": "chart-bar" }]
+    "composer.status": [{ "id": "gateway-usage", "target": { "command": "refresh-usage" }, "icon": "gauge" }]
   }
 }
