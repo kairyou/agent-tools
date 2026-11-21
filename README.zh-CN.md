@@ -97,7 +97,7 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 ```
 
 | 功能 | 安装项 | Agent (`-a`) |
-| --- | --- | --- |
+| --- | :---: | --- |
 | Claude Code 状态栏与用量 | `statusline` | `claude` |
 | 网关用量 | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | 跨模型识图 | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |

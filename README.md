@@ -97,8 +97,8 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 # npx -y github:kairyou/agent-tools <capability> -a <agent...>  # Or the latest code from GitHub (needs Git)
 ```
 
-| Feature | Install name | Agent (`-a`) |
-| --- | --- | --- |
+| Feature | Install | Agent (`-a`) |
+| --- | :---: | --- |
 | Claude Code status line and usage | `statusline` | `claude` |
 | Gateway usage | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
