@@ -100,7 +100,7 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 | Feature | Install | Agent (`-a`) |
 | --- | :---: | --- |
 | Claude Code status line and usage | `statusline` | `claude` |
-| Gateway usage | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
+| Gateway usage | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo`, `copilot`, `qwen` |
 | Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | Session work logs | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
@@ -147,6 +147,7 @@ npx -y @kairyou/agent-tools@latest usage -a codex
 - **ZCode** — the desktop footer shows gateway usage and optional `tok/s`.
 - **DeepSeek Harness** — shows gateway usage in the footer or on demand with `/at-usage`.
 - **Paseo** — enable plugins, then start or reload a Claude or Codex session. Click the usage above the input box for details.
+- **Copilot CLI, Qwen Code** — restart after installation to see gateway usage in the footer. If a custom status line is already configured, the installer leaves it in place. Qwen Code matches models in user settings by unique display name.
 
 After installing or updating, restart OpenCode, Pi, ZCode, or DeepSeek Harness as applicable.
 Pi also supports `/reload`.

@@ -6,8 +6,8 @@ agent-tools/
 ├── .codex-plugin/     # Codex plugin manifest.
 ├── .zcode-plugin/     # ZCode plugin manifest.
 ├── capabilities/      # Runtime capabilities, one directory each.
-│   ├── statusline/    # Claude Code status line.
-│   ├── usage/         # Provider balance / quota and local output speed.
+│   ├── statusline/    # Claude Code and Codex status lines.
+│   ├── usage/         # Gateway quota, output speed, and usage adapters.
 │   ├── vision/        # Cross-model image understanding and host adapters.
 │   └── log/           # Session work-log hooks and plugins.
 ├── skills/            # Reusable Agent Skills.

@@ -52,6 +52,8 @@ const TARGETS = {
       core: path.join(ROOT, "capabilities", "usage", "core.mjs"),
       cli: path.join(ROOT, "capabilities", "usage", "cli.mjs"),
       "codex-hook": path.join(ROOT, "capabilities", "usage", "codex-hook.mjs"),
+      "copilot-statusline": path.join(ROOT, "capabilities", "usage", "copilot-statusline.mjs"),
+      "qwen-statusline": path.join(ROOT, "capabilities", "usage", "qwen-statusline.mjs"),
       "opencode-plugin": path.join(ROOT, "capabilities", "usage", "opencode-plugin.mjs"),
       "opencode-tui": path.join(ROOT, "capabilities", "usage", "opencode-tui.mjs"),
       "pi-extension": path.join(ROOT, "capabilities", "usage", "pi-extension.mjs"),

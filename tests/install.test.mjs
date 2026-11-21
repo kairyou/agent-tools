@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -72,6 +72,45 @@ for (const capability of ["usage", "log"]) test(`Pi ${capability} install, updat
   runInstall([...args, "--uninstall"], env);
   assert.equal(readFileSync(stub, "utf8"), "// user-owned usage extension\n");
 });
+
+for (const [agent, settingsKey] of [["copilot", "COPILOT_HOME"], ["qwen", "QWEN_HOME"]]) {
+  test(`${agent} usage installs a footer and preserves existing settings`, (t) => {
+    const home = mkdtempSync(join(tmpdir(), `agent-tools-${agent}-`));
+    t.after(() => rmSync(home, { recursive: true, force: true }));
+    const runtime = join(home, "runtime with spaces");
+    const settings = join(home, "settings.json");
+    const env = { AGENT_TOOLS_HOME: runtime, [settingsKey]: home };
+    const args = ["usage", "-a", agent];
+    const original = agent === "copilot" ? { footer: { showBranch: false } } : { ui: { hideContextIndicator: true } };
+    writeFileSync(settings, "// keep comment\n" + JSON.stringify(original, null, 2) + "\n");
+    const read = () => readFileSync(settings, "utf8");
+    const prior = read();
+    runInstall([...args, "--dry-run"], env);
+    assert.equal(read(), prior);
+    assert.equal(existsSync(runtime), false);
+
+    runInstall(args, env);
+    const installed = read();
+    assert.match(installed, /\/\/ keep comment/);
+    const config = parseJsonc(installed);
+    const owner = agent === "copilot" ? config : config.ui;
+    assert.equal(owner.statusLine.type, "command");
+    assert.ok(owner.statusLine.command.endsWith(`/dist/usage/${agent}-statusline.mjs"`));
+    assert.ok(existsSync(join(runtime, "dist", "usage", `${agent}-statusline.mjs`)));
+    runInstall(args, env);
+    assert.equal(read(), installed);
+    runInstall([...args, "--uninstall"], env);
+    assert.deepEqual(parseJsonc(read()), original);
+    assert.match(read(), /\/\/ keep comment/);
+
+    owner.statusLine = agent === "copilot" ? { type: "command", command: "user-command" } : { type: "preset", items: ["git-branch"] };
+    const customized = JSON.stringify(config, null, 2) + "\n";
+    writeFileSync(settings, customized);
+    runInstall(args, env);
+    runInstall([...args, "--uninstall"], env);
+    assert.equal(read(), customized);
+  });
+}
 
 test("Codex usage follows the CLI version while preserving other hooks", () => {
   const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-statusline-"));

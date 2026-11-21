@@ -5,7 +5,7 @@
 //
 // Capabilities (all global for now — they target the user-level config):
 //   statusline  Claude Code statusLine script (claude only).
-//   usage       API provider quota/balance via per-agent hooks or plugins.
+//   usage       API provider quota/balance in the agent.
 //   vision      inspect_image host adapter + at-vision skill.
 //   log         AI session work log via per-agent hooks or plugins.
 //
@@ -30,6 +30,8 @@
 //   dsh      -> ~/.dsh/cordis.patch.yml (usage/log plugins + vision MCP client)
 //               + ~/.dsh/skills (at-vision)
 //   paseo    -> Paseo daemon plugin (usage only)
+//   copilot  -> ~/.copilot/settings.json (usage footer)
+//   qwen     -> ~/.qwen/settings.json (usage footer)
 // Runtime scripts are copied into ~/.agent-tools so this installer can be
 // run via npx from GitHub without requiring a persistent local clone.
 //
@@ -40,7 +42,7 @@
 //   agent-tools <capabilities> [options]
 //
 // Options:
-//   -a, --agent <names>       Target agents: claude | codex | opencode | pi | zcode | dsh | paseo.
+//   -a, --agent <names>       Target agents: claude | codex | opencode | pi | zcode | dsh | paseo | copilot | qwen.
 //                             Default: claude.
 //   --settings <path>         Override the Claude settings.json (for testing).
 //   --codex-hooks <path>      Override the Codex hooks.json (for testing).
@@ -67,6 +69,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import crossSpawn from "cross-spawn";
 import { applyEdits, createScanner, findNodeAtLocation, modify, parse as parseJsonc, parseTree, SyntaxKind } from "jsonc-parser";
 import { codexStatuslineConflict, editCodexStatusline } from "./codex-statusline-config.mjs";
+import { usageCliHome } from "../capabilities/usage/lib/cli-settings.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_ROOT =
@@ -123,7 +126,10 @@ const RUNTIME = {
   dshUsagePackage: path.join(INSTALL_ROOT, "dist", "usage", "package.json"),
 };
 const ALL_CAPS = ["statusline", "usage", "vision", "log"];
-const ALL_AGENTS = ["claude", "codex", "opencode", "pi", "zcode", "dsh", "paseo"];
+const COMMAND_STATUSLINES = { copilot: ["statusLine"], qwen: ["ui", "statusLine"] };
+// These hosts run a new command each repaint. Give background quota refreshes
+// a chance to appear soon after startup without polling the gateway more often.
+const COMMAND_STATUSLINE_REFRESH_SECONDS = 5;
 const AGENT_CAPS = {
   claude: ["statusline", "usage", "vision", "log"],
   codex: ["usage", "vision", "log"],
@@ -132,7 +138,10 @@ const AGENT_CAPS = {
   zcode: ["usage", "vision", "log"],
   dsh: ["usage", "vision", "log"],
   paseo: ["usage"],
+  copilot: ["usage"],
+  qwen: ["usage"],
 };
+const ALL_AGENTS = Object.keys(AGENT_CAPS);
 const VISION_MCP_NAME = "agent-tools-vision";
 const VISION_SKILL_NAME = "at-vision";
 // The at-vision skill ships inside the vision capability dir (capabilities/vision),
@@ -311,6 +320,10 @@ function installRuntimeAssets(opts) {
     if (opts.agents.includes("opencode")) {
       addFile(SOURCE.opencodeUsagePlugin, RUNTIME.opencodeUsagePlugin);
       addFile(SOURCE.opencodeUsageTui, RUNTIME.opencodeUsageTui);
+    }
+    for (const agent of opts.agents.filter((name) => Object.hasOwn(COMMAND_STATUSLINES, name))) {
+      const script = commandStatuslineScript(agent);
+      addFile(path.join(REPO_ROOT, script), path.join(INSTALL_ROOT, script));
     }
     addFile(SOURCE.usageScript, RUNTIME.usageScript);
     addFile(SOURCE.usageCli, RUNTIME.usageCli);
@@ -1847,6 +1860,31 @@ function cleanupVisionRuntimeIfUnused(opts) {
   console.log(`  removed unused vision runtime ${VISION_RUNTIME_DIR}`);
 }
 
+function commandStatuslineScript(agent) {
+  return path.join("dist", "usage", `${agent}-statusline.mjs`);
+}
+
+function runCommandStatusline(agent, opts) {
+  const file = path.join(usageCliHome(agent), "settings.json");
+  const segments = COMMAND_STATUSLINES[agent];
+  const command = nodeCmd(path.resolve(INSTALL_ROOT, commandStatuslineScript(agent)));
+  const config = readJsonc(file);
+  const current = segments.reduce((value, key) => value?.[key], config);
+  const ownsStatusline = current?.type === "command" && current.command === command;
+  console.log(`${agent} usage: ${file}`);
+  if (opts.uninstall ? !ownsStatusline : current !== undefined) {
+    if (!opts.uninstall && !ownsStatusline) console.log("  Kept existing status line.");
+    return;
+  }
+
+  const original = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "{}\n";
+  const formattingOptions = { insertSpaces: true, tabSize: 2, eol: original.includes("\r\n") ? "\r\n" : "\n" };
+  const desired = opts.uninstall ? undefined : { type: "command", command, refreshInterval: COMMAND_STATUSLINE_REFRESH_SECONDS };
+  const updated = applyEdits(original, modify(original, segments, desired, { formattingOptions }));
+  writeText(file, updated, opts.dryRun);
+  if (!opts.uninstall && !opts.dryRun) console.log("  Restart the CLI to see gateway usage in the footer.");
+}
+
 const AGENTS = {
   claude: runClaude,
   codex: runCodex,
@@ -1855,6 +1893,8 @@ const AGENTS = {
   zcode: runZcode,
   dsh: runDsh,
   paseo: runPaseo,
+  copilot: (opts) => runCommandStatusline("copilot", opts),
+  qwen: (opts) => runCommandStatusline("qwen", opts),
 };
 
 function main() {
