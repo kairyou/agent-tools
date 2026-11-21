@@ -84,11 +84,26 @@ function providerLabel(providerName, provider) {
   return String(provider.name || providerName || "API").toUpperCase();
 }
 
-async function contextForCodex({ env = process.env } = {}) {
+async function contextForCodex({ env = process.env, providerId } = {}) {
   const home = env.CODEX_HOME || join(homedir(), ".codex");
   const authFile = join(home, "auth.json");
   const auth = existsSync(authFile) ? await readJson(authFile) : {};
   const codexConfig = parseTomlLite(await readTextIfExists(join(home, "config.toml")));
+  if (providerId) {
+    const providers = codexConfig.model_providers ?? {};
+    const provider = Object.hasOwn(providers, providerId) ? providers[providerId] : {};
+    const builtIn = providerId === "openai" && !Object.hasOwn(providers, providerId);
+    // Explicit usage overrides follow the default provider. Other sessions keep their own credentials.
+    const overrides = providerId === (codexConfig.model_provider || "openai") ? env : {};
+    return {
+      providerName: providerId, provider, label: providerLabel(providerId, provider),
+      baseUrl: overrides.PROVIDER_USAGE_BASE_URL || overrides.SUB2API_BASE_URL ||
+        (builtIn ? env.OPENAI_BASE_URL : provider.base_url) || "",
+      key: overrides.PROVIDER_USAGE_API_KEY || overrides.SUB2API_API_KEY ||
+        (builtIn ? auth.OPENAI_API_KEY || env.OPENAI_API_KEY :
+          (provider.env_key && env[provider.env_key]) || provider.experimental_bearer_token) || "",
+    };
+  }
   const { providerName, provider } = activeProvider(codexConfig);
   const baseUrl =
     env.PROVIDER_USAGE_BASE_URL ||

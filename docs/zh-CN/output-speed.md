@@ -18,6 +18,7 @@ Claude Code 通过响应 ID 和用量校验耗时是否只对应一次响应.
 计时缺失或无法确认时, 改用用户输入或工具结果到响应完成的日志时间估算.
 
 缺少有效的 token 用量或计时数据时, 不显示速度.
+Codex 底栏和用量提示使用同一计时口径.
 Paseo 在开启 `providerUsage.outputSpeed` 后, 根据对应的 Claude 或 Codex 会话日志估算.
 
 ## 为什么是估算

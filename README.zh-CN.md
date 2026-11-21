@@ -96,12 +96,10 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 # npx -y github:kairyou/agent-tools <capability> -a <agent...>  # 或用 GitHub 上的最新代码(需 Git)
 ```
 
-`--dry-run` 预览, `--uninstall` 移除对应 capability, 重新执行安装命令即为更新.
-
 | 功能 | 安装项 | Agent (`-a`) |
 | --- | --- | --- |
-| Claude Code 状态栏 | `statusline` | `claude` |
-| 网关用量 | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
+| Claude Code 状态栏与用量 | `statusline` | `claude` |
+| 网关用量 | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | 跨模型识图 | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | 会话工作日志 | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
@@ -128,7 +126,8 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 在 `~/.agent-tools/config.jsonc` 的 `statusline.fields` 中设置显示项及顺序;
 加入 `"outputSpeed"` 可显示估算输出速度 (如 `38.2 tok/s`).
 
-中转网关用量的支持范围与配置见 [Provider usage](#provider-usage).
+设置 `statusline.showProviderUsage` 为 `false` 可隐藏中转网关用量.
+支持的网关与配置见 [Provider usage](#provider-usage).
 
 #### Provider usage
 
@@ -137,13 +136,10 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 取决于网关版本及其是否开放相应接口.
 
 ```bash
-# 以 Claude Code 为例
-npx -y @kairyou/agent-tools@latest usage -a claude
+npx -y @kairyou/agent-tools@latest usage -a codex
 ```
 
-- **Claude Code** — `usage` 安装 `/at-usage` 供手动查询. `statusline` 自动显示网关用量.
-  设置 `statusline.showProviderUsage: false` 可隐藏状态栏的中转网关用量.
-- **Codex** — 在 CLI 中运行 `/hooks` 批准自动提示. 手动查询用 `$at-usage`.
+- **Codex** — CLI 0.171.0 起优先使用底栏, 安装后重启生效. 用量提示需在 `/hooks` 中批准. 也可用 `$at-usage` 查询.
 - **OpenCode** — 会话空闲时弹出用量提示, 也可用 `/at-usage` 查询.
 - **Pi** — 在底栏显示用量.
 - **ZCode** — 桌面版底栏显示网关用量, 可选显示 `tok/s`.

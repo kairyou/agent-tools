@@ -29,6 +29,17 @@ function runInstallRaw(args, env) {
   });
 }
 
+function mockCodexVersion(home, version) {
+  const bin = join(home, "bin");
+  mkdirSync(bin, { recursive: true });
+  if (process.platform === "win32") {
+    writeFileSync(join(bin, "codex.cmd"), `@echo codex-cli ${version}\r\n`);
+  } else {
+    writeFileSync(join(bin, "codex"), `#!/bin/sh\necho codex-cli ${version}\n`, { mode: 0o755 });
+  }
+  return { PATH: bin };
+}
+
 for (const capability of ["usage", "log"]) test(`Pi ${capability} install, update, dry-run and uninstall preserve other extensions`, () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-pi-install-"));
   const home = join(temp, "runtime with spaces");
@@ -62,12 +73,109 @@ for (const capability of ["usage", "log"]) test(`Pi ${capability} install, updat
   assert.equal(readFileSync(stub, "utf8"), "// user-owned usage extension\n");
 });
 
+test("Codex usage follows the CLI version while preserving other hooks", () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-statusline-"));
+  const runtime = join(home, "runtime");
+  const config = join(home, "config.toml");
+  const hooks = join(home, "hooks.json");
+  const original = '[tui]\nstatus_line = ["model", "context-remaining"]\n\n[model_providers.relay]\nenv_key = "RELAY_KEY"\n';
+  const external = { hooks: [{ type: "command", command: "user-hook" }] };
+  writeFileSync(config, original);
+  writeFileSync(hooks, JSON.stringify({ hooks: { Stop: [external] } }));
+  const args = ["usage", "-a", "codex", "--codex-config", config, "--codex-skills-dir", join(home, "skills")];
+  const env = { AGENT_TOOLS_HOME: runtime, ...mockCodexVersion(home, "0.170.0") };
+  runInstall(args, env);
+  assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 2);
+
+  mockCodexVersion(home, "0.171.0");
+  runInstall([...args, "--dry-run"], env);
+  assert.equal(readFileSync(config, "utf8"), original);
+  runInstall(args, env);
+  const registered = readFileSync(config, "utf8");
+  assert.match(registered, /^features\.tui_extensions_statusline = true$/m);
+  assert.match(registered, /^\[tui\]\nstatus_line_provider = \{ server = "agent-tools-codex-statusline", tool = "statusline" \}\nstatus_line = \["model", "context-remaining"\]$/m);
+  assert.ok(registered.includes('[model_providers.relay]\nenv_key = "RELAY_KEY"\n'));
+  assert.match(registered, /\[mcp_servers\.agent-tools-codex-statusline\]/);
+  assert.match(registered, /^env_vars = \["OPENAI_BASE_URL","OPENAI_API_KEY","PROVIDER_USAGE_BASE_URL","PROVIDER_USAGE_API_KEY","SUB2API_BASE_URL","SUB2API_API_KEY","RELAY_KEY"\]$/m);
+  assert.ok(existsSync(join(runtime, "dist", "statusline", "codex-statusline.mjs")));
+  assert.deepEqual(JSON.parse(readFileSync(hooks, "utf8")).hooks, { Stop: [external] });
+  runInstall(args, env);
+  assert.equal(readFileSync(config, "utf8"), registered);
+
+  mockCodexVersion(home, "0.170.0");
+  runInstall(args, env);
+  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+  assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 2);
+  mockCodexVersion(home, "0.172.0");
+  runInstall(args, env);
+  assert.match(readFileSync(config, "utf8"), /\[mcp_servers\.agent-tools-codex-statusline\]/);
+  runInstall([...args, "--uninstall"], env);
+  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+  assert.deepEqual(JSON.parse(readFileSync(hooks, "utf8")).hooks, { Stop: [external] });
+});
+
+test("Codex preserves the native footer if it contains unsupported fields", () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-statusline-fields-"));
+  const config = join(home, "config.toml");
+  const hooks = join(home, "hooks.json");
+  const env = { AGENT_TOOLS_HOME: join(home, "runtime"), ...mockCodexVersion(home, "0.171.0") };
+  const args = ["usage", "-a", "codex", "--codex-config", config, "--codex-skills-dir", join(home, "skills")];
+  const original = '[tui]\nstatus_line = ["model", "total-input-tokens", "pull-request-number"] # keep\n';
+  writeFileSync(config, original);
+  runInstall(args, env);
+  assert.equal(readFileSync(config, "utf8"), original);
+  assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 1);
+
+  writeFileSync(config, original.replace(', "pull-request-number"', ""));
+  runInstall(args, env);
+  const installed = readFileSync(config, "utf8");
+  assert.match(installed, /status_line_provider = \{ server = "agent-tools-codex-statusline"/);
+  assert.equal(existsSync(hooks), false);
+
+  // A subsequent install must also preserve fields selected after enabling our footer.
+  writeFileSync(config, installed.replace('"total-input-tokens"]', '"total-input-tokens", "pull-request-number"]'));
+  runInstall(args, env);
+  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+  assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 1);
+});
+
+for (const [label, original, installed] of [
+  ["inline tables",
+    'features = { tui_extensions_statusline = false, other = true } # flags\ntui = { status_line_provider = "default", status_line = ["model"] } # display\n',
+    'features = { tui_extensions_statusline = true, other = true } # flags\ntui = { status_line_provider = { server = "agent-tools-codex-statusline", tool = "statusline" }, status_line = ["model"] } # display\n'],
+  ["named tables",
+    '[features]\ntui_extensions_statusline = false # user setting\n\n[tui]\nstatus_line_provider = "default" # keep this comment\n',
+    '[features]\ntui_extensions_statusline = true # user setting\n\n[tui]\nstatus_line_provider = { server = "agent-tools-codex-statusline", tool = "statusline" } # keep this comment\n'],
+]) test(`Codex status line install restores preferences in ${label} and preserves later provider choices`, () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-statusline-config-"));
+  const config = join(home, "config.toml");
+  const env = { AGENT_TOOLS_HOME: join(home, "runtime"), ...mockCodexVersion(home, "0.171.0") };
+  const args = ["usage", "-a", "codex", "--codex-config", config, "--codex-skills-dir", join(home, "skills")];
+  writeFileSync(config, original);
+  runInstall(args, env);
+  const configured = readFileSync(config, "utf8");
+  assert.ok(configured.startsWith(installed), configured);
+  runInstall(args, env);
+  runInstall([...args, "--uninstall"], env);
+  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+
+  runInstall(args, env);
+  const changed = readFileSync(config, "utf8").replace('server = "agent-tools-codex-statusline"', 'server = "another-provider"');
+  writeFileSync(config, changed);
+  runInstall([...args, "--uninstall"], env);
+  const after = readFileSync(config, "utf8");
+  assert.equal(after.trimEnd(), installed.replace('server = "agent-tools-codex-statusline"', 'server = "another-provider"').trimEnd());
+  runInstall(args, env);
+  assert.equal(readFileSync(config, "utf8"), after);
+  assert.equal(JSON.parse(readFileSync(join(home, "hooks.json"), "utf8")).hooks.Stop.length, 1);
+});
+
 test("installer wires and unwires Codex usage without removing unrelated hooks", () => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
   const runtime = join(temp, "runtime");
   const hooksFile = join(temp, "hooks.json");
   const skillsDir = join(temp, "skills");
-  const env = { AGENT_TOOLS_HOME: runtime };
+  const env = { AGENT_TOOLS_HOME: runtime, PATH: temp };
   const existingHook = {
     matcher: "^Bash$",
     hooks: [{ type: "command", command: "node user-hook.mjs" }],
@@ -89,6 +197,7 @@ test("installer wires and unwires Codex usage without removing unrelated hooks",
     skillsDir,
   ];
   runInstall(args, env);
+  assert.equal(existsSync(join(temp, "config.toml")), false);
   assert.equal(existsSync(staleRoute), false);
   const installed = JSON.parse(readFileSync(hooksFile, "utf8"));
 

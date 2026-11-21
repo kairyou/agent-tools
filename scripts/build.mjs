@@ -44,6 +44,7 @@ const TARGETS = {
   statusline: {
     entryPoints: {
       "claude-statusline": path.join(ROOT, "capabilities", "statusline", "claude-statusline.mjs"),
+      "codex-statusline": path.join(ROOT, "capabilities", "statusline", "codex-statusline.mjs"),
     },
   },
   usage: {

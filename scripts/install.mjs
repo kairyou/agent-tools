@@ -17,9 +17,10 @@
 //   claude   -> ~/.claude/settings.json (statusLine key + log hooks)
 //               + ~/.claude/skills/at-usage
 //               ~/.claude.json (vision MCP) + ~/.claude/skills (at-vision)
-//   codex    -> ~/.codex/hooks.json (usage + log hooks)
+//   codex    -> ~/.codex/config.toml (usage status line and vision MCP)
+//               ~/.codex/hooks.json (usage notices on older CLIs + log hooks)
 //               + ~/.agents/skills/at-usage
-//               ~/.codex/config.toml (vision MCP) + ~/.agents/skills (at-vision)
+//               + ~/.agents/skills/at-vision
 //   opencode -> ~/.config/opencode/ (usage + log plugins,
 //               vision MCP in opencode.json + skills/at-vision)
 //   pi       -> ~/.pi/agent/extensions/ (usage footer + session log + native vision tool)
@@ -65,6 +66,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import crossSpawn from "cross-spawn";
 import { applyEdits, createScanner, findNodeAtLocation, modify, parse as parseJsonc, parseTree, SyntaxKind } from "jsonc-parser";
+import { codexStatuslineConflict, editCodexStatusline } from "./codex-statusline-config.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL_ROOT =
@@ -93,6 +95,7 @@ const SOURCE = {
   usageCli: path.join(REPO_ROOT, "dist", "usage", "cli.mjs"),
   config: path.join(REPO_ROOT, "config.default.jsonc"),
   claudeStatusline: path.join(REPO_ROOT, "dist", "statusline", "claude-statusline.mjs"),
+  codexStatusline: path.join(REPO_ROOT, "dist", "statusline", "codex-statusline.mjs"),
   opencodeUsagePlugin: path.join(REPO_ROOT, "dist", "usage", "opencode-plugin.mjs"),
   opencodeUsageTui: path.join(REPO_ROOT, "dist", "usage", "opencode-tui.mjs"),
   piUsageExtension: path.join(REPO_ROOT, "dist", "usage", "pi-extension.mjs"),
@@ -111,6 +114,7 @@ const RUNTIME = {
   usageCli: path.join(INSTALL_ROOT, "dist", "usage", "cli.mjs"),
   config: path.join(INSTALL_ROOT, "config.jsonc"),
   claudeStatusline: path.join(INSTALL_ROOT, "dist", "statusline", "claude-statusline.mjs"),
+  codexStatusline: path.join(INSTALL_ROOT, "dist", "statusline", "codex-statusline.mjs"),
   opencodeUsagePlugin: path.join(INSTALL_ROOT, "dist", "usage", "opencode-plugin.mjs"),
   opencodeUsageTui: path.join(INSTALL_ROOT, "dist", "usage", "opencode-tui.mjs"),
   piUsageExtension: path.join(INSTALL_ROOT, "dist", "usage", "pi-extension.mjs"),
@@ -301,7 +305,8 @@ function installRuntimeAssets(opts) {
       addFile(SOURCE.piUsageExtension, RUNTIME.piUsageExtension);
     }
     if (opts.agents.includes("codex")) {
-      addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
+      if (opts.codexStatusline) addFile(SOURCE.codexStatusline, RUNTIME.codexStatusline);
+      else addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
     }
     if (opts.agents.includes("opencode")) {
       addFile(SOURCE.opencodeUsagePlugin, RUNTIME.opencodeUsagePlugin);
@@ -357,6 +362,7 @@ function parseArgs(argv) {
     claudeSkillsDir: null,
     codexConfig: null,
     codexSkillsDir: null,
+    codexStatusline: false,
     piAgentDir: null,
     zcodeConfig: null,
     zcodeSkillsDir: null,
@@ -906,38 +912,41 @@ function installUsageSkillDir(skillsRoot, agent, { remove, dryRun }) {
 
 const CODEX_VISION_BEGIN = "# >>> agent-tools vision >>>";
 const CODEX_VISION_END = "# <<< agent-tools vision <<<";
+const CODEX_STATUSLINE_NAME = "agent-tools-codex-statusline";
 
-// Codex config.toml is user-owned free-form TOML; we manage exactly one
-// marker-delimited block so install/update/uninstall never touch other keys.
-function updateCodexVisionBlock(file, { remove, dryRun, mcp }) {
+// Each integration owns its marker-delimited MCP block. The caller can also
+// update settings that select its provider.
+function updateCodexMcpBlock(file, { remove, dryRun, mcp, name, begin, end, edit }) {
   const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const blockRe = new RegExp(
-    `\\r?\\n?${escape(CODEX_VISION_BEGIN)}[\\s\\S]*?${escape(CODEX_VISION_END)}\\r?\\n?`
+    `\\r?\\n?${escape(begin)}[\\s\\S]*?${escape(end)}\\r?\\n?`
   );
-  let next = current.replace(blockRe, "\n").replace(/^\n+/, "");
+  let next = blockRe.test(current) ? current.replace(blockRe, "\n").replace(/^\n+/, "") : current;
   if (!remove) {
     // A same-named table outside our marker block would make the appended
     // TOML a duplicate declaration and break the ENTIRE config.toml parse.
-    const manualRe = new RegExp(`^\\s*\\[mcp_servers\\.["']?${escape(VISION_MCP_NAME)}["']?\\]`, "m");
+    const manualRe = new RegExp(`^\\s*\\[mcp_servers\\.["']?${escape(name)}["']?\\]`, "m");
     if (manualRe.test(next)) {
       console.error(
-        `  Found an existing [mcp_servers.${VISION_MCP_NAME}] entry in ${file} that was not ` +
+        `  Found an existing [mcp_servers.${name}] entry in ${file} that was not ` +
           "written by this installer. Remove or rename that entry, then re-run the install."
       );
       process.exit(1);
     }
     const args = mcp.args.map((a) => JSON.stringify(a)).join(", ");
     const block = [
-      CODEX_VISION_BEGIN,
-      `[mcp_servers.${VISION_MCP_NAME}]`,
+      begin,
+      `[mcp_servers.${name}]`,
       `command = ${JSON.stringify(mcp.command)}`,
       `args = [${args}]`,
-      CODEX_VISION_END,
+      ...(mcp.extraLines ?? []),
+      end,
       "",
     ].join("\n");
     next = next.trim() === "" ? block : next.replace(/\s*$/, "\n\n") + block;
   }
+  if (edit) next = edit(next);
   if (next === current) {
     console.log(`  kept existing ${file}`);
     return;
@@ -1042,13 +1051,84 @@ function runCodexVision(opts) {
   const file = opts.codexConfig || path.join(os.homedir(), ".codex", "config.toml");
   const skillsDir = opts.codexSkillsDir || path.join(os.homedir(), ".agents", "skills");
   console.log(`codex vision: ${file}`);
-  updateCodexVisionBlock(file, {
+  updateCodexMcpBlock(file, {
     remove: opts.uninstall,
     dryRun: opts.dryRun,
     mcp: visionMcpCommand(),
+    name: VISION_MCP_NAME,
+    begin: CODEX_VISION_BEGIN,
+    end: CODEX_VISION_END,
   });
   installVisionSkillDir(skillsDir, { remove: opts.uninstall, dryRun: opts.dryRun });
   console.log(opts.uninstall ? "  - vision" : "  + vision (inspect_image MCP + at-vision skill)");
+}
+
+function codexUsageHome(opts) {
+  const selectedFile = opts.codexConfig || opts.codexHooks;
+  return selectedFile ? path.dirname(path.resolve(selectedFile)) : process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+}
+
+function codexUsageConfig(opts) {
+  return opts.codexConfig || path.join(codexUsageHome(opts), "config.toml");
+}
+
+function useCodexStatusline(opts) {
+  const result = crossSpawn.sync("codex", ["--version"], {
+    encoding: "utf8", windowsHide: true,
+    // The local version check should finish quickly even via a launcher.
+    timeout: 5_000,
+  });
+  if (result.status !== 0) return false;
+  const version = result.stdout.trim().match(/^codex-cli (\d+)\.(\d+)\.\d+(?:\+[\w.-]+)?$/);
+  // Codex CLI 0.171.0 is the first stable release with MCP status lines.
+  if (!version || (Number(version[1]) === 0 && Number(version[2]) < 171)) return false;
+  const file = codexUsageConfig(opts);
+  const conflict = fs.existsSync(file) && codexStatuslineConflict(fs.readFileSync(file, "utf8"), CODEX_STATUSLINE_NAME);
+  if (!conflict) return true;
+  console.log(`  ${conflict} Usage will use hooks.`);
+  return false;
+}
+
+function runCodexStatusline(opts) {
+  const file = codexUsageConfig(opts);
+  const enabled = opts.codexStatusline && !opts.uninstall;
+  const config = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  const begin = "# >>> agent-tools usage statusline >>>";
+  if (!enabled && !config.includes(begin) && !fs.existsSync(INSTALL_STATE_PATH)) return;
+  const state = readInstallState();
+  const key = `codex-statusline:${skillManifestKey(file)}`;
+  const saved = state.artifacts[key];
+  if (!enabled && !saved && !config.includes(begin)) return;
+  const providerEnvKeys = [...config.matchAll(/^\s*env_key\s*=\s*["']([A-Za-z_][A-Za-z0-9_]*)["']/gm)].map((match) => match[1]);
+  const envKeys = [...new Set([
+    "OPENAI_BASE_URL", "OPENAI_API_KEY", "PROVIDER_USAGE_BASE_URL", "PROVIDER_USAGE_API_KEY",
+    "SUB2API_BASE_URL", "SUB2API_API_KEY", ...providerEnvKeys,
+  ])];
+  let backup;
+  updateCodexMcpBlock(file, {
+    remove: !enabled, dryRun: opts.dryRun, name: CODEX_STATUSLINE_NAME,
+    begin,
+    end: "# <<< agent-tools usage statusline <<<",
+    edit: (text) => {
+      const result = editCodexStatusline(text, { enabled, server: CODEX_STATUSLINE_NAME, backup: saved?.backup });
+      backup = result.backup;
+      return result.text;
+    },
+    mcp: {
+      command: "node",
+      args: [fwd(RUNTIME.codexStatusline)],
+      extraLines: [
+        `env_vars = ${JSON.stringify(envKeys)}`,
+        `[mcp_servers.${CODEX_STATUSLINE_NAME}.env]`,
+        `CODEX_HOME = ${JSON.stringify(path.resolve(path.dirname(file)))}`,
+        `AGENT_TOOLS_HOME = ${JSON.stringify(path.resolve(INSTALL_ROOT))}`,
+      ],
+    },
+  });
+  if (opts.dryRun || JSON.stringify(backup) === JSON.stringify(saved?.backup)) return;
+  if (backup) state.artifacts[key] = { kind: "codex-statusline", backup };
+  else delete state.artifacts[key];
+  writeInstallState(state);
 }
 
 function runCodex(opts) {
@@ -1057,38 +1137,31 @@ function runCodex(opts) {
   if (!wants(opts, "usage")) {
     return;
   }
+  runCodexStatusline(opts);
   const skillsDir = opts.codexSkillsDir || path.join(os.homedir(), ".agents", "skills");
   console.log(`codex usage skill: ${skillsDir}`);
   installUsageSkillDir(skillsDir, "codex", {
     remove: opts.uninstall,
     dryRun: opts.dryRun,
   });
-  const file = opts.codexHooks || path.join(os.homedir(), ".codex", "hooks.json");
+  const file = opts.codexHooks || path.join(codexUsageHome(opts), "hooks.json");
   console.log(`codex (global): ${file}`);
   const cfg = readJson(file);
 
-  if (wants(opts, "usage")) {
-    if (opts.uninstall) {
-      applyProviderUsage(cfg, { remove: true });
-      console.log("  - usage");
-    } else {
-      applyProviderUsage(cfg, { remove: false });
-      console.log("  + usage (UserPromptSubmit + Stop)");
-    }
+  applyProviderUsage(cfg, { remove: opts.uninstall || opts.codexStatusline });
+  console.log(opts.uninstall ? "  - usage" : opts.codexStatusline ? "  + usage (status line)" : "  + usage (UserPromptSubmit + Stop)");
+
+  if ((opts.uninstall || opts.codexStatusline) && Object.keys(cfg).length === 0) {
+    if (fs.existsSync(file)) removeFile(file, opts.dryRun);
+  } else {
+    writeJson(file, cfg, opts.dryRun);
   }
-
-  if (opts.uninstall && Object.keys(cfg).length === 0 && fs.existsSync(file)) {
-    removeFile(file, opts.dryRun);
-    return;
-  }
-
-  writeJson(file, cfg, opts.dryRun);
-
   if (!opts.uninstall && !opts.dryRun) {
-    console.log(
-      "  NOTE: Codex will not run this hook until you trust it — run `/hooks` " +
-        "inside Codex and approve the agent-tools hooks."
-    );
+    if (opts.codexStatusline) {
+      console.log("  Restart Codex CLI 0.171.0 or later to load the status line.");
+    } else {
+      console.log("  NOTE: Codex will not run this hook until you trust it — run `/hooks` inside Codex and approve the agent-tools hooks.");
+    }
   }
 }
 
@@ -1799,6 +1872,9 @@ function main() {
     return;
   }
   validateAgentCapabilities(opts);
+  if (!opts.uninstall && wants(opts, "usage") && opts.agents.includes("codex")) {
+    opts.codexStatusline = useCodexStatusline(opts);
+  }
   installRuntimeAssets(opts);
   if (wants(opts, "vision")) installVisionRuntime(opts);
   for (const name of opts.agents) {

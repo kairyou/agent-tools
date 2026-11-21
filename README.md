@@ -97,13 +97,10 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 # npx -y github:kairyou/agent-tools <capability> -a <agent...>  # Or the latest code from GitHub (needs Git)
 ```
 
-`--dry-run` previews, `--uninstall` removes the capability from the agent, and
-re-running the install command updates it.
-
 | Feature | Install name | Agent (`-a`) |
 | --- | --- | --- |
-| Claude Code status line | `statusline` | `claude` |
-| Gateway usage | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
+| Claude Code status line and usage | `statusline` | `claude` |
+| Gateway usage | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo` |
 | Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | Session work logs | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
@@ -130,7 +127,8 @@ The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
 Set visible fields and order via `statusline.fields` in `~/.agent-tools/config.jsonc`;
 add `"outputSpeed"` for estimated output speed (e.g. `38.2 tok/s`).
 
-For supported relay gateways and usage configuration, see [Provider usage](#provider-usage).
+Set `statusline.showProviderUsage` to `false` to hide gateway usage.
+For supported gateways and configuration, see [Provider usage](#provider-usage).
 
 #### Provider usage
 
@@ -140,13 +138,10 @@ Command Code; compatibility depends on the gateway version and enabled usage
 endpoints.
 
 ```bash
-# Claude Code example
-npx -y @kairyou/agent-tools@latest usage -a claude
+npx -y @kairyou/agent-tools@latest usage -a codex
 ```
 
-- **Claude Code** — `usage` installs `/at-usage` for manual queries. `statusline` displays gateway usage automatically.
-  Set `statusline.showProviderUsage` to `false` to hide relay gateway usage from the status line.
-- **Codex** — run `/hooks` in the CLI to approve automatic usage notices. Use `$at-usage` to query manually.
+- **Codex** — CLI 0.171.0+ uses the footer when compatible. Restart to load it. If installed as notices, approve them in `/hooks`. Query anytime with `$at-usage`.
 - **OpenCode** — shows a toast when the session goes idle, or on demand with `/at-usage`.
 - **Pi** — displays usage in the footer.
 - **ZCode** — the desktop footer shows gateway usage and optional `tok/s`.

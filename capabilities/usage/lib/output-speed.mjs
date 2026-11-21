@@ -101,6 +101,15 @@ export function zcodeOutputSpeed(options = {}) {
   return formatOutputSpeed(row.output_tokens, row.completed_at - row.first_token_at);
 }
 
+export function codexTranscriptPath(sessionId, agentHome) {
+  if (!sessionId) return undefined;
+  const root = join(agentHome || process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
+  try {
+    const name = fs.readdirSync(root, { recursive: true }).find((file) => file.endsWith(`-${sessionId}.jsonl`));
+    return name && join(root, name);
+  } catch { return undefined; }
+}
+
 export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId, agentHome } = {}) {
   try {
     if (agent === "zcode") return zcodeOutputSpeed({ sessionId, turnId, cwd });
@@ -112,12 +121,7 @@ export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId
         .map((name) => ({ file: join(project, name), mtime: fs.statSync(join(project, name)).mtimeMs }))
         .sort((a, b) => b.mtime - a.mtime)[0]?.file;
     } else if (!transcriptPath && agent === "codex") {
-      sessionId ??= process.env.CODEX_THREAD_ID;
-      if (sessionId) {
-        const root = join(agentHome || process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
-        transcriptPath = fs.readdirSync(root, { recursive: true }).filter((name) => name.endsWith(`-${sessionId}.jsonl`))
-          .map((name) => join(root, name))[0];
-      }
+      transcriptPath = codexTranscriptPath(sessionId ?? process.env.CODEX_THREAD_ID, agentHome);
     }
     if (!transcriptPath) return "";
     return agent === "claude" ? claudeOutputSpeed({ transcript_path: transcriptPath }) :
