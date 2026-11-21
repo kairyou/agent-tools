@@ -114,13 +114,15 @@ export function copilotOutputSpeed(file) {
   const events = transcriptTail(file);
   const index = events.findLastIndex((entry) => entry.type === "assistant.message");
   const message = events[index]?.data;
-  if (!message?.apiCallId || message.parentAgentTaskId || !(message.outputTokens > 0)) return "";
+  if (!message?.apiCallId || !message.model || message.parentAgentTaskId) return "";
   const usage = events.slice(0, index).findLast((entry) =>
     entry.type === "session.usage_record" && entry.data?.usage?.apiCallId === message.apiCallId
   )?.data.usage;
   if (usage?.interactionType !== "conversation-agent" || usage.model !== message.model ||
-      usage.outputTokens !== message.outputTokens || !Number.isFinite(usage.outputTtftMs) ||
-      usage.outputTtftMs < 0 || !Number.isFinite(usage.duration)) return "";
+      !Number.isSafeInteger(usage.outputTokens) || usage.outputTokens <= 0 ||
+      !Number.isFinite(usage.outputTtftMs) || usage.outputTtftMs < 0 || !Number.isFinite(usage.duration)) return "";
+  // Copilot may only record output tokens in the usage event.
+  if (message.outputTokens != null && message.outputTokens !== usage.outputTokens) return "";
   return formatOutputSpeed(usage.outputTokens, usage.duration - usage.outputTtftMs);
 }
 

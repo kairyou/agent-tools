@@ -91,7 +91,7 @@ test("CLI usage footers isolate accounts and skip ambiguous Qwen models", { time
   const jsonLines = (entries) => entries.map((entry) => JSON.stringify(entry)).join("\n");
   writeFileSync(join(copilotTranscript, "events.jsonl"), jsonLines([
     { type: "session.usage_record", data: { usage: copilotUsage } },
-    { type: "assistant.message", data: { model: "fixture", apiCallId: "reply", outputTokens: 40 } },
+    { type: "assistant.message", data: { model: "fixture", apiCallId: "reply" } },
     { type: "session.usage_record", data: { usage: { ...copilotUsage, apiCallId: "auxiliary", outputTokens: 100 } } },
   ]));
   const sessionId = "00000000-0000-4000-8000-000000000001";
