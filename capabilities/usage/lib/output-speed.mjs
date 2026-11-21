@@ -110,6 +110,40 @@ export function codexTranscriptPath(sessionId, agentHome) {
   } catch { return undefined; }
 }
 
+export function copilotOutputSpeed(file) {
+  const events = transcriptTail(file);
+  const index = events.findLastIndex((entry) => entry.type === "assistant.message");
+  const message = events[index]?.data;
+  if (!message?.apiCallId || message.parentAgentTaskId || !(message.outputTokens > 0)) return "";
+  const usage = events.slice(0, index).findLast((entry) =>
+    entry.type === "session.usage_record" && entry.data?.usage?.apiCallId === message.apiCallId
+  )?.data.usage;
+  if (usage?.interactionType !== "conversation-agent" || usage.model !== message.model ||
+      usage.outputTokens !== message.outputTokens || !Number.isFinite(usage.outputTtftMs) ||
+      usage.outputTtftMs < 0 || !Number.isFinite(usage.duration)) return "";
+  return formatOutputSpeed(usage.outputTokens, usage.duration - usage.outputTtftMs);
+}
+
+export function qwenOutputSpeed(file, sessionId) {
+  const events = transcriptTail(file);
+  const index = events.findLastIndex((entry) => entry.sessionId === sessionId && entry.type === "assistant");
+  const message = events[index];
+  const tokens = message?.usageMetadata?.candidatesTokenCount;
+  if (!(tokens > 0) || !message.model) return "";
+  for (let i = index - 1; i >= 0; i--) {
+    const entry = events[i];
+    if (entry.sessionId !== sessionId) continue;
+    if (["user", "assistant", "tool_result"].includes(entry.type)) break;
+    if (entry.subtype !== "ui_telemetry") continue;
+    const response = entry.systemPayload?.uiEvent;
+    if (response?.["event.name"] === "qwen-code.api_response" && !response.subagent_id && !response.subagent_name &&
+        response.status_code === 200 && response.model === message.model && response.output_token_count === tokens) {
+      return formatOutputSpeed(tokens, response.generation_ms);
+    }
+  }
+  return "";
+}
+
 export function agentOutputSpeed(agent, { transcriptPath, cwd, sessionId, turnId, agentHome } = {}) {
   try {
     if (agent === "zcode") return zcodeOutputSpeed({ sessionId, turnId, cwd });

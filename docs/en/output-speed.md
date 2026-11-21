@@ -13,6 +13,8 @@ Token counts come from the agent's usage records.
 | OpenCode | Times the first through last text or reasoning output. Responses containing tool calls have no speed reading. |
 | ZCode | From first output to request completion. |
 | DeepSeek Harness | Built-in session output speed in the footer. |
+| Copilot CLI | Request duration minus the time to first output, matched to the assistant response by API call ID. |
+| Qwen Code | Generation time recorded for the matching main-agent response. |
 
 Claude Code checks the response ID and token usage to confirm that the API duration covers only one response.
 When timing is missing or cannot be matched, it uses transcript timestamps from the preceding user input or tool result to response completion.

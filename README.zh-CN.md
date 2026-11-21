@@ -145,9 +145,11 @@ npx -y @kairyou/agent-tools@latest usage -a codex
 - **ZCode** — 桌面版底栏显示网关用量, 可选显示 `tok/s`.
 - **DeepSeek Harness** — 底栏显示网关用量, 也可用 `/at-usage` 查询.
 - **Paseo** — 启用插件后, 新开或重载 Claude / Codex 会话. 点击输入框上方的用量查看详情.
-- **Copilot CLI, Qwen Code** — 安装后重启即可在底栏查看网关用量. 已配置状态栏时保留原配置. Qwen Code 按用户设置中唯一的模型显示名匹配网关.
+- **Copilot CLI** — 在原生底栏项旁显示网关用量, 可选显示 `tok/s`.
+- **Qwen Code** — 按用户设置中唯一的模型显示名匹配网关用量, 底栏也可显示 `tok/s`.
 
-安装或更新后, 重启对应的 OpenCode, Pi, ZCode 或 DeepSeek Harness. Pi 也可运行 `/reload`.
+安装器会保留 Copilot CLI 和 Qwen Code 已有的自定义底栏.
+安装或更新后, 重启对应的 OpenCode, Pi, ZCode, DeepSeek Harness, Copilot CLI 或 Qwen Code. Pi 也可运行 `/reload`.
 
 自动从 Agent 当前模型或已有配置获取端点和密钥. 直连 OpenAI 或 Anthropic 时跳过网关查询.
 如果结果是 `Provider usage is unavailable.`, 可用

@@ -1,9 +1,10 @@
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { usageCliHome } from "./lib/cli-settings.mjs";
 import { readTextIfExists } from "./lib/config.mjs";
+import { copilotOutputSpeed } from "./lib/output-speed.mjs";
 import { runUsageStatusline } from "./lib/statusline-command.mjs";
 
-await runUsageStatusline("copilot", async ({ model }) => {
+async function resolveContext({ model }) {
   const id = model?.id;
   if (typeof id !== "string" || !id) return;
 
@@ -24,4 +25,11 @@ await runUsageStatusline("copilot", async ({ model }) => {
   if (!config.models?.some((entry) => entry.provider === name && entry.id === id.slice(separator + 1))) return;
   const provider = config.providers?.find((entry) => entry.name === name);
   return { providerName: name, baseUrl: provider?.baseUrl, key: provider?.bearerToken || provider?.apiKey };
-});
+}
+
+function readSpeed({ transcript_path: transcript }) {
+  if (typeof transcript !== "string" || !isAbsolute(transcript)) return "";
+  return copilotOutputSpeed(join(transcript, "events.jsonl"));
+}
+
+await runUsageStatusline("copilot", resolveContext, readSpeed);

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { canRefreshUsage } from "./cache.mjs";
-import { HOOK_SNAPSHOT_MAX_AGE_MS, REFRESH_INTERVAL_MS } from "./config.mjs";
+import { agentConfig, HOOK_SNAPSHOT_MAX_AGE_MS, REFRESH_INTERVAL_MS } from "./config.mjs";
+import { withOutputSpeed } from "./output-speed.mjs";
 import { cachedUsage, queryCachedProviderUsage } from "./query.mjs";
 import { isOfficialBaseUrl } from "./urls.mjs";
 
@@ -16,7 +17,17 @@ function refreshInBackground(context) {
   child.unref();
 }
 
-export async function runUsageStatusline(agent, resolveContext) {
+async function gatewayUsage(data, resolveContext) {
+  const context = await resolveContext(data);
+  if (!context?.key || !/^https?:\/\//i.test(context.baseUrl) || isOfficialBaseUrl(context.baseUrl)) return "";
+  const snapshot = await cachedUsage(context);
+  if ((!snapshot || snapshot.ageMs >= REFRESH_INTERVAL_MS) && await canRefreshUsage(context, REFRESH_INTERVAL_MS)) {
+    refreshInBackground(context);
+  }
+  return snapshot?.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? snapshot.text : "";
+}
+
+export async function runUsageStatusline(agent, resolveContext, readSpeed) {
   try {
     let raw = "";
     for await (const chunk of process.stdin) raw += chunk;
@@ -27,13 +38,11 @@ export async function runUsageStatusline(agent, resolveContext) {
       return;
     }
 
-    const context = await resolveContext(data);
-    if (!context?.key || !/^https?:\/\//i.test(context.baseUrl) || isOfficialBaseUrl(context.baseUrl)) return;
-    const snapshot = await cachedUsage(context);
-    if ((!snapshot || snapshot.ageMs >= REFRESH_INTERVAL_MS) && await canRefreshUsage(context, REFRESH_INTERVAL_MS)) {
-      refreshInBackground(context);
-    }
-    if (snapshot?.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS) process.stdout.write(snapshot.text);
+    const [quota, speed] = await Promise.all([
+      gatewayUsage(data, resolveContext).catch(() => ""),
+      agentConfig().then((config) => config.outputSpeed === true ? readSpeed(data) : "").catch(() => ""),
+    ]);
+    process.stdout.write(withOutputSpeed(quota, speed));
   } catch {
     // An unavailable provider should leave the footer blank.
   }

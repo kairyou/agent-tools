@@ -1,7 +1,9 @@
-import { isAbsolute, join } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import { parse as parseJsonc } from "jsonc-parser";
 import { usageCliHome } from "./lib/cli-settings.mjs";
 import { readTextIfExists } from "./lib/config.mjs";
+import { qwenOutputSpeed } from "./lib/output-speed.mjs";
 import { runUsageStatusline } from "./lib/statusline-command.mjs";
 
 async function settingsAt(file) {
@@ -18,7 +20,7 @@ function settingValue(value) {
   return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name) => process.env[name] || "");
 }
 
-await runUsageStatusline("qwen", async ({ model, workspace }) => {
+async function resolveContext({ model, workspace }) {
   const label = model?.display_name;
   const cwd = workspace?.current_dir;
   if (typeof label !== "string" || !label || typeof cwd !== "string" || !isAbsolute(cwd)) return;
@@ -38,4 +40,24 @@ await runUsageStatusline("qwen", async ({ model, workspace }) => {
   if (matches.length !== 1) return;
   const { name, entry } = matches[0];
   return { providerName: name, baseUrl: settingValue(entry.baseUrl), key: process.env[settingValue(entry.envKey)] };
-});
+}
+
+async function readSpeed({ session_id: sessionId, workspace, worktree }) {
+  const cwd = workspace?.current_dir;
+  if (typeof sessionId !== "string" || !/^[a-f0-9-]+$/i.test(sessionId) ||
+      typeof cwd !== "string" || !isAbsolute(cwd)) return "";
+  const home = usageCliHome("qwen");
+  const settings = await settingsAt(join(home, "settings.json"));
+  const project = await settingsAt(join(cwd, ".qwen", "settings.json"));
+  const runtimeDir = process.env.QWEN_RUNTIME_DIR ||
+    settingValue(project.advanced?.runtimeOutputDir ?? settings.advanced?.runtimeOutputDir);
+  const runtime = runtimeDir.startsWith("~/") || runtimeDir.startsWith("~\\")
+    ? resolve(homedir(), runtimeDir.slice(2))
+    : runtimeDir ? resolve(cwd, runtimeDir) : home;
+  // Qwen derives its per-project transcript directory from the workspace path.
+  const projectCwd = worktree?.original_cwd || cwd;
+  const projectPath = (process.platform === "win32" ? projectCwd.toLowerCase() : projectCwd).replace(/[^a-zA-Z0-9]/g, "-");
+  return qwenOutputSpeed(join(runtime, "projects", projectPath, "chats", `${sessionId}.jsonl`), sessionId);
+}
+
+await runUsageStatusline("qwen", resolveContext, readSpeed);
