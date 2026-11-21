@@ -153,6 +153,31 @@ test("Codex usage follows the CLI version while preserving other hooks", () => {
   assert.deepEqual(JSON.parse(readFileSync(hooks, "utf8")).hooks, { Stop: [external] });
 });
 
+test("Codex keeps usage status line settings when vision is uninstalled", (t) => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-mcp-blocks-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const config = join(home, "config.toml");
+  const env = { AGENT_TOOLS_HOME: join(home, "runtime"), ...mockCodexVersion(home, "0.171.0") };
+  const args = ["-a", "codex", "--codex-config", config, "--codex-skills-dir", join(home, "skills")];
+  const read = () => readFileSync(config, "utf8");
+
+  runInstall(["vision", ...args], env);
+  runInstall(["usage", ...args], env);
+  runInstall(["vision", ...args, "--uninstall"], env);
+  assert.match(read(), /^features\.tui_extensions_statusline = true$/m);
+  assert.match(read(), /^tui\.status_line_provider = \{ server = "agent-tools-codex-statusline", tool = "statusline" \}$/m);
+  assert.match(read(), /\[mcp_servers\.agent-tools-codex-statusline\]/);
+  assert.doesNotMatch(read(), /agent-tools-vision/);
+
+  const usageOnly = read();
+  runInstall(["usage", ...args], env);
+  assert.equal(read(), usageOnly);
+  runInstall(["vision", ...args], env);
+  runInstall(["usage", ...args, "--uninstall"], env);
+  assert.match(read(), /\[mcp_servers\.agent-tools-vision\]/);
+  assert.doesNotMatch(read(), /tui_extensions_statusline|status_line_provider|agent-tools-codex-statusline/);
+});
+
 test("Codex preserves the native footer if it contains unsupported fields", () => {
   const home = mkdtempSync(join(tmpdir(), "agent-tools-codex-statusline-fields-"));
   const config = join(home, "config.toml");

@@ -25,7 +25,7 @@ function locations(text) {
     }
   }
   for (const node of root.body) add(node, []);
-  return { tables, values, firstTable: root.body.find((node) => node.type === "TOMLTable") };
+  return { tables, values };
 }
 
 function replace(text, start, end, value) {
@@ -33,7 +33,7 @@ function replace(text, start, end, value) {
 }
 
 function setValue(text, path, value) {
-  const { tables, values, firstTable } = locations(text);
+  const { tables, values } = locations(text);
   const entry = values.get(keyFor(path));
   if (entry && value !== null) return replace(text, ...entry.value.range, value);
   if (entry && entry.parent.type === "TOMLInlineTable") {
@@ -60,7 +60,9 @@ function setValue(text, path, value) {
     const at = last?.range[1] ?? node.range[0] + 1;
     return replace(text, at, at, last ? `, ${assignment}` : assignment);
   }
-  const at = node.type === "TOMLTable" ? lineEnd(node.key.range[1]) : firstTable ? lineStart(firstTable.range[0]) : text.length;
+  // Comments before the first table can open a managed MCP block.
+  const anchor = node.type === "TOMLTable" ? node.key : node.body.findLast((child) => child.type === "TOMLKeyValue");
+  const at = anchor ? lineEnd(anchor.range[1]) : 0;
   const newline = text.includes("\r\n") ? "\r\n" : "\n";
   return replace(text, at, at, `${at && text[at - 1] !== "\n" ? newline : ""}${assignment}${newline}`);
 }
