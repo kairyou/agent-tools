@@ -23,15 +23,18 @@ embedded JavaScript modules without installing or executing upstream code.
 
 Command registration identifies the entrypoints. The review call site supplies
 the effort router, output formatter, and Agent/host-reporting predicates. Local
-selection values choose the high recipe and the fix-flag branch. The simplify
-handler is interpreted with an empty target and Agent availability enabled.
+selection values choose the high recipe and the fix-flag branch. When routing
+uses a model-family table, the extractor takes the `high` recipe from the table
+and uses it for both review and fixes. The simplify handler is interpreted with
+an empty target and Agent availability enabled.
 When reporting availability compares a mode with `void 0`, its predicate is
 constrained to `undefined`, so both formatting and fixes keep host reporting off.
 
 The static reader supports literals, strings, templates, references, imported
-bindings, function calls/default arguments, conditionals, logical expressions,
-strict equality, concatenation, arrays/objects, local declarations, return, if,
-and switch. String trimming is explicitly supported. It rejects unknown active
+bindings, function calls with default arguments and simple object parameters,
+conditionals, logical expressions, strict equality, concatenation, arrays,
+static objects and object spread, local declarations, return, if, and switch.
+String operations are limited to `trim` and `startsWith`. It rejects unknown active
 operations, missing or ambiguous imports/commands, and excessive interpretation.
 It never calls upstream JavaScript through eval, Function, or dynamic import.
 
@@ -56,8 +59,8 @@ instructions within the high recipe, remains intact.
 
 ## Verification boundary
 
-Real packages 2.1.260, 2.1.292, 2.1.293, 2.1.314, and 2.1.316 were verified. The older monolithic
-2.1.235 layout is unsupported. The module format and command/router interfaces
-are internal implementation details, so future structural changes can still
-require maintenance. Unknown cases stop generation instead of guessing or
-silently retaining an older snapshot.
+Real packages 2.1.260, 2.1.292, 2.1.293, 2.1.314, 2.1.316, and 2.1.330 were
+verified. The older monolithic 2.1.235 layout is unsupported. The module format
+and command/router interfaces are internal implementation details, so future
+structural changes can still require maintenance. Unknown cases stop generation
+instead of guessing or silently retaining an older snapshot.

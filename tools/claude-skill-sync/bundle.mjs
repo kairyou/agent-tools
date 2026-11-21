@@ -11,6 +11,9 @@ function* walk(node) {
 const key = (property) => property.key?.name ?? property.key?.value;
 const property = (object, name) => object.properties.find((entry) => key(entry) === name)?.value;
 const callable = (node) => /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(node?.type);
+const parameterTarget = (node) => node.type === "AssignmentPattern" ? node.left : node;
+const blockedMembers = new Set(["constructor", "prototype", "__proto__"]);
+const staticObject = (value) => value !== null && typeof value === "object" && Object.getPrototypeOf(value) === null;
 function* localNodes(node) {
   yield node;
   if (callable(node)) return;
@@ -90,6 +93,7 @@ class StaticReader {
   read(binding) {
     if (this.overrides.has(binding)) return this.overrides.get(binding);
     if (binding.written || binding.duplicate) throw new Error("Mutable or duplicate official binding");
+    if (binding.uninitialized) throw new Error("Uninitialized official function parameter");
     if (Object.hasOwn(binding, "value")) return binding.value;
     if (this.active.has(binding)) throw new Error("Cyclic official binding");
     this.active.add(binding);
@@ -134,6 +138,12 @@ class StaticReader {
       case "ObjectExpression": {
         const result = Object.create(null);
         for (const entry of node.properties) {
+          if (entry.type === "SpreadElement") {
+            const source = visit(entry.argument);
+            if (!staticObject(source)) throw new Error("Official object spread requires a static object");
+            Object.assign(result, source);
+            continue;
+          }
           if (entry.type !== "Property" || entry.computed || entry.kind !== "init") throw new Error("Unsupported official object property");
           result[key(entry)] = visit(entry.value);
         }
@@ -141,7 +151,7 @@ class StaticReader {
       }
       case "MemberExpression": {
         const object = visit(node.object), name = node.computed ? visit(node.property) : node.property.name;
-        if (!object || !Object.hasOwn(object, name) || ["constructor", "prototype", "__proto__"].includes(name)) break;
+        if (!object || !Object.hasOwn(object, name) || blockedMembers.has(name)) break;
         return object[name];
       }
       case "CallExpression":
@@ -149,6 +159,10 @@ class StaticReader {
         if (node.callee.type === "MemberExpression") {
           const object = visit(node.callee.object), name = node.callee.property.name;
           if (!node.callee.computed && typeof object === "string" && name === "trim" && !node.arguments.length) return object.trim();
+          if (!node.callee.computed && typeof object === "string" && name === "startsWith" && node.arguments.length === 1) {
+            const prefix = visit(node.arguments[0]);
+            if (typeof prefix === "string") return object.startsWith(prefix);
+          }
           break;
         }
         return this.call(visit(node.callee), node.arguments.map(visit));
@@ -157,13 +171,40 @@ class StaticReader {
   }
   environment(fn, args = []) {
     const env = new Map(fn.env);
-    for (let i = 0; i < fn.node.params.length; i++) {
-      const param = fn.node.params[i];
-      const id = param.type === "AssignmentPattern" ? param.left : param;
-      if (id.type !== "Identifier") throw new Error("Unsupported official function parameter");
-      const value = args[i] === undefined && param.type === "AssignmentPattern"
-        ? this.eval(param.right, fn.module, env) : args[i];
-      env.set(id.name, { value });
+    const withDefault = (param, value) => value === undefined && param.type === "AssignmentPattern"
+      ? this.eval(param.right, fn.module, env) : value;
+    const parameters = fn.node.params.map((param) => {
+      const target = parameterTarget(param);
+      if (target.type === "Identifier") {
+        env.set(target.name, { uninitialized: true });
+        return { param, name: target.name };
+      }
+      if (target.type !== "ObjectPattern") throw new Error("Unsupported official function parameter");
+      const fields = target.properties.map((entry) => {
+        const field = key(entry);
+        if (entry.type !== "Property" || entry.computed || entry.kind !== "init" ||
+            blockedMembers.has(field) || parameterTarget(entry.value).type !== "Identifier") {
+          throw new Error("Unsupported official object parameter property");
+        }
+        const name = parameterTarget(entry.value).name;
+        env.set(name, { uninitialized: true });
+        return { field, name, binding: entry.value };
+      });
+      return { param, fields };
+    });
+    for (const [i, { param, name, fields }] of parameters.entries()) {
+      const value = withDefault(param, args[i]);
+      if (!fields) {
+        env.set(name, { value });
+        continue;
+      }
+      if (!staticObject(value)) {
+        throw new Error("Official object parameter requires a static object");
+      }
+      for (const field of fields) {
+        const selected = Object.hasOwn(value, field.field) ? value[field.field] : undefined;
+        env.set(field.name, { value: withDefault(field.binding, selected) });
+      }
     }
     return env;
   }
@@ -226,6 +267,30 @@ function runtimeInitializer(binding) {
   return binding.node;
 }
 
+function constrainReviewRecipe(reader, selector, module, env) {
+  if (selector?.type === "Identifier" || selector?.type === "Literal") return;
+  if (selector?.type !== "MemberExpression" || selector.computed || selector.optional ||
+      selector.property.name !== "cell" || selector.object.type !== "Identifier" || !env.has(selector.object.name)) {
+    throw new Error("Review recipe selector changed");
+  }
+  const binding = reader.binding(selector.object.name, module, env);
+  const cell = runtimeInitializer(binding);
+  const row = cell?.object;
+  if (cell?.type !== "MemberExpression" || !cell.computed || cell.optional || cell.property.type !== "Identifier" ||
+      row?.type !== "MemberExpression" || !row.computed || row.optional || row.property.type !== "Identifier" ||
+      row.object.type !== "Identifier") {
+    throw new Error("Review recipe table lookup changed");
+  }
+  const table = reader.eval(row.object, module, env);
+  if (!staticObject(table)) throw new Error("Review recipe table is not a static object");
+  // Keep the named high recipe even when the live session selects by model family.
+  const recipe = one(Object.values(table).map((family) => {
+    if (!staticObject(family)) throw new Error("Review recipe family is not a static object");
+    return family.high;
+  }).filter((entry) => staticObject(entry) && entry.cell === "high"), "explicit high review recipe");
+  reader.overrides.set(binding, recipe);
+}
+
 function constrainRuntimePredicate(reader, argument, module, env, value, hostReporting = false) {
   if (argument?.type !== "Identifier") throw new Error("Review runtime selector changed");
   let predicate = runtimeInitializer(reader.binding(argument.name, module, env));
@@ -283,6 +348,7 @@ export function extractOfficialSkills(bundle) {
   }
   const { fn: router, call } = one(routers, "review effort router");
   const env = reader.locals(review, reader.environment(review, ["", Object.create(null)]));
+  constrainReviewRecipe(reader, call.arguments[0], review.module, env);
   // The router's explicit interface selects the portable variant. Resolve its
   // runtime predicates from the command call site rather than minified names.
   for (const [index, value] of [[2, true], [3, false]]) {

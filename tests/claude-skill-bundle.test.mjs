@@ -23,6 +23,26 @@ test("official command graph selects high effort, Agent, JSON, and fixes without
   assert.doesNotMatch(JSON.stringify(result.texts), /Wrong|Runtime must not execute/);
 });
 
+test("official object parameters resolve defaults and explicitly supplied values", () => {
+  const changed = fixture
+    .replace("const output=(limit)=>", 'const output=(limit,{severity: label = limit === 10 ? "default" : "other"} = {})=>')
+    .replace("Do not call ${Report}.", "Severity: ${label}. Do not call ${Report}.")
+    .replace("${format(limit)}", '${format(limit,{severity:"explicit"})}');
+  const result = extract(changed);
+  assert.match(result.texts.output.text, /Severity: default\./);
+  assert.match(result.texts.review.text, /Severity: explicit\./);
+  assert.throws(() => extract(changed.replace("severity: label", '["severity"]: label')), /Unsupported official object parameter property/);
+  assert.throws(() => extract(changed.replace("label = limit === 10", "label = label === 10")), /Uninitialized official function parameter/);
+});
+
+test("official object spread copies static properties in order", () => {
+  const changed = fixture.replace('reuse="Reuse original"',
+    'reuse=({text:"first",...{text:"spread"},...{other:"unused"},text:"last"}).text');
+  assert.match(extract(changed).texts.simplify.text, /last/);
+  assert.match(extract(changed.replace(',text:"last"', "")).texts.simplify.text, /spread/);
+  assert.throws(() => extract(changed.replace('...{text:"spread"}', '..."spread"')), /Official object spread requires a static object/);
+});
+
 const reportingModeFixture = fixture.replace("host=hostCheck(context),", "mode=hostCheck(context),host=mode!==void 0,");
 
 test("reporting mode presence selects the same portable review, fixes and simplify texts", () => {
@@ -32,6 +52,24 @@ test("reporting mode presence selects the same portable review, fixes and simpli
     renamed = renamed.replaceAll(new RegExp(`\\b${name}\\b`, "g"), `renamed_${name}`);
   }
   assert.deepEqual(extract(renamed.replaceAll("/bundle/runtime.js", "/renamed/chunk.js")).texts, extract().texts);
+});
+
+test("model-dependent routing uses the explicit high recipe for both review and fixes", () => {
+  const changed = reportingModeFixture
+    .replace("function fixInstructions(host)", 'function fixInstructions(host, bugsOnly)')
+    .replace("Fix original.", '${bugsOnly ? "Wrong recipe" : "Fix original."}')
+    .replace("async function reviewCommand", `const recipes={default:{high:{cell:"bugs-high"}},model:{high:{cell:"high"}}};
+async function reviewCommand`)
+    .replace("let agents=", 'let family=context.model,effort=context.effort,recipe=recipes[family][effort];let agents=')
+    .replace('route("high",', 'route(recipe.cell,')
+    .replace('fixInstructions(host):', 'fixInstructions(host,recipe.cell.startsWith("bugs-")):');
+  assert.deepEqual(extract(changed).texts, extract().texts);
+  assert.throws(() => extract(changed.replace('model:{high:{cell:"high"}}', 'model:{high:{cell:"other"}}')),
+    /Expected one explicit high review recipe, found 0/);
+  assert.throws(() => extract(changed.replace('default:{high:{cell:"bugs-high"}}', 'default:{high:{cell:"high"}}')),
+    /Expected one explicit high review recipe, found 2/);
+  assert.throws(() => extract(changed.replace('return [{type:"text",text:`${route', 'recipe=other;return [{type:"text",text:`${route')),
+    /Mutable or duplicate official runtime binding/);
 });
 
 test("unknown or mutable runtime selectors fail closed before symbolic overrides", () => {
