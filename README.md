@@ -99,20 +99,24 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 
 | Feature | Install | Agent (`-a`) |
 | --- | :---: | --- |
-| Claude Code status line and usage | `statusline` | `claude` |
-| Gateway usage | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo`, `copilot`, `qwen` |
+| Claude Code CLI status line | `statusline` | `claude` |
+| Gateway usage | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo`, `copilot`, `qwen` |
 | Cross-model image understanding | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | Session work logs | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
 ### Status and usage
 
-#### Statusline
+#### Claude Code
 
-```bash
-npx -y @kairyou/agent-tools@latest statusline -a claude
-```
+| Interface | Install command |
+| --- | --- |
+| CLI status line (includes gateway usage) | `npx -y @kairyou/agent-tools@latest statusline -a claude` |
+| Claude Desktop (local Code session) | `npx -y @kairyou/agent-tools@latest usage -a claude` |
+| Both | `npx -y @kairyou/agent-tools@latest statusline usage -a claude` |
 
-The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
+In a new Desktop session, click usage above the input box (bundled Claude Code 2.1.286+).
+
+CLI setup writes `statusLine` to `~/.claude/settings.json`.
 
 ```text
 # Claude subscription:
@@ -122,20 +126,20 @@ The installer writes `statusLine` to `~/.claude/settings.json`. Example output:
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
 ```
 
-`5h` / `w`: Claude's rolling 5-hour / 7-day usage windows; `⟳`: time until reset.
+`5h` and `w` show rolling 5-hour and 7-day usage. `⟳` shows the reset countdown.
 
-Set visible fields and order via `statusline.fields` in `~/.agent-tools/config.jsonc`;
-add `"outputSpeed"` for estimated output speed (e.g. `38.2 tok/s`).
+In `~/.agent-tools/config.jsonc`, use `statusline.fields` to order CLI fields and
+`statusline.showProviderUsage: false` to hide gateway usage.
 
-Set `statusline.showProviderUsage` to `false` to hide gateway usage.
-For supported gateways and configuration, see [Provider usage](#provider-usage).
+For estimated output speed (`tok/s`), add `"outputSpeed"` to `statusline.fields` (CLI)
+or set `providerUsage.outputSpeed` to `true` (Desktop).
 
 #### Provider usage
 
-Shows gateway balance and usage in the agent. Supports Sub2API,
-One API (including OneHub and DoneHub), New API, Claude Code Hub, OpenRouter, and
-Command Code; compatibility depends on the gateway version and enabled usage
-endpoints.
+View gateway balance and usage in your agent. These settings also apply to Claude.
+Built-in routes include Sub2API, One API (including OneHub and DoneHub), New API,
+Claude Code Hub, OpenRouter, and Command Code. Compatibility depends on the
+gateway version and enabled usage endpoints.
 
 ```bash
 npx -y @kairyou/agent-tools@latest usage -a codex

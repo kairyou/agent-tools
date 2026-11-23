@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -289,12 +291,17 @@ test("installer wires and unwires Codex usage without removing unrelated hooks",
   assert.equal(existsSync(join(skillsDir, "at-usage")), false);
 });
 
-test("installer installs Claude usage as a managed local skill", () => {
+test("installer keeps Claude's usage skill and manages the Desktop plugin separately", (t) => {
   const temp = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
+  t.after(() => rmSync(temp, { recursive: true, force: true }));
   const runtime = join(temp, "runtime with spaces");
   const skillsDir = join(temp, "skills");
   const args = ["usage", "-a", "claude", "--claude-skills-dir", skillsDir];
   const env = { AGENT_TOOLS_HOME: runtime };
+  const plugin = join(skillsDir, "agent-tools-desktop-usage");
+
+  runInstall([...args, "--dry-run"], env);
+  assert.equal(existsSync(plugin), false);
 
   runInstall(args, env);
   const skillDir = join(skillsDir, "at-usage");
@@ -304,9 +311,14 @@ test("installer installs Claude usage as a managed local skill", () => {
   assert.equal(existsSync(join(skillDir, ".agent-tools-managed.json")), false);
   const state = JSON.parse(readFileSync(join(runtime, "install-state.json"), "utf8"));
   const managed = Object.values(state.artifacts);
-  assert.equal(managed.length, 1);
-  assert.equal(managed[0].capability, "usage");
-  assert.match(managed[0].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(managed.length, 2);
+  assert.match(managed.find((artifact) => artifact.capability === "usage").sha256, /^[a-f0-9]{64}$/);
+  const registerFile = join(plugin, "hooks", "register.js");
+  const registration = readFileSync(registerFile, "utf8");
+  assert.match(registration, /runtime with spaces.*claude-desktop-usage\.mjs/);
+  assert.equal(JSON.parse(readFileSync(join(plugin, "hooks", "hooks.json"), "utf8")).modules[0], "./register.js");
+  runInstall(args, env);
+  assert.equal(readFileSync(registerFile, "utf8"), registration);
   // Records which release wrote this layout, for diagnosing a later upgrade.
   const { version: packageVersion } = JSON.parse(
     readFileSync(join(ROOT, "package.json"), "utf8")
@@ -315,6 +327,118 @@ test("installer installs Claude usage as a managed local skill", () => {
 
   runInstall([...args, "--uninstall"], env);
   assert.equal(existsSync(skillDir), false);
+  assert.equal(existsSync(plugin), false);
+  assert.equal(existsSync(join(runtime, "install-state.json")), false);
+});
+
+test("upgrading only usage leaves an installed Claude statusline able to refresh quota", async (t) => {
+  const temp = mkdtempSync(join(tmpdir(), "agent-tools-usage-upgrade-"));
+  const home = join(temp, "home");
+  const runtime = join(temp, "custom runtime");
+  const profile = join(temp, "claude");
+  const settings = join(profile, "settings.json");
+  const statusline = join(runtime, "dist", "statusline", "claude-statusline.mjs");
+  const usage = join(runtime, "dist", "usage", "core.mjs");
+  const snapshot = join(runtime, "cache", "usage-snapshot.json");
+  const requests = [];
+  const gateway = createServer((request, response) => {
+    requests.push([request.url, request.headers.authorization]);
+    response.end(JSON.stringify({ balance: 21 }));
+  });
+  t.after(async () => {
+    if (gateway.listening) await new Promise((resolve) => gateway.close(resolve));
+    rmSync(temp, { recursive: true, force: true, maxRetries: 3 });
+  });
+  await new Promise((resolve) => gateway.listen(0, "127.0.0.1", resolve));
+  const installEnv = { HOME: home, USERPROFILE: home, CLAUDE_CONFIG_DIR: profile, AGENT_TOOLS_HOME: runtime };
+  runInstall(["statusline", "-a", "claude"], installEnv);
+  const installedSettings = readFileSync(settings, "utf8");
+  const installedStatusline = readFileSync(statusline, "utf8");
+  writeFileSync(usage, "// previous usage runtime\n");
+  runInstall(["usage", "-a", "claude"], installEnv);
+  assert.equal(readFileSync(settings, "utf8"), installedSettings);
+  assert.equal(readFileSync(statusline, "utf8"), installedStatusline);
+  assert.notEqual(readFileSync(usage, "utf8"), "// previous usage runtime\n");
+
+  executeStatusline();
+  const deadline = Date.now() + 5_000;
+  while (!existsSync(snapshot) && Date.now() < deadline) await delay(25);
+  assert.ok(existsSync(snapshot), "the refreshed snapshot belongs to the statusline's installation");
+  assert.equal(executeStatusline(), "Sonnet | balance $21.0");
+  assert.deepEqual(requests, [["/v1/usage?days=30", "Bearer fixture-key"]]);
+
+  function executeStatusline() {
+    const result = spawnSync(process.execPath, [statusline, "--fields", "model"], {
+      input: JSON.stringify({ model: { id: "Sonnet" } }),
+      env: {
+        ...process.env, ...installEnv, AGENT_TOOLS_HOME: "", AGENT_TOOLS_USAGE_REFRESH: "1",
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${gateway.address().port}/v1`,
+        ANTHROPIC_AUTH_TOKEN: "fixture-key", PROVIDER_USAGE_BASE_URL: "", PROVIDER_USAGE_API_KEY: "",
+        PROVIDER_USAGE_PRESET: "sub2api", PROVIDER_USAGE_DAYS: "30", PROVIDER_USAGE_DEBUG: "0",
+      },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  }
+});
+
+test("Claude statusline, usage and log use the same custom profile", () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
+  const profile = join(home, "custom-claude");
+  const runtime = join(home, "runtime");
+  const settings = join(profile, "settings.json");
+  const skills = join(profile, "skills");
+  const env = { HOME: home, USERPROFILE: home, CLAUDE_CONFIG_DIR: profile, AGENT_TOOLS_HOME: runtime };
+  const args = ["statusline", "usage", "log", "-a", "claude"];
+  runInstall(args, env);
+  const config = JSON.parse(readFileSync(settings, "utf8"));
+  assert.match(config.statusLine.command, /claude-statusline\.mjs/);
+  assert.ok(Object.keys(config.hooks).length);
+  assert.ok(existsSync(join(skills, "at-usage", "SKILL.md")));
+  assert.ok(existsSync(join(skills, "agent-tools-desktop-usage", "hooks", "register.js")));
+  assert.equal(existsSync(join(home, ".claude")), false);
+
+  runInstall([...args, "--uninstall"], env);
+  const after = JSON.parse(readFileSync(settings, "utf8"));
+  assert.equal(after.statusLine, undefined);
+  assert.equal(after.hooks, undefined);
+  assert.equal(existsSync(join(skills, "at-usage")), false);
+  assert.equal(existsSync(join(skills, "agent-tools-desktop-usage")), false);
+});
+
+test("Claude usage preflights Desktop ownership and removes only managed plugin files", () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-tools-install-"));
+  const runtime = join(home, "runtime");
+  const skills = join(home, "skills");
+  const plugin = join(skills, "agent-tools-desktop-usage");
+  const notes = join(plugin, "notes.txt");
+  const args = ["usage", "-a", "claude", "--claude-skills-dir", skills];
+  const env = { AGENT_TOOLS_HOME: runtime };
+  mkdirSync(plugin, { recursive: true });
+  writeFileSync(notes, "user notes\n");
+
+  const conflict = runInstallRaw(args, env);
+  assert.equal(conflict.status, 1);
+  assert.match(conflict.stderr, /Refusing to overwrite an unmanaged or modified Claude Desktop plugin/);
+  assert.equal(existsSync(runtime), false);
+  assert.equal(existsSync(join(skills, "at-usage")), false);
+  rmSync(notes);
+  rmdirSync(plugin);
+  runInstall(args, env);
+  writeFileSync(notes, "user notes\n");
+  const register = join(plugin, "hooks", "register.js");
+  const installed = readFileSync(register, "utf8");
+  writeFileSync(register, "// user change\n");
+  const removal = runInstall([...args, "--uninstall"], env);
+  assert.match(removal.stdout, /kept modified Claude Desktop plugin/);
+  assert.equal(readFileSync(register, "utf8"), "// user change\n");
+
+  writeFileSync(register, installed);
+  runInstall([...args, "--uninstall"], env);
+  assert.equal(existsSync(register), false);
+  assert.equal(existsSync(join(plugin, ".claude-plugin")), false);
+  assert.equal(readFileSync(notes, "utf8"), "user notes\n");
   assert.equal(existsSync(join(runtime, "install-state.json")), false);
 });
 
@@ -333,6 +457,7 @@ test("usage install refuses to overwrite an unmanaged skill", () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Refusing to overwrite existing unowned skill directory/);
   assert.equal(readFileSync(join(skillDir, "SKILL.md"), "utf8"), "user-owned\n");
+  assert.equal(existsSync(join(temp, "runtime")), false);
 });
 
 test("usage install preserves a managed skill modified by the user", () => {

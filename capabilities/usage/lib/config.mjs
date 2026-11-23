@@ -3,11 +3,22 @@
 
 import { readFile, writeFile, mkdir, open, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { parse as parseJsonc } from "jsonc-parser";
 
-export const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(homedir(), ".agent-tools");
+function installedUsageHome() {
+  // Installed usage bundles sit next to the statusline's dist directory.
+  // A launcher may no longer have the environment used to install them.
+  const directory = dirname(fileURLToPath(import.meta.url));
+  const dist = dirname(directory);
+  if (basename(directory) !== "usage" || basename(dist) !== "dist") return "";
+  const home = dirname(dist);
+  return existsSync(join(home, "config.jsonc")) ? home : "";
+}
+
+export const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || installedUsageHome() || join(homedir(), ".agent-tools");
 export const AGENT_CONFIG_PATH = join(AGENT_TOOLS_HOME, "config.jsonc");
 export const DEBUG_PATH = join(AGENT_TOOLS_HOME, "logs", "usage-debug.log");
 export const CACHE_DIR = join(AGENT_TOOLS_HOME, "cache");

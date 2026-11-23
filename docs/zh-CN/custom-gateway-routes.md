@@ -1,6 +1,6 @@
 # 自定义网关路由
 
-[Provider usage](../../README.zh-CN.md#provider-usage) 的高级指南: 为内置 preset 覆盖不到的中转(比如 cookie 认证的网关)编写自己的用量探测, 无需修改包内代码.
+[网关用量](../../README.zh-CN.md#网关用量) 的高级指南: 为内置 preset 覆盖不到的中转(比如 cookie 认证的网关)编写自己的用量探测, 无需修改包内代码.
 
 ## 声明路由
 

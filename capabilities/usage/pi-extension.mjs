@@ -56,7 +56,7 @@ export function createPiUsageExtension({ query = queryProviderUsage, now = Date.
             providerName: model.provider,
             baseUrl,
             key,
-          }, { agent: "pi", rememberSnapshot: true })).then((result) => {
+          }, { agent: "pi", rememberSnapshot: true, reuseSnapshot: true })).then((result) => {
             account.text = result?.text || undefined;
           }).catch(() => {
             // A failed probe must not interrupt Pi or leave stale quota visible.

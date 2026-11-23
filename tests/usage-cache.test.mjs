@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fsPromises from "node:fs/promises";
+import { createServer } from "node:http";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { after, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { usageAccountCacheKey } from "../capabilities/usage/lib/cache-policy.mjs";
 
 const home = mkdtempSync(join(tmpdir(), "agent-tools-account-cache-"));
@@ -13,6 +20,70 @@ const sessions = await import("../capabilities/usage/lib/opencode-session.mjs");
 const a = { baseUrl: "https://relay-a.example/v1", key: "fixture-secret-a" };
 const b = { baseUrl: a.baseUrl, key: "fixture-secret-b" };
 const c = { baseUrl: "https://relay-b.example/v1", key: a.key };
+
+test("a foreground usage query reuses the snapshot from a running background process", async (t) => {
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let requests = 0;
+  const server = createServer(async (_request, response) => {
+    const request = ++requests;
+    if (request === 1) {
+      started.resolve();
+      await release.promise;
+    }
+    response.end(JSON.stringify({ balance: request === 1 ? 21 : 42 }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const context = { baseUrl: `http://127.0.0.1:${server.address().port}`, key: "refresh-test-key" };
+  const entry = new URL("../dist/usage/core.mjs", import.meta.url);
+  const { queryProviderUsage, queryCachedProviderUsage } = await import(entry);
+  const previousPreset = process.env.PROVIDER_USAGE_PRESET;
+  process.env.PROVIDER_USAGE_PRESET = "sub2api";
+  t.after(() => {
+    if (previousPreset === undefined) delete process.env.PROVIDER_USAGE_PRESET;
+    else process.env.PROVIDER_USAGE_PRESET = previousPreset;
+  });
+  const background = promisify(execFile)(process.execPath, [fileURLToPath(entry), "refresh", "--agent", "claude"], {
+    env: {
+      ...process.env, PROVIDER_USAGE_API_KEY: context.key, PROVIDER_USAGE_BASE_URL: context.baseUrl,
+    },
+    timeout: 5_000,
+  });
+  const contested = Promise.withResolvers();
+  const open = fsPromises.open;
+  let foreground;
+  try {
+    await Promise.race([started.promise, background.then(() => assert.fail("no background request"))]);
+    assert.equal(await queryCachedProviderUsage(context), "");
+    t.mock.method(fsPromises, "open", async (...args) => {
+      try { return await open(...args); }
+      catch (error) {
+        if (error.code === "EEXIST" && basename(args[0]).startsWith("usage-refresh-")) contested.resolve();
+        throw error;
+      }
+    });
+    syncBuiltinESMExports();
+    foreground = queryProviderUsage(context, { rememberSnapshot: true, reuseSnapshot: true });
+    await Promise.race([
+      contested.promise,
+      foreground.then(() => assert.fail("foreground skipped the refresh lease")),
+      background.then(() => assert.fail("background exited before the foreground tried the lease")),
+    ]);
+    release.resolve();
+    const result = await foreground;
+    assert.equal(result.text, "balance $21.0");
+    assert.equal(result.cached, true);
+    assert.equal((await cache.readUsageSnapshot(context)).text, "balance $21.0");
+    assert.equal(requests, 1);
+  } finally {
+    release.resolve();
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await Promise.allSettled([background, foreground]);
+  }
+});
 
 test("quota, refresh throttles and leases are isolated by endpoint and credential", async () => {
   const alias = { ...a, baseUrl: "https://relay-a.example/api/v1/" };

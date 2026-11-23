@@ -14,9 +14,8 @@
 //   mcp-vision                                  Run the vision MCP stdio server.
 //
 // Targets:
-//   claude   -> ~/.claude/settings.json (statusLine key + log hooks)
-//               + ~/.claude/skills/at-usage
-//               ~/.claude.json (vision MCP) + ~/.claude/skills (at-vision)
+//   claude   -> settings.json and skills/ under CLAUDE_CONFIG_DIR (default ~/.claude)
+//               ~/.claude.json (vision MCP)
 //   codex    -> ~/.codex/config.toml (usage status line and vision MCP)
 //               ~/.codex/hooks.json (usage notices on older CLIs + log hooks)
 //               + ~/.agents/skills/at-usage
@@ -126,6 +125,9 @@ const RUNTIME = {
   dshUsagePackage: path.join(INSTALL_ROOT, "dist", "usage", "package.json"),
 };
 const ALL_CAPS = ["statusline", "usage", "vision", "log"];
+const CLAUDE_DESKTOP_RUNTIME = path.join("dist", "usage", "claude-desktop-usage.mjs");
+const CLAUDE_DESKTOP_PLUGIN = "agent-tools-desktop-usage";
+const CLAUDE_DESKTOP_PLUGIN_FILES = [".claude-plugin/plugin.json", "hooks/hooks.json", "hooks/register.js"];
 const COMMAND_STATUSLINES = { copilot: ["statusLine"], qwen: ["ui", "statusLine"] };
 // These hosts run a new command each repaint. Give background quota refreshes
 // a chance to appear soon after startup without polling the gateway more often.
@@ -295,6 +297,9 @@ function installRuntimeAssets(opts) {
     addFile(SOURCE.config, RUNTIME.config, { mergeJsonc: true });
   }
   if (wants(opts, "usage")) {
+    if (opts.agents.includes("claude")) {
+      addFile(path.join(REPO_ROOT, CLAUDE_DESKTOP_RUNTIME), path.join(INSTALL_ROOT, CLAUDE_DESKTOP_RUNTIME));
+    }
     if (opts.agents.includes("paseo")) {
       for (const file of PASEO_USAGE_FILES) {
         addFile(path.join(REPO_ROOT, PASEO_USAGE_DIR, file), path.join(INSTALL_ROOT, PASEO_USAGE_DIR, file));
@@ -589,8 +594,20 @@ function applyLogHooks(cfg, { remove, matchers }) {
   if (Object.keys(cfg.hooks).length === 0) delete cfg.hooks;
 }
 
+function claudeConfigDir() {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+}
+
+function claudeSettingsFile(opts) {
+  return opts.settings || path.join(claudeConfigDir(), "settings.json");
+}
+
+function claudeSkillsDir(opts) {
+  return opts.claudeSkillsDir || path.join(claudeConfigDir(), "skills");
+}
+
 function runClaudeLog(opts) {
-  const settings = opts.settings || path.join(os.homedir(), ".claude", "settings.json");
+  const settings = claudeSettingsFile(opts);
   console.log(`claude log: ${settings}`);
   const cfg = readJson(settings);
   applyLogHooks(cfg, { remove: opts.uninstall, matchers: true });
@@ -755,7 +772,7 @@ function skillManifestKey(dest) {
 }
 
 function skillHash(skillFile) {
-  if (!fs.existsSync(skillFile)) return "";
+  if (!fs.lstatSync(skillFile, { throwIfNoEntry: false })?.isFile()) return "";
   return createHash("sha256").update(fs.readFileSync(skillFile)).digest("hex");
 }
 
@@ -810,6 +827,9 @@ function writeInstallState(state) {
 }
 
 function managedSkillStatus(dest, identity) {
+  const existing = fs.lstatSync(dest, { throwIfNoEntry: false });
+  if (!existing) return "missing";
+  if (!existing.isDirectory()) return "unmanaged";
   const entry = readInstallState().artifacts[skillManifestKey(dest)];
   if (entry) {
     if (!matchesIdentity(entry, identity)) return "other";
@@ -817,6 +837,16 @@ function managedSkillStatus(dest, identity) {
     return currentHash && currentHash === entry.sha256 ? "managed" : "modified";
   }
   return "unmanaged";
+}
+
+function assertManagedSkillWritable(dest, status) {
+  if (status === "missing" || status === "managed") return;
+  const conflict = status === "modified" ? "modified managed" : "existing unowned";
+  console.error(
+    `  Refusing to overwrite ${conflict} skill directory ${dest}. ` +
+      `Move it or resolve the conflict, then re-run the install.`
+  );
+  process.exit(1);
 }
 
 function recordManagedSkill(dest, identity) {
@@ -842,9 +872,9 @@ function installManagedSkillDir(
   { name, source, identity, replacements, remove, dryRun }
 ) {
   const dest = path.join(skillsRoot, name);
-  const status = fs.existsSync(dest) ? managedSkillStatus(dest, identity) : "missing";
+  const status = managedSkillStatus(dest, identity);
   if (remove) {
-    if (!fs.existsSync(dest)) {
+    if (status === "missing") {
       if (!dryRun) forgetManagedSkill(dest);
       return;
     }
@@ -866,20 +896,7 @@ function installManagedSkillDir(
     console.log(`  removed ${dest}`);
     return;
   }
-  if (status === "modified") {
-    console.error(
-      `  Refusing to overwrite modified managed skill directory ${dest}. ` +
-        `Move or restore it, then re-run the install.`
-    );
-    process.exit(1);
-  }
-  if (fs.existsSync(dest) && status !== "managed") {
-    console.error(
-      `  Refusing to overwrite existing unowned skill directory ${dest}. ` +
-        `Move or remove it, then re-run the install.`
-    );
-    process.exit(1);
-  }
+  assertManagedSkillWritable(dest, status);
   if (dryRun) {
     console.log(`  [dry-run] would copy ${source} -> ${dest}`);
     return;
@@ -977,7 +994,7 @@ function updateCodexMcpBlock(file, { remove, dryRun, mcp, name, begin, end, edit
 
 function runClaudeVision(opts) {
   const claudeJson = opts.claudeJson || path.join(os.homedir(), ".claude.json");
-  const skillsDir = opts.claudeSkillsDir || path.join(os.homedir(), ".claude", "skills");
+  const skillsDir = claudeSkillsDir(opts);
   console.log(`claude vision: ${claudeJson}`);
   const cfg = readJson(claudeJson);
   const mcp = visionMcpCommand();
@@ -1009,20 +1026,102 @@ function runClaudeVision(opts) {
   console.log("  + vision (inspect_image MCP + at-vision skill)");
 }
 
+function claudeDesktopPluginStatus(dest, entry, { uninstall = false } = {}) {
+  const existing = fs.lstatSync(dest, { throwIfNoEntry: false });
+  if (!existing) return "missing";
+  if (entry?.kind !== "claude-desktop-usage") return "unmanaged";
+  if (!existing.isDirectory()) return "modified";
+  for (const dir of [".claude-plugin", "hooks"]) {
+    const info = fs.lstatSync(path.join(dest, dir), { throwIfNoEntry: false });
+    if (info && !info.isDirectory()) return "modified";
+  }
+  for (const file of CLAUDE_DESKTOP_PLUGIN_FILES) {
+    const target = path.join(dest, file);
+    const info = fs.lstatSync(target, { throwIfNoEntry: false });
+    if (!info && uninstall) continue;
+    if (!info?.isFile() || !entry.files?.[file] || skillHash(target) !== entry.files[file]) return "modified";
+  }
+  return "managed";
+}
+
+function assertClaudeDesktopPluginWritable(dest, status) {
+  if (status === "unmanaged" || status === "modified") {
+    throw new Error(`Refusing to overwrite an unmanaged or modified Claude Desktop plugin at ${dest}`);
+  }
+}
+
+function prepareClaudeUsage(opts) {
+  const skillsDir = claudeSkillsDir(opts);
+  const skill = path.join(skillsDir, USAGE_SKILL_NAME);
+  assertManagedSkillWritable(skill, managedSkillStatus(skill, USAGE_SKILL_IDENTITY));
+  const plugin = path.join(skillsDir, CLAUDE_DESKTOP_PLUGIN);
+  const entry = readInstallState().artifacts[skillManifestKey(plugin)];
+  assertClaudeDesktopPluginWritable(plugin, claudeDesktopPluginStatus(plugin, entry));
+
+  const source = path.join(REPO_ROOT, "dist", "usage", "claude-desktop");
+  const runtime = JSON.stringify({ home: path.resolve(INSTALL_ROOT), command: [process.execPath, path.resolve(INSTALL_ROOT, CLAUDE_DESKTOP_RUNTIME)] });
+  const marker = '"__AGENT_TOOLS_DESKTOP_RUNTIME__"';
+  return CLAUDE_DESKTOP_PLUGIN_FILES.map((file) => {
+    const contents = fs.readFileSync(path.join(source, file), "utf8");
+    if (file !== "hooks/register.js") return contents;
+    if (!contents.includes(marker)) throw new Error("Missing runtime marker in Claude Desktop plugin. Run npm run build.");
+    return contents.replace(marker, () => runtime);
+  });
+}
+
+function runClaudeDesktopUsage(skillsDir, opts) {
+  const dest = path.join(skillsDir, CLAUDE_DESKTOP_PLUGIN);
+  const key = skillManifestKey(dest);
+  const state = readInstallState();
+  const entry = state.artifacts[key];
+  const status = claudeDesktopPluginStatus(dest, entry, opts);
+  if (opts.uninstall && (status === "modified" || status === "unmanaged")) {
+    console.log(`  kept ${status} Claude Desktop plugin ${dest}`);
+    return;
+  }
+  if (!opts.uninstall) assertClaudeDesktopPluginWritable(dest, status);
+  const action = opts.uninstall ? "remove" : "install";
+  if (opts.dryRun) {
+    console.log(`  [dry-run] would ${action} Claude Desktop usage plugin at ${dest}`);
+    return;
+  }
+  if (opts.uninstall) {
+    if (entry?.kind !== "claude-desktop-usage") return;
+    for (const file of CLAUDE_DESKTOP_PLUGIN_FILES) fs.rmSync(path.join(dest, file), { force: true });
+    for (const dir of [path.join(dest, ".claude-plugin"), path.join(dest, "hooks"), dest]) {
+      try { fs.rmdirSync(dir); }
+      catch (error) { if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes(error.code)) throw error; }
+    }
+    delete state.artifacts[key];
+  } else {
+    for (const [index, file] of CLAUDE_DESKTOP_PLUGIN_FILES.entries()) {
+      writeText(path.join(dest, file), opts.claudeDesktopPluginContents[index], false);
+    }
+    state.packageVersion = PACKAGE_VERSION;
+    state.artifacts[key] = {
+      kind: "claude-desktop-usage",
+      files: Object.fromEntries(CLAUDE_DESKTOP_PLUGIN_FILES.map((file) => [file, skillHash(path.join(dest, file))])),
+    };
+  }
+  writeInstallState(state);
+  console.log(`  ${opts.uninstall ? "removed" : "installed"} Claude Desktop usage plugin`);
+}
+
 function runClaude(opts) {
   if (wants(opts, "vision")) runClaudeVision(opts);
   if (wants(opts, "log")) runClaudeLog(opts);
   if (wants(opts, "usage")) {
-    const skillsDir = opts.claudeSkillsDir || path.join(os.homedir(), ".claude", "skills");
+    const skillsDir = claudeSkillsDir(opts);
     console.log(`claude usage: ${skillsDir}`);
     installUsageSkillDir(skillsDir, "claude", {
       remove: opts.uninstall,
       dryRun: opts.dryRun,
     });
     console.log(opts.uninstall ? "  - usage skill" : "  + usage skill (at-usage)");
+    runClaudeDesktopUsage(skillsDir, opts);
   }
   if (!wants(opts, "statusline")) return;
-  const settings = opts.settings || path.join(os.homedir(), ".claude", "settings.json");
+  const settings = claudeSettingsFile(opts);
   console.log(`claude (global): ${settings}`);
   const cfg = readJson(settings);
   cfg[META_KEY] = cfg[META_KEY] || { version: META_VERSION, managed: {} };
@@ -1914,6 +2013,9 @@ function main() {
   validateAgentCapabilities(opts);
   if (!opts.uninstall && wants(opts, "usage") && opts.agents.includes("codex")) {
     opts.codexStatusline = useCodexStatusline(opts);
+  }
+  if (!opts.uninstall && wants(opts, "usage") && opts.agents.includes("claude")) {
+    opts.claudeDesktopPluginContents = prepareClaudeUsage(opts);
   }
   installRuntimeAssets(opts);
   if (wants(opts, "vision")) installVisionRuntime(opts);

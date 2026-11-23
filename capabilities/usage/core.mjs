@@ -14,11 +14,7 @@ import {
   HOOK_SNAPSHOT_MAX_AGE_MS,
   REFRESH_INTERVAL_MS,
 } from "./lib/config.mjs";
-import {
-  acquireUsageRefreshLease,
-  canRefreshUsage,
-  rememberRefreshState,
-} from "./lib/cache.mjs";
+import { canRefreshUsage } from "./lib/cache.mjs";
 import { usageContext } from "./lib/context.mjs";
 import { cachedUsage, queryUsageContext } from "./lib/query.mjs";
 import { agentOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
@@ -65,15 +61,7 @@ function failSoft(message, error) {
 
 async function refresh(agent = "codex") {
   const context = await usageContext(agent);
-  const release = await acquireUsageRefreshLease(context);
-  if (!release) return { skipped: true, text: "" };
-  try {
-    if (!(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return { skipped: true, text: "" };
-    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
-    return await queryUsageContext(context, { agent, mode, rememberSnapshot: true });
-  } finally {
-    await release();
-  }
+  return await queryUsageContext(context, { agent, mode, rememberSnapshot: true, force: false });
 }
 
 export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, ...session } = {}) {
@@ -84,7 +72,7 @@ export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, .
       const cached = await cachedUsage(context);
       if (cached && cached.ageMs < maxAgeMs) return { ...cached, text: withOutputSpeed(cached.text, speed), cached: true };
     }
-    const result = await queryUsageContext(context, { agent, mode, rememberSnapshot: true });
+    const result = await queryUsageContext(context, { agent, mode, rememberSnapshot: true, reuseSnapshot: true });
     return { ...result, text: withOutputSpeed(result.text, speed) };
   } catch (error) {
     if (speed) return { text: speed };

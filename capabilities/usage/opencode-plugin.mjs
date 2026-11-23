@@ -85,6 +85,7 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
       const task = queryProviderUsage(context, {
         agent: "opencode",
         rememberSnapshot: true,
+        reuseSnapshot: true,
       })
         .catch(() => null)
         .finally(() => inFlight.delete(cacheKey));

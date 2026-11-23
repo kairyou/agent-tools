@@ -3,61 +3,22 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 import { readJson, readTextIfExists } from "./config.mjs";
 import { readZcodeSessionProvider } from "./zcode-session.mjs";
 
-function stripInlineComment(value) {
-  let inSingle = false;
-  let inDouble = false;
-  for (let i = 0; i < value.length; i += 1) {
-    const char = value[i];
-    const prev = value[i - 1];
-    if (char === "'" && !inDouble) inSingle = !inSingle;
-    if (char === '"' && !inSingle && prev !== "\\") inDouble = !inDouble;
-    if (char === "#" && !inSingle && !inDouble) return value.slice(0, i).trim();
+function parseCodexConfig(source) {
+  try {
+    return getStaticTOMLValue(parseTOML(source.replace(/^\uFEFF/, "")));
+  } catch {
+    return {};
   }
-  return value.trim();
-}
-
-function parseTomlLite(source) {
-  const root = {};
-  let current = root;
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const table = line.match(/^\[([^\]]+)\]$/);
-    if (table) {
-      current = root;
-      for (const part of table[1].split(".")) {
-        const key = part.replace(/^['"]|['"]$/g, "");
-        current[key] ||= {};
-        current = current[key];
-      }
-      continue;
-    }
-
-    const eq = line.indexOf("=");
-    if (eq === -1) continue;
-    const key = line.slice(0, eq).trim();
-    const rawValue = stripInlineComment(line.slice(eq + 1));
-    current[key] = parseTomlValue(rawValue);
-  }
-  return root;
-}
-
-function parseTomlValue(value) {
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
-  }
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return value;
 }
 
 function activeProvider(config) {
   const providerName = config.model_provider || "openai";
-  const provider = config.model_providers?.[providerName] || {};
+  const providers = config.model_providers ?? {};
+  const provider = Object.hasOwn(providers, providerName) ? providers[providerName] : {};
   return { providerName, provider };
 }
 
@@ -88,7 +49,7 @@ async function contextForCodex({ env = process.env, providerId } = {}) {
   const home = env.CODEX_HOME || join(homedir(), ".codex");
   const authFile = join(home, "auth.json");
   const auth = existsSync(authFile) ? await readJson(authFile) : {};
-  const codexConfig = parseTomlLite(await readTextIfExists(join(home, "config.toml")));
+  const codexConfig = parseCodexConfig(await readTextIfExists(join(home, "config.toml")));
   if (providerId) {
     const providers = codexConfig.model_providers ?? {};
     const provider = Object.hasOwn(providers, providerId) ? providers[providerId] : {};

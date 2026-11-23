@@ -39,7 +39,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "npm run build",
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "node scripts/test.mjs",
     "version": "node scripts/sync-plugin-version.mjs",
     "claude-skills:fetch": "node tools/claude-skill-sync/cli.mjs fetch",
     "claude-skills:inspect": "node tools/claude-skill-sync/cli.mjs inspect",

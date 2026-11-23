@@ -87,7 +87,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 }
 ```
 
-## Capabilities
+## 运行时功能
 
 按 Agent 选装的运行时功能:
 
@@ -98,20 +98,24 @@ npx -y @kairyou/agent-tools@latest <capability> -a <agent...>
 
 | 功能 | 安装项 | Agent (`-a`) |
 | --- | :---: | --- |
-| Claude Code 状态栏与用量 | `statusline` | `claude` |
-| 网关用量 | `usage` | `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo`, `copilot`, `qwen` |
+| Claude Code CLI 状态栏 | `statusline` | `claude` |
+| 网关用量 | `usage` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` (DeepSeek Harness), `paseo`, `copilot`, `qwen` |
 | 跨模型识图 | `vision` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 | 会话工作日志 | `log` | `claude`, `codex`, `opencode`, `pi`, `zcode`, `dsh` |
 
 ### 状态与用量
 
-#### Statusline
+#### Claude Code
 
-```bash
-npx -y @kairyou/agent-tools@latest statusline -a claude
-```
+| 使用界面 | 安装命令 |
+| --- | --- |
+| CLI 底栏 (含网关用量) | `npx -y @kairyou/agent-tools@latest statusline -a claude` |
+| Claude Desktop (本地 Code 会话) | `npx -y @kairyou/agent-tools@latest usage -a claude` |
+| 两边都用 | `npx -y @kairyou/agent-tools@latest statusline usage -a claude` |
 
-安装器会把 `statusLine` 写入 `~/.claude/settings.json`. 显示效果:
+Desktop 新会话中, 点击输入框上方的用量看详情 (需内置 Claude Code 2.1.286+).
+
+CLI 安装会写入 `~/.claude/settings.json` 的 `statusLine`.
 
 ```text
 # 官方订阅:
@@ -121,19 +125,19 @@ npx -y @kairyou/agent-tools@latest statusline -a claude
 ⎇ main | Opus 4.8 | balance $362 | today $61.7 | 30d $566
 ```
 
-`5h` / `w`: Claude 的 5小时 / 7天滚动用量窗口; `⟳`: 重置倒计时.
+`5h` / `w` 是 5 小时 / 7 天滚动用量, `⟳` 是重置倒计时.
 
-在 `~/.agent-tools/config.jsonc` 的 `statusline.fields` 中设置显示项及顺序;
-加入 `"outputSpeed"` 可显示估算输出速度 (如 `38.2 tok/s`).
+在 `~/.agent-tools/config.jsonc` 中, CLI 用 `statusline.fields` 排列字段,
+用 `statusline.showProviderUsage: false` 隐藏网关用量.
 
-设置 `statusline.showProviderUsage` 为 `false` 可隐藏中转网关用量.
-支持的网关与配置见 [Provider usage](#provider-usage).
+要显示估算输出速度 (`tok/s`), CLI 在 `statusline.fields` 中加 `"outputSpeed"`,
+Desktop 将 `providerUsage.outputSpeed` 设为 `true`.
 
-#### Provider usage
+#### 网关用量
 
-在 Agent 内查看网关余额和用量. 支持 Sub2API, One API (包括 OneHub
-与 DoneHub), New API, Claude Code Hub, OpenRouter 和 Command Code. 具体兼容性
-取决于网关版本及其是否开放相应接口.
+在 Agent 内查看网关余额和用量. 本节的网关配置也适用于 Claude.
+内置路由包括 Sub2API, One API (包括 OneHub 与 DoneHub), New API, Claude Code Hub,
+OpenRouter 和 Command Code. 具体兼容性取决于网关版本及其开放的用量接口.
 
 ```bash
 npx -y @kairyou/agent-tools@latest usage -a codex

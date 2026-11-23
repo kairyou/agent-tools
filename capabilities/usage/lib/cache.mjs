@@ -36,8 +36,8 @@ async function readJsonCache(path, field) {
 }
 
 // Read-modify-write serialized across processes: the gateway refresh lock
-// covers only one account, and skill/CLI queries hold no lock at all, so
-// concurrent writers would otherwise drop each other's entries. The temp file
+// covers only one account, so concurrent writers for different accounts
+// would otherwise drop each other's entries. The temp file
 // plus rename keeps readers from ever seeing a half-written file.
 export async function updateJsonCache(path, field, source, mutate) {
   const release = await acquireWriteLock();

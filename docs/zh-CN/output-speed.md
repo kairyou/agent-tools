@@ -7,7 +7,8 @@ Token 数取自 Agent 的用量记录.
 
 | Agent | 计时依据 |
 | --- | --- |
-| Claude Code | Claude Code 记录的累计 API 耗时的前后差值. |
+| Claude Code CLI | Claude Code 记录的累计 API 耗时的前后差值. |
+| Claude Desktop | 本地 Code 会话中单次模型请求的耗时. |
 | Codex | 日志中用户输入或工具结果到模型响应完成的时间. |
 | Pi | 从收到首段输出到最后一段输出, 包括文本, 思考和工具参数. |
 | OpenCode | 按文本和思考输出的首末时间计时. 含工具调用的回复不显示速度. |
@@ -16,7 +17,9 @@ Token 数取自 Agent 的用量记录.
 | Copilot CLI | 通过请求 ID 匹配助手响应, 用请求总耗时减去首段输出等待时间. |
 | Qwen Code | 匹配主 Agent 响应, 使用日志记录的生成耗时. |
 
-Claude Code 通过响应 ID 和用量校验耗时是否只对应一次响应.
+开启 `tok/s` 见 [Claude Code 安装说明](../../README.zh-CN.md#claude-code).
+
+Claude Code CLI 通过响应 ID 和用量校验耗时是否只对应一次响应.
 计时缺失或无法确认时, 改用用户输入或工具结果到响应完成的日志时间估算.
 
 缺少有效的 token 用量或计时数据时, 不显示速度.

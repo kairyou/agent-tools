@@ -115,6 +115,7 @@ if (!dryRun && target === "registry") {
     label: `node scripts/publish.mjs --auth-only ${publishArgs.join(" ")}`.trimEnd(),
   });
 }
+runNpm(["run", "build"]);
 runNpm(["test"]);
 
 if (dryRun) {

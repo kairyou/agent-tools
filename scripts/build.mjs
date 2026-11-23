@@ -40,6 +40,21 @@ async function buildPaseoPlugin(stage, options) {
   fs.copyFileSync(path.join(src, "paseo-plugin.json"), path.join(dir, "paseo-plugin.json"));
 }
 
+async function buildClaudeDesktopPlugin(stage, options) {
+  const dir = path.join(stage, "claude-desktop");
+  const manifestDir = path.join(dir, ".claude-plugin");
+  await build({ ...options, platform: "neutral", target: "es2022",
+    entryPoints: [path.join(ROOT, "capabilities", "usage", "claude-desktop-mod.mjs")],
+    outfile: path.join(dir, "hooks", "register.js"), outExtension: {} });
+  fs.mkdirSync(manifestDir, { recursive: true });
+  fs.writeFileSync(path.join(manifestDir, "plugin.json"), `${JSON.stringify({
+    name: "agent-tools-desktop-usage", version: PACKAGE_VERSION,
+    description: "Display gateway usage and output speed in Claude Code Desktop",
+    author: { name: "kairyou" }, license: "MIT",
+  }, null, 2)}\n`);
+  fs.writeFileSync(path.join(dir, "hooks", "hooks.json"), '{"modules":["./register.js"]}\n');
+}
+
 const TARGETS = {
   statusline: {
     entryPoints: {
@@ -51,6 +66,7 @@ const TARGETS = {
     entryPoints: {
       core: path.join(ROOT, "capabilities", "usage", "core.mjs"),
       cli: path.join(ROOT, "capabilities", "usage", "cli.mjs"),
+      "claude-desktop-usage": path.join(ROOT, "capabilities", "usage", "claude-desktop-usage.mjs"),
       "codex-hook": path.join(ROOT, "capabilities", "usage", "codex-hook.mjs"),
       "copilot-statusline": path.join(ROOT, "capabilities", "usage", "copilot-statusline.mjs"),
       "qwen-statusline": path.join(ROOT, "capabilities", "usage", "qwen-statusline.mjs"),
@@ -113,6 +129,7 @@ for (const [name, { entryPoints, external = [] }] of Object.entries(TARGETS)) {
       fs.copyFileSync(path.join(ROOT, "capabilities", "usage", "dsh-package.json"), path.join(stage, "package.json"));
       await buildZcodeMarketplace(stage, options);
       await buildPaseoPlugin(stage, options);
+      await buildClaudeDesktopPlugin(stage, options);
     }
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.renameSync(stage, outDir);

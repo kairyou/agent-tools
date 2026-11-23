@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { debugLog, usagePreset, HOOK_SNAPSHOT_MAX_AGE_MS, REFRESH_INTERVAL_MS } from "./config.mjs";
 import { isOfficialBaseUrl } from "./urls.mjs";
 import {
@@ -12,7 +13,7 @@ import { orderedUsageRoutes } from "./routes.mjs";
 import { normalizeUsageContext } from "./context.mjs";
 import { usageAccountCacheKey } from "./cache-policy.mjs";
 
-export async function queryUsageContext(context, { agent = "external", mode = "hook", rememberSnapshot = false } = {}) {
+async function probeUsage(context, { agent = "external", mode = "hook", rememberSnapshot = false }) {
   await debugLog({
     mode,
     agent,
@@ -68,32 +69,69 @@ export async function queryProviderUsage(input, options = {}) {
 }
 
 const pendingUsageRefreshes = new Map();
+// A foreground query can join another process briefly. Status surfaces can
+// show their existing snapshot immediately while that process refreshes.
+const REFRESH_WAIT_MS = 10_000;
+const REFRESH_POLL_MS = 50;
+
+export async function queryUsageContext(context, options = {}) {
+  if (!options.rememberSnapshot) return await probeUsage(context, options);
+  if (!context.key || isOfficialBaseUrl(context.baseUrl)) return { skipped: true, text: "" };
+
+  const { force = true, wait = force, reuseSnapshot = false } = options;
+  const account = usageAccountCacheKey(context);
+  const previous = wait && reuseSnapshot ? await readUsageSnapshot(context) : null;
+  const deadline = performance.now() + REFRESH_WAIT_MS;
+  let contended = false;
+  while (true) {
+    let task = pendingUsageRefreshes.get(account);
+    if (!task) {
+      const snapshotVersion = contended && reuseSnapshot ? previous?.updatedAt ?? "" : null;
+      task = refreshUsage(context, { ...options, force }, snapshotVersion)
+        .finally(() => pendingUsageRefreshes.delete(account));
+      pendingUsageRefreshes.set(account, task);
+    }
+    const outcome = await task;
+    if (outcome && (!outcome.fromSnapshot || reuseSnapshot)) return outcome.result;
+    if (!wait) return { skipped: true, text: "" };
+
+    contended = true;
+    if (performance.now() >= deadline) throw new Error("Usage refresh is already in progress");
+    await delay(REFRESH_POLL_MS);
+  }
+}
+
+async function refreshUsage(context, options, snapshotVersion) {
+  const release = await acquireUsageRefreshLease(context);
+  if (!release) return null;
+  try {
+    // Only callers that accept cached output can reuse another process's
+    // result. The snapshot deliberately omits the gateway's raw response.
+    if (snapshotVersion !== null) {
+      const cached = await cachedUsage(context);
+      if (cached && cached.updatedAt !== snapshotVersion) {
+        return { result: { ...cached, cached: true }, fromSnapshot: true };
+      }
+    }
+    if (!options.force && !(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return null;
+    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
+    return { result: await probeUsage(context, options) };
+  } finally {
+    await release();
+  }
+}
 
 // Native status surfaces and commands share snapshots and one refresh per account.
 export async function queryCachedProviderUsage(input, { agent, force = false, allowStale = true } = {}) {
   const context = normalizeUsageContext(input);
   if (!context.key || isOfficialBaseUrl(context.baseUrl)) return "";
-  const account = usageAccountCacheKey(context);
   const cached = force && !allowStale ? null : await cachedUsage(context);
   const fallback = allowStale && cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "";
-  let task = pendingUsageRefreshes.get(account);
-  if (!task) {
-    if (!force && cached && cached.ageMs < REFRESH_INTERVAL_MS) return cached.text;
-    task = refreshCachedProviderUsage(context, { agent, force }).finally(() => pendingUsageRefreshes.delete(account));
-    pendingUsageRefreshes.set(account, task);
-  }
-  return (await task) || fallback;
-}
-
-async function refreshCachedProviderUsage(context, { agent, force }) {
-  const release = await acquireUsageRefreshLease(context);
-  if (!release) return "";
+  if (!force && cached && cached.ageMs < REFRESH_INTERVAL_MS) return cached.text;
   try {
-    if (!force && !(await canRefreshUsage(context, REFRESH_INTERVAL_MS))) return "";
-    await rememberRefreshState(context, { lastStartedAt: new Date().toISOString() });
-    return (await queryUsageContext(context, { agent, rememberSnapshot: true }))?.text || "";
-  } catch { return ""; }
-  finally { await release(); }
+    const result = await queryUsageContext(context, { agent, rememberSnapshot: true, force, wait: false, reuseSnapshot: true });
+    return result.text || fallback;
+  } catch { return fallback; }
 }
 
 export async function cachedUsage(context) {

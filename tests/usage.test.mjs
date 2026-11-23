@@ -177,7 +177,7 @@ test("local usage CLI queries Codex and Claude without a package manager", async
   });
 });
 
-test("Codex usage reads the provider experimental bearer token", async () => {
+test("Codex usage reads the experimental bearer token of a quoted provider ID", async () => {
   const seen = [];
   await withServer((req, res) => {
     seen.push({ url: req.url, authorization: req.headers.authorization });
@@ -196,7 +196,7 @@ test("Codex usage reads the provider experimental bearer token", async () => {
     mkdirSync(agentHome, { recursive: true });
     writeFileSync(
       join(codexHome, "config.toml"),
-      `model_provider = "mock"\n[model_providers.mock]\nname = "Mock"\nbase_url = "${baseUrl}/v1"\nexperimental_bearer_token = "config-token"\n`
+      `model_provider = "relay.eu"\n[model_providers."relay.eu"] # relay\nname = "Mock"\nbase_url = "${baseUrl}/v1"\nexperimental_bearer_token = "config-token"\n`
     );
     writeFileSync(join(agentHome, "config.jsonc"), JSON.stringify({ providerUsage: {} }));
 
@@ -208,7 +208,7 @@ test("Codex usage reads the provider experimental bearer token", async () => {
       SUB2API_BASE_URL: "",
       OPENAI_BASE_URL: "",
       OPENAI_API_KEY: "",
-    });
+    }, DIST_USAGE_CLI);
 
     assert.deepEqual(result, { status: 0, stdout: "balance $18.8\n", stderr: "" });
     assert.deepEqual(seen, [

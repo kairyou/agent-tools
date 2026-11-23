@@ -85,7 +85,7 @@ test("Pi usage queries resolved auth, caches and coalesces refreshes", async () 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context.baseUrl, "https://resolved.example/v1");
   assert.equal(calls[0].context.key, "resolved-key");
-  assert.deepEqual(calls[0].options, { agent: "pi", rememberSnapshot: true });
+  assert.deepEqual(calls[0].options, { agent: "pi", rememberSnapshot: true, reuseSnapshot: true });
   finish({ text: "balance $27.5" });
   await setImmediate();
   assert.equal(h.statuses.at(-1).text, "balance $27.5");
