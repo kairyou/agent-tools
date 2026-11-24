@@ -203,7 +203,9 @@ test("OpenCode commands isolate sessions and discard quota from replaced credent
   };
   try {
     let finishSlow;
+    let requests = 0;
     await withServer((req, res) => {
+      requests += 1;
       res.setHeader("content-type", "application/json");
       const amount = req.url.startsWith("/other/") ? 30 : req.headers.authorization === "Bearer fixture-b" ? 20 : 10;
       const send = () => res.end(JSON.stringify({ balance: amount }));
@@ -235,8 +237,14 @@ test("OpenCode commands isolate sessions and discard quota from replaced credent
         await layer.commands[0].run();
         return shown;
       };
+      const { queryCachedProviderUsage } = await import("../dist/usage/core.mjs");
+      assert.equal(await queryCachedProviderUsage({
+        baseUrl: `${baseUrl}/v1`, key: "fixture-a",
+      }, { agent: "claude" }), "balance $10.0");
+      assert.equal(requests, 1);
       await params("a", "fixture-a");
       await idle("a");
+      assert.equal(requests, 1, "OpenCode reuses a recent reading from another agent");
       await params("b", "fixture-b");
       await idle("b");
       await params("c", "fixture-a", `${baseUrl}/other/v1`);

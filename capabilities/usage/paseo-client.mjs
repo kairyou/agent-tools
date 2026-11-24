@@ -5,8 +5,6 @@ import { Text } from "react-native";
 import { usageSummary } from "./lib/usage-summary.mjs";
 import { agentUsage } from "./paseo-rpc.mjs";
 
-// Poll only mounted pills, at the same cadence as the shared gateway cache.
-const REFRESH_MS = 60_000;
 const empty = { gateway: "", speed: "" };
 
 function addUsagePill(client, { id: agentId, workspaceId }) {
@@ -30,19 +28,10 @@ function addUsagePill(client, { id: agentId, workspaceId }) {
     const state = useAgent(agentId, ({ status, runtimeInfo }) => ({ status, sessionId: runtimeInfo?.sessionId }));
     useEffect(() => {
       let stopped = false;
-      let timer;
-      async function refresh() {
-        try {
-          const next = await client.rpc(agentUsage, { agentId });
-          if (!stopped) publish(next);
-        } catch {
-          if (!stopped) publish(empty);
-        } finally {
-          if (!stopped) timer = setTimeout(refresh, REFRESH_MS);
-        }
-      }
-      void refresh();
-      return () => { stopped = true; clearTimeout(timer); };
+      void client.rpc(agentUsage, { agentId }).then((next) => {
+        if (!stopped) publish(next);
+      }).catch(() => {});
+      return () => { stopped = true; };
     }, [state?.status, state?.sessionId]);
     return h(Icon, { name: "Gauge", size, color });
   }

@@ -30,6 +30,7 @@
     "toml-eslint-parser": "0.10.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.32.0",
     "acorn": "8.19.0",
     "esbuild": "0.28.2",

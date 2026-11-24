@@ -174,6 +174,14 @@ test("local usage CLI queries Codex and Claude without a package manager", async
     // The bundled dist entry must behave exactly like the source entry.
     const bundled = await runUsageCli("claude", claudeEnv, DIST_USAGE_CLI);
     assert.deepEqual(bundled, claude);
+
+    writeFileSync(join(codexHome, "config.toml"), `openai_base_url = "${baseUrl}/v1"\n`);
+    const codexWithBuiltInProvider = await runUsageCli("codex", {
+      ...common,
+      CODEX_HOME: codexHome,
+      OPENAI_BASE_URL: `${baseUrl}/unused/v1`,
+    }, DIST_USAGE_CLI);
+    assert.deepEqual(codexWithBuiltInProvider, codex);
   });
 });
 

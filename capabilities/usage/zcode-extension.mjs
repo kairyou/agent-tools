@@ -1,6 +1,6 @@
 import { queryCachedProviderUsage } from "./core.mjs";
 import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
-import { agentConfig, REFRESH_INTERVAL_MS } from "./lib/config.mjs";
+import { agentConfig } from "./lib/config.mjs";
 import { usageContext } from "./lib/context.mjs";
 import { withOutputSpeed } from "./lib/output-speed.mjs";
 import { usageSummary } from "./lib/usage-summary.mjs";
@@ -95,25 +95,22 @@ export function createZcodeUsageExtension() {
         }),
       ];
       void agentConfig().then(({ outputSpeed }) => {
-        if (!active || outputSpeed !== true || !ctx.models?.onDidGenerate) return;
+        if (!active || !ctx.models?.onDidGenerate) return;
         subscriptions.push(ctx.models.onDidGenerate(({ sessionId, phase, model, outputTokens, outputTokensPerSecond }) => {
           const state = sessions.get(sessionId);
           const key = modelKey(model);
           // The host's streaming events estimate tokens from characters.
-          if (!state || phase !== "final" || (state.model && state.model !== key) ||
-              !Number.isSafeInteger(outputTokens) || outputTokens <= 0 ||
-              !Number.isFinite(outputTokensPerSecond) || outputTokensPerSecond <= 0) return;
-          state.output = { model: key, speed: `${outputTokensPerSecond.toFixed(1)} tok/s` };
-          publish(sessionId, state);
+          if (!state || phase !== "final" || (state.model && state.model !== key)) return;
+          if (outputSpeed === true && Number.isSafeInteger(outputTokens) && outputTokens > 0 &&
+              Number.isFinite(outputTokensPerSecond) && outputTokensPerSecond > 0) {
+            state.output = { model: key, speed: `${outputTokensPerSecond.toFixed(1)} tok/s` };
+            publish(sessionId, state);
+          }
+          void update(sessionId, state);
         }));
       });
-      const timer = setInterval(() => {
-        for (const [sessionId, state] of sessions) void update(sessionId, state);
-      }, REFRESH_INTERVAL_MS);
-      timer.unref?.();
       dispose = () => {
         active = false;
-        clearInterval(timer);
         for (const subscription of subscriptions) subscription.dispose();
         sessions.clear();
       };

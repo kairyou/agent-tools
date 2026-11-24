@@ -127,10 +127,13 @@ test("Codex usage follows the CLI version while preserving other hooks", () => {
   const env = { AGENT_TOOLS_HOME: runtime, ...mockCodexVersion(home, "0.170.0") };
   runInstall(args, env);
   assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 2);
+  const withoutFooter = readFileSync(config, "utf8");
+  assert.match(withoutFooter, /\[mcp_servers\.agent-tools-codex-statusline\]/);
+  assert.doesNotMatch(withoutFooter, /tui_extensions_statusline|status_line_provider/);
 
   mockCodexVersion(home, "0.171.0");
   runInstall([...args, "--dry-run"], env);
-  assert.equal(readFileSync(config, "utf8"), original);
+  assert.equal(readFileSync(config, "utf8"), withoutFooter);
   runInstall(args, env);
   const registered = readFileSync(config, "utf8");
   assert.match(registered, /^features\.tui_extensions_statusline = true$/m);
@@ -145,7 +148,7 @@ test("Codex usage follows the CLI version while preserving other hooks", () => {
 
   mockCodexVersion(home, "0.170.0");
   runInstall(args, env);
-  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+  assert.equal(readFileSync(config, "utf8"), withoutFooter);
   assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 2);
   mockCodexVersion(home, "0.172.0");
   runInstall(args, env);
@@ -189,7 +192,9 @@ test("Codex preserves the native footer if it contains unsupported fields", () =
   const original = '[tui]\nstatus_line = ["model", "total-input-tokens", "pull-request-number"] # keep\n';
   writeFileSync(config, original);
   runInstall(args, env);
-  assert.equal(readFileSync(config, "utf8"), original);
+  const withoutFooter = readFileSync(config, "utf8");
+  assert.ok(withoutFooter.startsWith(original));
+  assert.doesNotMatch(withoutFooter, /tui_extensions_statusline|status_line_provider/);
   assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 1);
 
   writeFileSync(config, original.replace(', "pull-request-number"', ""));
@@ -201,7 +206,7 @@ test("Codex preserves the native footer if it contains unsupported fields", () =
   // A subsequent install must also preserve fields selected after enabling our footer.
   writeFileSync(config, installed.replace('"total-input-tokens"]', '"total-input-tokens", "pull-request-number"]'));
   runInstall(args, env);
-  assert.equal(readFileSync(config, "utf8").trimEnd(), original.trimEnd());
+  assert.equal(readFileSync(config, "utf8"), withoutFooter);
   assert.equal(JSON.parse(readFileSync(hooks, "utf8")).hooks.Stop.length, 1);
 });
 
@@ -232,7 +237,9 @@ for (const [label, original, installed] of [
   const after = readFileSync(config, "utf8");
   assert.equal(after.trimEnd(), installed.replace('server = "agent-tools-codex-statusline"', 'server = "another-provider"').trimEnd());
   runInstall(args, env);
-  assert.equal(readFileSync(config, "utf8"), after);
+  const withPanel = readFileSync(config, "utf8");
+  assert.ok(withPanel.startsWith(after.trimEnd()));
+  assert.match(withPanel, /\[mcp_servers\.agent-tools-codex-statusline\]/);
   assert.equal(JSON.parse(readFileSync(join(home, "hooks.json"), "utf8")).hooks.Stop.length, 1);
 });
 
@@ -263,7 +270,7 @@ test("installer wires and unwires Codex usage without removing unrelated hooks",
     skillsDir,
   ];
   runInstall(args, env);
-  assert.equal(existsSync(join(temp, "config.toml")), false);
+  assert.match(readFileSync(join(temp, "config.toml"), "utf8"), /\[mcp_servers\.agent-tools-codex-statusline\]/);
   assert.equal(existsSync(staleRoute), false);
   const installed = JSON.parse(readFileSync(hooksFile, "utf8"));
 

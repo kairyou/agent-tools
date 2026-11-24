@@ -123,7 +123,15 @@ for (const [name, { entryPoints, external = [] }] of Object.entries(TARGETS)) {
       sourcemap: false,
       legalComments: "none",
     };
-    await build({ ...options, entryPoints, outdir: stage, external });
+    let define;
+    if (name === "statusline") {
+      const panel = await build({
+        entryPoints: [path.join(ROOT, "capabilities", "usage", "codex-panel.mjs")],
+        bundle: true, platform: "browser", format: "esm", target: "es2022", write: false, minify: true,
+      });
+      define = { CODEX_USAGE_PANEL_SCRIPT: JSON.stringify(panel.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")) };
+    }
+    await build({ ...options, entryPoints, outdir: stage, external, define });
 
     if (name === "usage") {
       fs.copyFileSync(path.join(ROOT, "capabilities", "usage", "dsh-package.json"), path.join(stage, "package.json"));

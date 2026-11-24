@@ -40,25 +40,28 @@ async function readJsonCache(path, field) {
 // would otherwise drop each other's entries. The temp file
 // plus rename keeps readers from ever seeing a half-written file.
 export async function updateJsonCache(path, field, source, mutate) {
-  const release = await acquireWriteLock();
-  if (!release) {
-    // Losing one update is safer than an unlocked read-modify-write, which
-    // would drop the other gateways' entries. Caches refill on the next run.
-    await debugLog({ source, skipped: "cache write lock unavailable" });
-    return;
-  }
+  let release;
+  let temp;
   try {
+    release = await acquireWriteLock();
+    if (!release) {
+      // Losing one update is safer than an unlocked read-modify-write.
+      await debugLog({ source, skipped: "cache write lock unavailable" });
+      return;
+    }
     const cache = await readJsonCache(path, field);
     mutate(cache[field]);
     cache[field] = retainedCacheEntries(cache[field]);
     await mkdir(dirname(path), { recursive: true });
-    const temp = `${path}.${process.pid}.tmp`;
+    temp = `${path}.${process.pid}.tmp`;
     await writeFile(temp, `${JSON.stringify(cache, null, 2)}\n`);
     await rename(temp, path);
+    temp = undefined;
   } catch (error) {
     await debugLog({ source, error: error.message });
   } finally {
-    await release();
+    if (temp) await unlink(temp).catch(() => {});
+    await release?.();
   }
 }
 
@@ -126,6 +129,7 @@ export async function canRefreshUsage(context, minIntervalMs) {
 
 // `wx` fails when the file exists, which makes creating it an atomic
 // cross-process lock. Returns a release function, or null when the lock is held.
+// Propagate storage errors so callers only wait for actual contention.
 //
 // Best-effort, not a guarantee: the holder keeps touching the file so a live
 // holder is unlikely to be declared stale, but a suspended machine, a stalled
@@ -139,8 +143,24 @@ async function tryLock(lockPath, staleMs, details = {}) {
   await mkdir(dirname(lockPath), { recursive: true });
   const token = randomUUID();
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    let handle;
     try {
-      const handle = await open(lockPath, "wx");
+      handle = await open(lockPath, "wx");
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (attempt > 0) return null;
+      try {
+        const { mtimeMs } = await stat(lockPath);
+        if (Date.now() - mtimeMs <= staleMs) return null;
+        const claimed = `${lockPath}.${token}`;
+        await rename(lockPath, claimed);
+        await unlink(claimed).catch(() => {});
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      continue;
+    }
+    try {
       try {
         await handle.writeFile(
           `${JSON.stringify({ token, pid: process.pid, ...details, startedAt: new Date().toISOString() })}\n`
@@ -148,39 +168,26 @@ async function tryLock(lockPath, staleMs, details = {}) {
       } finally {
         await handle.close();
       }
-      const heartbeat = setInterval(() => {
-        const now = new Date();
-        utimes(lockPath, now, now).catch(() => {});
-      }, Math.max(50, Math.floor(staleMs / 3)));
-      heartbeat.unref(); // must never keep the process alive
-      return async () => {
-        clearInterval(heartbeat);
-        // If we were taken over anyway, the file belongs to someone else and
-        // must survive; this check is why a missed heartbeat is recoverable.
-        try {
-          const held = JSON.parse(await readTextIfExists(lockPath));
-          if (held?.token === token) await unlink(lockPath);
-        } catch {
-          // Unreadable or already gone: nothing of ours left to release.
-        }
-      };
     } catch (error) {
-      if (error?.code !== "EEXIST" || attempt > 0) return null;
-      const age = await stat(lockPath).then(
-        ({ mtimeMs }) => Date.now() - mtimeMs,
-        () => Infinity // vanished under us: retry immediately
-      );
-      if (age <= staleMs) return null;
-      // Claim the stale lock by renaming it: rename is atomic, so only one
-      // process wins and nobody deletes a lock another just created.
-      try {
-        const claimed = `${lockPath}.${token}`;
-        await rename(lockPath, claimed);
-        await unlink(claimed).catch(() => {});
-      } catch {
-        return null; // another process claimed it first
-      }
+      await unlink(lockPath).catch(() => {});
+      throw error;
     }
+    const heartbeat = setInterval(() => {
+      const now = new Date();
+      utimes(lockPath, now, now).catch(() => {});
+    }, Math.max(50, Math.floor(staleMs / 3)));
+    heartbeat.unref(); // must never keep the process alive
+    return async () => {
+      clearInterval(heartbeat);
+      // If we were taken over anyway, the file belongs to someone else and
+      // must survive; this check is why a missed heartbeat is recoverable.
+      try {
+        const held = JSON.parse(await readTextIfExists(lockPath));
+        if (held?.token === token) await unlink(lockPath);
+      } catch {
+        // Unreadable or already gone: nothing of ours left to release.
+      }
+    };
   }
   return null;
 }

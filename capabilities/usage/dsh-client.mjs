@@ -27,28 +27,23 @@ window.__ModuleLoader__.load({
   factory(require) {
     const { createElement: h, useEffect, useState } = require("react");
 
-    function Usage({ sessionId }) {
+    function Usage({ sessionId, usage }) {
       const [text, setText] = useState("");
       const [open, setOpen] = useState(false);
       useEffect(() => {
         const controller = new AbortController();
         const { signal } = controller;
-        let timer;
         async function refresh() {
           try {
             const response = await fetch(`api/agent-tools.usage?${new URLSearchParams({ sessionId })}`, { signal });
-            const data = response.ok ? await response.json() : null;
+            if (!response.ok) return;
+            const data = await response.json();
             if (!signal.aborted) setText(typeof data?.text === "string" ? data.text : "");
-          } catch {
-            if (!signal.aborted) setText("");
-          } finally {
-            // Match the host's one-minute quota refresh window.
-            if (!signal.aborted) timer = setTimeout(refresh, 60_000);
-          }
+          } catch { /* Retain the last reading until the next session update. */ }
         }
         void refresh();
-        return () => { controller.abort(); clearTimeout(timer); };
-      }, [sessionId]);
+        return () => controller.abort();
+      }, [sessionId, usage]);
 
       const summary = usageSummary(text);
       if (!summary) return null;
@@ -64,11 +59,12 @@ window.__ModuleLoader__.load({
 
     function SessionUsage({ sessionId, useProjection }) {
       const model = useProjection("modelSelection");
+      const usage = useProjection("tokenUsage");
       const selected = model?.next ?? model?.lastUsed;
       // Remount on a model/session change to hide old usage immediately and
       // cancel any outstanding read before starting another one.
       const key = JSON.stringify([sessionId, selected?.provider, selected?.model]);
-      return h(Usage, { key, sessionId });
+      return h(Usage, { key, sessionId, usage });
     }
 
     return {

@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CACHE_DIR, HOOK_SNAPSHOT_MAX_AGE_MS } from "./config.mjs";
+import { CACHE_DIR } from "./config.mjs";
 import { readUsageSnapshotByKey, updateJsonCache } from "./cache.mjs";
 import { withOutputSpeed } from "./output-speed.mjs";
 
 const SESSION_PATH = join(CACHE_DIR, "opencode-sessions.json");
+// The TUI can only use the account association recently confirmed by the session plugin.
+const SESSION_REFERENCE_MAX_AGE_MS = 10 * 60_000;
 
 function displayKey(cwd, sessionID) {
   return createHash("sha256").update(JSON.stringify([resolve(cwd), sessionID])).digest("hex");
@@ -32,10 +34,8 @@ export async function readOpenCodeUsage(cwd, sessionID) {
   try {
     const item = JSON.parse(readFileSync(SESSION_PATH, "utf8"))?.items?.[displayKey(cwd, sessionID)];
     const age = Date.now() - Date.parse(item?.updatedAt || "");
-    if (!(age < HOOK_SNAPSHOT_MAX_AGE_MS)) return "";
+    if (!(age < SESSION_REFERENCE_MAX_AGE_MS)) return "";
     const snapshot = await readUsageSnapshotByKey(item.accountKey);
-    const quotaAge = Date.now() - Date.parse(snapshot?.updatedAt || "");
-    const quota = quotaAge < HOOK_SNAPSHOT_MAX_AGE_MS ? snapshot?.text || "" : "";
-    return withOutputSpeed(quota, item.outputSpeed);
+    return withOutputSpeed(snapshot?.text, item.outputSpeed);
   } catch { return ""; }
 }

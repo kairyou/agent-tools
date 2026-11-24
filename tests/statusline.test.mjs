@@ -177,7 +177,7 @@ test("showProviderUsage hides only gateway usage and skips background refresh", 
   assert.equal(existsSync(join(temp, "cache", "usage-refresh-state.json")), false);
 });
 
-test("Claude statusline only reads the current account and hides expired quota", (t) => {
+test("Claude statusline keeps older quota for the current account", (t) => {
   const home = mkdtempSync(join(tmpdir(), "agent-tools-statusline-accounts-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   mkdirSync(join(home, "cache"));
@@ -204,6 +204,9 @@ test("Claude statusline only reads the current account and hides expired quota",
   assert.equal(render({ ...a, key: "changed-key" }), "fixture-model");
   assert.equal(render({ ...a, key: "" }), "fixture-model");
   items[usageAccountCacheKey(a)].updatedAt = new Date(Date.now() - 11 * 60_000).toISOString();
+  writeFileSync(file, JSON.stringify({ items }));
+  assert.equal(render(a), "fixture-model | balance $1");
+  items[usageAccountCacheKey(a)].updatedAt = new Date(Date.now() - 31 * 24 * 60 * 60_000).toISOString();
   writeFileSync(file, JSON.stringify({ items }));
   assert.equal(render(a), "fixture-model");
 });

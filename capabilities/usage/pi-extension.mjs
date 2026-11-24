@@ -1,5 +1,5 @@
 import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
-import { queryProviderUsage } from "./core.mjs";
+import { queryCachedProviderUsage } from "./core.mjs";
 import { isOfficialBaseUrl } from "./lib/urls.mjs";
 import { agentConfig } from "./lib/config.mjs";
 import { formatOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
@@ -9,7 +9,7 @@ import { formatOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
 const REFRESH_MS = 60_000;
 const STATUS_KEY = "agent-tools-usage";
 
-export function createPiUsageExtension({ query = queryProviderUsage, now = Date.now, config = agentConfig } = {}) {
+export function createPiUsageExtension({ query = queryCachedProviderUsage, now = Date.now, config = agentConfig } = {}) {
   return function agentToolsUsage(pi) {
     const accounts = new Map();
     let generation = 0;
@@ -56,10 +56,10 @@ export function createPiUsageExtension({ query = queryProviderUsage, now = Date.
             providerName: model.provider,
             baseUrl,
             key,
-          }, { agent: "pi", rememberSnapshot: true, reuseSnapshot: true })).then((result) => {
-            account.text = result?.text || undefined;
+          }, { agent: "pi" })).then((text) => {
+            account.text = text || undefined;
           }).catch(() => {
-            // A failed probe must not interrupt Pi or leave stale quota visible.
+            // The shared query handles gateway errors and cached readings.
             account.text = undefined;
           }).finally(() => { account.pending = null; });
         }

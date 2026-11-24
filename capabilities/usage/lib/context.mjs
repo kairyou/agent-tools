@@ -50,6 +50,7 @@ async function contextForCodex({ env = process.env, providerId } = {}) {
   const authFile = join(home, "auth.json");
   const auth = existsSync(authFile) ? await readJson(authFile) : {};
   const codexConfig = parseCodexConfig(await readTextIfExists(join(home, "config.toml")));
+  const openaiBaseUrl = typeof codexConfig.openai_base_url === "string" ? codexConfig.openai_base_url.trim() : "";
   if (providerId) {
     const providers = codexConfig.model_providers ?? {};
     const provider = Object.hasOwn(providers, providerId) ? providers[providerId] : {};
@@ -59,6 +60,7 @@ async function contextForCodex({ env = process.env, providerId } = {}) {
     return {
       providerName: providerId, provider, label: providerLabel(providerId, provider),
       baseUrl: overrides.PROVIDER_USAGE_BASE_URL || overrides.SUB2API_BASE_URL ||
+        (providerId === "openai" && openaiBaseUrl) ||
         (builtIn ? env.OPENAI_BASE_URL : provider.base_url) || "",
       key: overrides.PROVIDER_USAGE_API_KEY || overrides.SUB2API_API_KEY ||
         (builtIn ? auth.OPENAI_API_KEY || env.OPENAI_API_KEY :
@@ -69,6 +71,7 @@ async function contextForCodex({ env = process.env, providerId } = {}) {
   const baseUrl =
     env.PROVIDER_USAGE_BASE_URL ||
     env.SUB2API_BASE_URL ||
+    (providerName === "openai" && openaiBaseUrl) ||
     env.OPENAI_BASE_URL ||
     provider.base_url ||
     "";

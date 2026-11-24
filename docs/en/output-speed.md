@@ -23,7 +23,7 @@ Claude Code CLI checks the response ID and token usage to confirm that the API d
 When timing is missing or cannot be matched, it uses transcript timestamps from the preceding user input or tool result to response completion.
 
 Speed is hidden when usable token counts or timing are unavailable.
-Codex uses the same reading in its status line and usage notices.
+The Codex CLI footer and usage notices use the same timing as the usage panel in the ChatGPT desktop app.
 Paseo uses the corresponding Claude or Codex transcript when `providerUsage.outputSpeed` is enabled.
 
 ## Why it is an estimate

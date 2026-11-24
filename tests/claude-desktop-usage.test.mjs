@@ -60,7 +60,6 @@ test("Claude Desktop usage renders scoped gateway data and measures only main mo
     register((name, matcher, handle) => hooks.push({ name, matcher: handle ? matcher : {}, handle: handle ?? matcher }));
     let ms = 0;
     let opened;
-    let cancelled = false;
     const settings = Promise.withResolvers();
     const gateway = Promise.withResolvers();
     const elements = Object.fromEntries(["Box", "Text", "Button"].map((name) => [name, (props) => ({ name, ...props })]));
@@ -68,7 +67,7 @@ test("Claude Desktop usage renders scoped gateway data and measures only main mo
       session: sessionApi,
       clock: {
         now: async () => ms,
-        every: () => ({ cancel() { cancelled = true; } }),
+        every: () => assert.fail("Usage should not start a periodic timer"),
       },
       process: { async run([exe, script, ...args], opts) {
         const settingsOnly = args[0] === "--settings";
@@ -106,7 +105,6 @@ test("Claude Desktop usage renders scoped gateway data and measures only main mo
       },
       end() {
         assert.equal(fire("session.end", {}), "untouched");
-        assert.equal(cancelled, true);
       },
     };
   }

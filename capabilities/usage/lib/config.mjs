@@ -79,13 +79,12 @@ async function rotateDebugLogIfNeeded() {
 export async function debugLog(event) {
   const config = await agentConfig();
   if (process.env.PROVIDER_USAGE_DEBUG !== "1" && config.debug !== true) return;
-  await mkdir(dirname(DEBUG_PATH), { recursive: true });
-  await rotateDebugLogIfNeeded();
-  const line = JSON.stringify({
-    at: new Date().toISOString(),
-    ...event,
-  });
-  await writeFile(DEBUG_PATH, `${line}\n`, { flag: "a" });
+  try {
+    await mkdir(dirname(DEBUG_PATH), { recursive: true });
+    await rotateDebugLogIfNeeded();
+    const line = JSON.stringify({ at: new Date().toISOString(), ...event });
+    await writeFile(DEBUG_PATH, `${line}\n`, { flag: "a" });
+  } catch { /* Debug logging must not interrupt usage queries. */ }
 }
 
 export async function providerUsageDays() {
@@ -103,8 +102,6 @@ export async function usagePreset() {
 // Timing follows the caller's shape, so it is fixed rather than configurable:
 // the hook never waits on the network (snapshot + background refresh), and
 // every other caller either runs detached or is an explicit user request.
-// Past this age a snapshot is too stale to show instead of nothing.
-export const HOOK_SNAPSHOT_MAX_AGE_MS = 10 * 60_000;
 // Minimum gap between queries for one gateway account, however many hooks fire.
 export const REFRESH_INTERVAL_MS = 60_000;
 

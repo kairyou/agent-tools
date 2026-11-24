@@ -85,8 +85,8 @@ test("Pi usage queries resolved auth, caches and coalesces refreshes", async () 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context.baseUrl, "https://resolved.example/v1");
   assert.equal(calls[0].context.key, "resolved-key");
-  assert.deepEqual(calls[0].options, { agent: "pi", rememberSnapshot: true, reuseSnapshot: true });
-  finish({ text: "balance $27.5" });
+  assert.deepEqual(calls[0].options, { agent: "pi" });
+  finish("balance $27.5");
   await setImmediate();
   assert.equal(h.statuses.at(-1).text, "balance $27.5");
   await h.emit("agent_end");
@@ -94,7 +94,7 @@ test("Pi usage queries resolved auth, caches and coalesces refreshes", async () 
   time = 60_000;
   await h.emit("agent_end");
   assert.equal(calls.length, 2);
-  finish({ text: "balance $26" });
+  finish("balance $26");
   await setImmediate();
   assert.equal(h.statuses.at(-1).text, "balance $26");
 });
@@ -105,15 +105,15 @@ test("Pi model changes and shutdown discard late results", async () => {
   await h.emit("session_start");
   const next = { provider: "other", baseUrl: "https://other.example/v1" };
   await h.emit("model_select", { model: next });
-  pending[1]({ text: "new account" });
+  pending[1]("new account");
   await setImmediate();
-  pending[0]({ text: "old account" });
+  pending[0]("old account");
   await setImmediate();
   assert.equal(h.statuses.at(-1).text, "new account");
   await h.emit("model_select", { model: { provider: "third", baseUrl: "https://third.example" } });
   await h.emit("session_shutdown");
   const count = h.statuses.length;
-  pending[2]({ text: "closed session" });
+  pending[2]("closed session");
   await setImmediate();
   assert.equal(h.statuses.length, count);
   assert.equal(h.statuses.at(-1).text, undefined);
@@ -138,24 +138,23 @@ test("Pi usage skips official endpoints, missing auth and headless sessions", as
   assert.equal(queries, 0);
 });
 
-test("Pi usage failures clear stale status and allow a later retry", async () => {
+test("Pi keeps the cached quota returned by a failed refresh and clears it when auth is missing", async () => {
   let time = 0;
   let calls = 0;
   const h = harness({ now: () => time, query: async () => {
     calls += 1;
-    if (calls === 2) throw new Error("offline");
-    return { text: "balance $10" };
+    return calls === 3 ? "balance $9" : "balance $10";
   } });
   await h.emit("session_start");
   assert.equal(h.statuses.at(-1).text, "balance $10");
-  time = 60_000;
-  await h.emit("agent_end");
-  assert.equal(h.statuses.at(-1).text, undefined);
-  await h.emit("agent_end");
-  assert.equal(calls, 2);
-  time = 120_000;
+  time = 11 * 60_000;
   await h.emit("agent_end");
   assert.equal(h.statuses.at(-1).text, "balance $10");
+  await h.emit("agent_end");
+  assert.equal(calls, 2);
+  time += 60_000;
+  await h.emit("agent_end");
+  assert.equal(h.statuses.at(-1).text, "balance $9");
   h.ctx.modelRegistry.getApiKeyAndHeaders = async () => { throw new Error("auth unavailable"); };
   await h.emit("agent_end");
   assert.equal(h.statuses.at(-1).text, undefined);
@@ -167,7 +166,7 @@ test("Pi usage honors explicit endpoint and credential overrides", async () => {
   process.env.PROVIDER_USAGE_API_KEY = "override-key";
   try {
     let input;
-    const h = harness({ query: async (context) => { input = context; return { text: "quota" }; } });
+    const h = harness({ query: async (context) => { input = context; return "quota"; } });
     h.ctx.model = { provider: "openai", baseUrl: "https://api.openai.com/v1" };
     h.ctx.modelRegistry.getApiKeyAndHeaders = async () => { throw new Error("must use override"); };
     await h.emit("session_start");
@@ -188,7 +187,7 @@ test("Pi output speed excludes initial wait, tools and finalization while retain
   let calls = 0;
   const h = harness({ now: () => time, config: async () => ({ outputSpeed: true }), query: async () => {
     calls += 1;
-    return { text: "balance $10" };
+    return "balance $10";
   } });
   await h.emit("session_start");
   await h.emit("message_start", { message: { role: "assistant" } });

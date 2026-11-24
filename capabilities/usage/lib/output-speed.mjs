@@ -32,10 +32,10 @@ function transcriptTail(file) {
   }
 }
 
-export function codexOutputSpeed(file) {
-  let inputTime, response, lastTotal, lastResponseId, turnId, result = "";
+export function codexTranscriptUsage(file) {
+  let inputTime, response, lastTotal, lastResponseId, turnId, rateLimits, speed = "";
   function finish(tokens, end) {
-    result = formatOutputSpeed(tokens, end - response?.start);
+    speed = formatOutputSpeed(tokens, end - response?.start);
     inputTime = Math.max(inputTime ?? -Infinity, end);
     response = undefined;
   }
@@ -72,6 +72,7 @@ export function codexOutputSpeed(file) {
     } else if (payload.type === "user_message") {
       inputTime = timestamp;
     } else if (payload.type === "token_count") {
+      if (payload.rate_limits?.limit_id === "codex") rateLimits = payload.rate_limits;
       const next = payload.info?.total_token_usage?.output_tokens;
       const last = payload.info?.last_token_usage?.output_tokens;
       if (!Number.isFinite(next) || next < 0 || next === lastTotal) continue;
@@ -81,10 +82,14 @@ export function codexOutputSpeed(file) {
       if (response) finish(tokens, response.end);
     } else if (payload.type === "turn_aborted") {
       inputTime = response = undefined;
-      result = "";
+      speed = "";
     }
   }
-  return result;
+  return { speed, rateLimits };
+}
+
+export function codexOutputSpeed(file) {
+  return codexTranscriptUsage(file).speed;
 }
 
 export function zcodeOutputSpeed(options = {}) {

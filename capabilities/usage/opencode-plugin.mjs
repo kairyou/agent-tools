@@ -1,6 +1,6 @@
 import { queryProviderUsage } from "./core.mjs";
 import { usageAccountCacheKey } from "./lib/cache-policy.mjs";
-import { agentConfig, HOOK_SNAPSHOT_MAX_AGE_MS } from "./lib/config.mjs";
+import { agentConfig } from "./lib/config.mjs";
 import { formatOutputSpeed, withOutputSpeed } from "./lib/output-speed.mjs";
 import { readUsageSnapshot } from "./lib/cache.mjs";
 import { rememberOpenCodeSession } from "./lib/opencode-session.mjs";
@@ -85,16 +85,15 @@ export const AgentToolsUsage = async ({ client, directory = process.cwd() }, opt
       const task = queryProviderUsage(context, {
         agent: "opencode",
         rememberSnapshot: true,
-        reuseSnapshot: true,
+        force: false,
       })
         .catch(() => null)
         .finally(() => inFlight.delete(cacheKey));
       inFlight.set(cacheKey, task);
     }
     const pending = inFlight.get(cacheKey);
-    const result = pending ? await pending : await readUsageSnapshot(context);
-    const fresh = pending || Date.now() - Date.parse(result?.updatedAt || "") < HOOK_SNAPSHOT_MAX_AGE_MS;
-    await show(fresh ? result?.text : "");
+    const result = await pending;
+    await show(result?.text || (await readUsageSnapshot(context))?.text);
   }
 
   return {

@@ -28,49 +28,40 @@ Skills installer 会自动检测并安装到大多数受支持 Agent 的 Skills 
 npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
 ```
 
-用法:
-
-- `/at-commit [<语言>]` — 指定 commit description 的语言(Conventional Commits 语法部分保持英文)
+用 `/at-commit [<语言>]` 指定提交标题中冒号后文字的语言.
 
 ### at-review
 
-审查本地改动或托管的 PR/MR 中的正确性 bug, 回归风险, 约定违规和高价值清理项.
+审查本地改动或托管的 PR/MR, 查找 bug, 回归风险和约定违规.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 ```
 
-用法:
-
-- `/at-review [--fix] [<PR/MR-URL|分支|路径>]` — 输出审查结果; 私有托管目标需要本地已有只读访问权限, `--fix` 仅对匹配的工作树应用修复
+`/at-review [--fix] [<PR/MR-URL|分支|路径>]`. 私有 PR/MR 需有读取权限. `--fix` 仅修复匹配的工作树.
 
 ### at-simplify
 
-重构改动, 减少冗余, 降低复杂度, 提升代码质量.
+简化改动中的代码, 减少冗余和复杂度.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
 ```
 
-用法:
-
-- `/at-simplify [<pr|分支|路径>]`
+`/at-simplify [<pr|分支|路径>]`
 
 ### at-zentao
 
-读取禅道 bug/task 并端到端处理, 管理任务状态和工时, 或补充关联 story 上下文; 提交和回写前均需确认.
+处理禅道 Bug, 任务和工时, 查询关联需求. 提交和回写前需确认.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 ```
 
-用法:
-
-- `/at-zentao bugs` — 列出指派给你(配置的账号)的 bug, 挑一个或多个(多个 = 批量模式)
-- `/at-zentao tasks` — 同上, 任务清单
-- `/at-zentao bug <id>` — 直接处理指定 bug
-- `/at-zentao task <id> [请求]` — 处理指定 task, 用自然语言开始/暂停/继续或记录工时
-- `/at-zentao story <id>` — 只读查看研发需求范围和验收信息
+- `/at-zentao bugs` / `/at-zentao tasks` — 查看指派给你的列表, 支持批量处理.
+- `/at-zentao bug <id> [请求]` — 处理指定 Bug, 也可加 `只分析原因` 等请求.
+- `/at-zentao task <id> [请求]` — 用自然语言开始/暂停/继续任务或记录工时.
+- `/at-zentao story <id>` — 只读查看需求和验收信息.
 
 配置 `~/.agent-tools/config.jsonc`:
 
@@ -81,8 +72,7 @@ npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
     "account": "user",
     "password": "your-password",
     // "password": { "env": "ZENTAO_PASSWORD" }, // 或者从环境变量读取密码.
-    // 可选. 不配置时, 字段标签默认跟随条目或用户的语言.
-    // "commentPrompt": "修复 Bug 时使用中文, 按以下格式回写:\n原因: ...\n修复: ...\n影响范围: ...\n测试建议: ...\nCommit: <hash>\n每项简短, 影响范围和测试建议无实质内容时省略. 使用真实提交号."
+    // "commentPrompt": "已修复的 Bug 用中文回写:\n原因: ...\n修复: ...\n影响: ...\nCommit: <实际提交号>\n无实质影响时省略影响字段."
   }
 }
 ```
@@ -143,7 +133,8 @@ OpenRouter 和 Command Code. 具体兼容性取决于网关版本及其开放的
 npx -y @kairyou/agent-tools@latest usage -a codex
 ```
 
-- **Codex** — CLI 0.171.0 起优先使用底栏, 安装后重启生效. 用量提示需在 `/hooks` 中批准. 也可用 `$at-usage` 查询.
+- **Codex CLI** — 0.171.0 起优先在底栏显示. 如有提示, 在 `/hooks` 中批准用量通知. 可用 `$at-usage` 查询.
+- **ChatGPT 桌面端** — 本地 Codex 会话右侧 **+ → More tools → Agent Tools usage**. 若无法访问 `web-sandbox.oaiusercontent.com`, 用 `$at-usage` 查网关用量.
 - **OpenCode** — 会话空闲时弹出用量提示, 也可用 `/at-usage` 查询.
 - **Pi** — 在底栏显示用量.
 - **ZCode** — 桌面版底栏显示网关用量, 可选显示 `tok/s`.
@@ -152,8 +143,7 @@ npx -y @kairyou/agent-tools@latest usage -a codex
 - **Copilot CLI** — 在原生底栏项旁显示网关用量, 可选显示 `tok/s`.
 - **Qwen Code** — 按用户设置中唯一的模型显示名匹配网关用量, 底栏也可显示 `tok/s`.
 
-安装器会保留 Copilot CLI 和 Qwen Code 已有的自定义底栏.
-安装或更新后, 重启对应的 OpenCode, Pi, ZCode, DeepSeek Harness, Copilot CLI 或 Qwen Code. Pi 也可运行 `/reload`.
+安装或更新后重启 Agent, Pi 也可运行 `/reload`.
 
 自动从 Agent 当前模型或已有配置获取端点和密钥. 直连 OpenAI 或 Anthropic 时跳过网关查询.
 如果结果是 `Provider usage is unavailable.`, 可用
@@ -200,15 +190,13 @@ balance $362 | today $61.7 | 30d $566
 
 ### Vision(跨模型识图)
 
-让不支持图片的主模型借助多模态模型识图, 适用于读取报错截图, 按设计稿还原 UI, 定位测试反馈截图里的界面问题.
+让主模型借助多模态模型读截图和设计稿.
 
 #### 安装
 
 ```bash
 npx -y @kairyou/agent-tools@latest vision -a claude
 ```
-
-卸载会保留现有 `vision` 配置.
 
 #### 配置
 
@@ -231,10 +219,7 @@ npx -y @kairyou/agent-tools@latest vision -a claude
 
 #### 使用
 
-在消息里给出本地图片路径或 URL 即可. 主模型不支持图片时, 请先保存图片,
-再提供文件路径, 不要直接粘贴.
-
-人工排查配置或测试识别质量时可用:
+在消息里给出图片路径或 URL. 也可用 CLI 测试识图效果.
 
 ```bash
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "导航栏的背景色和高度是多少"

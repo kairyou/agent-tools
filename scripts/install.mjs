@@ -16,7 +16,7 @@
 // Targets:
 //   claude   -> settings.json and skills/ under CLAUDE_CONFIG_DIR (default ~/.claude)
 //               ~/.claude.json (vision MCP)
-//   codex    -> ~/.codex/config.toml (usage status line and vision MCP)
+//   codex    -> ~/.codex/config.toml (usage and vision MCP)
 //               ~/.codex/hooks.json (usage notices on older CLIs + log hooks)
 //               + ~/.agents/skills/at-usage
 //               + ~/.agents/skills/at-vision
@@ -319,8 +319,8 @@ function installRuntimeAssets(opts) {
       addFile(SOURCE.piUsageExtension, RUNTIME.piUsageExtension);
     }
     if (opts.agents.includes("codex")) {
-      if (opts.codexStatusline) addFile(SOURCE.codexStatusline, RUNTIME.codexStatusline);
-      else addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
+      addFile(SOURCE.codexStatusline, RUNTIME.codexStatusline);
+      if (!opts.codexStatusline) addFile(SOURCE.codexUsageHook, RUNTIME.codexUsageHook);
     }
     if (opts.agents.includes("opencode")) {
       addFile(SOURCE.opencodeUsagePlugin, RUNTIME.opencodeUsagePlugin);
@@ -1206,11 +1206,10 @@ function runCodexStatusline(opts) {
   const enabled = opts.codexStatusline && !opts.uninstall;
   const config = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   const begin = "# >>> agent-tools usage statusline >>>";
-  if (!enabled && !config.includes(begin) && !fs.existsSync(INSTALL_STATE_PATH)) return;
   const state = readInstallState();
   const key = `codex-statusline:${skillManifestKey(file)}`;
   const saved = state.artifacts[key];
-  if (!enabled && !saved && !config.includes(begin)) return;
+  if (opts.uninstall && !saved && !config.includes(begin)) return;
   const providerEnvKeys = [...config.matchAll(/^\s*env_key\s*=\s*["']([A-Za-z_][A-Za-z0-9_]*)["']/gm)].map((match) => match[1]);
   const envKeys = [...new Set([
     "OPENAI_BASE_URL", "OPENAI_API_KEY", "PROVIDER_USAGE_BASE_URL", "PROVIDER_USAGE_API_KEY",
@@ -1218,7 +1217,7 @@ function runCodexStatusline(opts) {
   ])];
   let backup;
   updateCodexMcpBlock(file, {
-    remove: !enabled, dryRun: opts.dryRun, name: CODEX_STATUSLINE_NAME,
+    remove: opts.uninstall, dryRun: opts.dryRun, name: CODEX_STATUSLINE_NAME,
     begin,
     end: "# <<< agent-tools usage statusline <<<",
     edit: (text) => {

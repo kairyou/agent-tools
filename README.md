@@ -29,49 +29,40 @@ Generate a Conventional Commits message from staged changes and wait for user co
 npx -y skills@latest add kairyou/agent-tools --skill at-commit -g -y
 ```
 
-Usage:
-
-- `/at-commit [<language>]` — language for the commit description (Conventional Commits tokens stay in English)
+Use `/at-commit [<language>]` to set the language of the text after the colon in the commit title.
 
 ### at-review
 
-Review local changes or a hosted PR/MR for correctness bugs, regressions, convention violations, and high-value cleanup findings.
+Review local changes or a hosted PR/MR for bugs, regressions, and convention violations.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-review -g -y
 ```
 
-Usage:
-
-- `/at-review [--fix] [<pr-or-mr-url|branch|path>]` — reports review findings; private hosted targets require locally available read access, and `--fix` applies fixes only to a matching working tree
+`/at-review [--fix] [<pr-or-mr-url|branch|path>]`. Private PRs and MRs require read access. `--fix` applies to the matching working tree only.
 
 ### at-simplify
 
-Refactor changes to reduce duplication, lower complexity, and improve code quality.
+Simplify changed code to reduce redundancy and complexity.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-simplify -g -y
 ```
 
-Usage:
-
-- `/at-simplify [<pr|branch|path>]`
+`/at-simplify [<pr|branch|path>]`
 
 ### at-zentao
 
-Work ZenTao (禅道) bugs/tasks end to end, manage task status and hours, or read linked story context; asks before committing and before writing back.
+Handle ZenTao bugs, tasks, and time logs. Review linked stories. Confirm before committing or writing back.
 
 ```bash
 npx -y skills@latest add kairyou/agent-tools --skill at-zentao -g -y
 ```
 
-Usage:
-
-- `/at-zentao bugs` — list bugs assigned to you (the configured account); pick one or several (several = batch mode)
-- `/at-zentao tasks` — same, for tasks
-- `/at-zentao bug <id>` — work a specific bug
-- `/at-zentao task <id> [request]` — work a task, start/pause/resume it, or log hours with a natural-language request
-- `/at-zentao story <id>` — read requirement scope and acceptance context without writing back
+- `/at-zentao bugs` / `/at-zentao tasks` — list assigned items and select one or more.
+- `/at-zentao bug <id> [request]` — work a bug or add a request such as `only analyze the cause`.
+- `/at-zentao task <id> [request]` — start, pause, resume, or log hours in natural language.
+- `/at-zentao story <id>` — read requirements and acceptance criteria.
 
 Configure `~/.agent-tools/config.jsonc`:
 
@@ -82,8 +73,7 @@ Configure `~/.agent-tools/config.jsonc`:
     "account": "user",
     "password": "your-password",
     // "password": { "env": "ZENTAO_PASSWORD" }, // Or read the password from an environment variable.
-    // Optional. Without this, labels follow the item or user's language.
-    // "commentPrompt": "For fixed Bugs, write in English using this format:\nCause: ...\nFix: ...\nScope: ...\nTest suggestions: ...\nCommit: <hash>\nKeep each field brief. Omit Scope and Test suggestions when there is nothing useful to add. Use a real commit hash."
+    // "commentPrompt": "For fixed bugs, write in English:\nCause: ...\nFix: ...\nImpact: ...\nCommit: <actual hash>\nOmit Impact when there is nothing substantive to add."
   }
 }
 ```
@@ -145,7 +135,8 @@ gateway version and enabled usage endpoints.
 npx -y @kairyou/agent-tools@latest usage -a codex
 ```
 
-- **Codex** — CLI 0.171.0+ uses the footer when compatible. Restart to load it. If installed as notices, approve them in `/hooks`. Query anytime with `$at-usage`.
+- **Codex CLI** — 0.171.0+ uses the footer when compatible. Approve usage notices in `/hooks` if prompted. Query anytime with `$at-usage`.
+- **ChatGPT desktop app** — In a local Codex conversation, choose **+ → More tools → Agent Tools usage** in the right panel. If `web-sandbox.oaiusercontent.com` is blocked, check gateway usage with `$at-usage`.
 - **OpenCode** — shows a toast when the session goes idle, or on demand with `/at-usage`.
 - **Pi** — displays usage in the footer.
 - **ZCode** — the desktop footer shows gateway usage and optional `tok/s`.
@@ -154,9 +145,7 @@ npx -y @kairyou/agent-tools@latest usage -a codex
 - **Copilot CLI** — adds gateway usage and optional `tok/s` alongside its built-in footer items.
 - **Qwen Code** — shows gateway usage for models with a unique display name in user settings. The footer can also show `tok/s`.
 
-The installer keeps any existing custom status line in Copilot CLI or Qwen Code.
-After installing or updating, restart OpenCode, Pi, ZCode, DeepSeek Harness, Copilot CLI, or Qwen Code as applicable.
-Pi also supports `/reload`.
+Restart your agent after installing or updating. In Pi, you can use `/reload`.
 
 The endpoint and key come from the agent's current model or existing configuration.
 Direct connections to OpenAI or Anthropic skip gateway queries. If a query returns
@@ -205,15 +194,13 @@ Gateways not covered by the built-in probes can use a custom route. See
 
 ### Vision (cross-model image understanding)
 
-Lets a main model that cannot see images use a multimodal model to analyze error screenshots, implement UI from design mockups, and inspect bug-report screenshots.
+Use a multimodal model to read screenshots and design mockups.
 
 #### Install
 
 ```bash
 npx -y @kairyou/agent-tools@latest vision -a claude
 ```
-
-Uninstalling keeps your `vision` configuration.
 
 #### Configure
 
@@ -236,10 +223,7 @@ Configure `vision` in `~/.agent-tools/config.jsonc`:
 
 #### Use
 
-Pass a local image path or URL in your message. If the main model cannot accept
-pasted images, save the image first and pass its file path instead.
-
-To diagnose the provider setup or test recognition quality manually:
+Pass an image path or URL in your message. To test image recognition directly, use the CLI.
 
 ```bash
 npx -y @kairyou/agent-tools@latest inspect-image <path|url> -q "What are the navbar background color and height?"

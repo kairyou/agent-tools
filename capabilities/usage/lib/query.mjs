@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { debugLog, usagePreset, HOOK_SNAPSHOT_MAX_AGE_MS, REFRESH_INTERVAL_MS } from "./config.mjs";
+import { debugLog, usagePreset, REFRESH_INTERVAL_MS } from "./config.mjs";
 import { isOfficialBaseUrl } from "./urls.mjs";
 import {
   readUsageSnapshot,
@@ -102,7 +102,16 @@ export async function queryUsageContext(context, options = {}) {
 }
 
 async function refreshUsage(context, options, snapshotVersion) {
-  const release = await acquireUsageRefreshLease(context);
+  let release;
+  try {
+    release = await acquireUsageRefreshLease(context);
+  } catch (error) {
+    if (!["EACCES", "EPERM", "EROFS"].includes(error?.code)) throw error;
+    // Read-only callers may query on demand. Automatic refreshes still need a
+    // lease so multiple processes cannot bypass the shared refresh interval.
+    if (!options.force) return null;
+    return { result: await probeUsage(context, { ...options, rememberSnapshot: false }) };
+  }
   if (!release) return null;
   try {
     // Only callers that accept cached output can reuse another process's
@@ -126,12 +135,12 @@ export async function queryCachedProviderUsage(input, { agent, force = false, al
   const context = normalizeUsageContext(input);
   if (!context.key || isOfficialBaseUrl(context.baseUrl)) return "";
   const cached = force && !allowStale ? null : await cachedUsage(context);
-  const fallback = allowStale && cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "";
   if (!force && cached && cached.ageMs < REFRESH_INTERVAL_MS) return cached.text;
   try {
     const result = await queryUsageContext(context, { agent, rememberSnapshot: true, force, wait: false, reuseSnapshot: true });
-    return result.text || fallback;
-  } catch { return fallback; }
+    if (result.text) return result.text;
+  } catch { /* A background refresh may fail while a previous reading is still available. */ }
+  return allowStale ? (await readUsageSnapshot(context))?.text || "" : "";
 }
 
 export async function cachedUsage(context) {

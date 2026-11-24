@@ -11,7 +11,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import {
   agentConfig,
-  HOOK_SNAPSHOT_MAX_AGE_MS,
   REFRESH_INTERVAL_MS,
 } from "./lib/config.mjs";
 import { canRefreshUsage } from "./lib/cache.mjs";
@@ -66,8 +65,9 @@ async function refresh(agent = "codex") {
 
 export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, ...session } = {}) {
   const speed = (await agentConfig()).outputSpeed === true ? agentOutputSpeed(agent, session) : "";
+  let context;
   try {
-    const context = await usageContext(agent);
+    context = await usageContext(agent);
     if (maxAgeMs > 0) {
       const cached = await cachedUsage(context);
       if (cached && cached.ageMs < maxAgeMs) return { ...cached, text: withOutputSpeed(cached.text, speed), cached: true };
@@ -75,6 +75,8 @@ export async function queryAgentProviderUsage(agent = "codex", { maxAgeMs = 0, .
     const result = await queryUsageContext(context, { agent, mode, rememberSnapshot: true, reuseSnapshot: true });
     return { ...result, text: withOutputSpeed(result.text, speed) };
   } catch (error) {
+    const cached = context && await cachedUsage(context);
+    if (cached) return { ...cached, text: withOutputSpeed(cached.text, speed), cached: true };
     if (speed) return { text: speed };
     throw error;
   }
@@ -120,7 +122,7 @@ async function hook(agent, { silent = false } = {}) {
   ) {
     scheduleRefresh(agent);
   }
-  hookOut(silent ? "" : withOutputSpeed(cached && cached.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? cached.text : "", speed));
+  hookOut(silent ? "" : withOutputSpeed(cached?.text, speed));
 }
 
 async function main() {

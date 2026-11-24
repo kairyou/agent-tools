@@ -117,6 +117,102 @@ test("quota, refresh throttles and leases are isolated by endpoint and credentia
   }
 });
 
+test("automatic usage keeps an older snapshot until the same gateway refreshes", async (t) => {
+  let available = false;
+  const server = createServer((_request, response) => {
+    if (!available) return response.writeHead(503).end();
+    response.end(JSON.stringify({ balance: 21 }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const previousPreset = process.env.PROVIDER_USAGE_PRESET;
+  process.env.PROVIDER_USAGE_PRESET = "sub2api";
+  t.after(() => {
+    if (previousPreset === undefined) delete process.env.PROVIDER_USAGE_PRESET;
+    else process.env.PROVIDER_USAGE_PRESET = previousPreset;
+  });
+  const context = { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, key: "stale-key" };
+  const { queryCachedProviderUsage } = await import("../dist/usage/core.mjs");
+  const updatedAt = new Date(Date.now() - 11 * 60_000).toISOString();
+  const previous = "today $1 25reqs | 7d $7";
+  await cache.updateJsonCache(join(home, "cache", "usage-snapshot.json"), "items", "test", (items) => {
+    items[usageAccountCacheKey(context)] = { text: previous, updatedAt };
+  });
+  assert.equal(await queryCachedProviderUsage(context), previous);
+  assert.equal(await queryCachedProviderUsage({ ...context, key: "rotated-key" }), "");
+  assert.equal(await queryCachedProviderUsage(context, { force: true, allowStale: false }), "");
+  available = true;
+  assert.equal(await queryCachedProviderUsage(context, { force: true }), "balance $21.0");
+  assert.equal(await queryCachedProviderUsage(context), "balance $21.0");
+});
+
+test("Codex usage CLI can query with a read-only cache and falls back only to the matching account", async (t) => {
+  const root = mkdtempSync(join(home, "readonly-"));
+  const transcript = join(root, "session.jsonl");
+  writeFileSync(join(root, "config.jsonc"), JSON.stringify({ providerUsage: { outputSpeed: true } }));
+  writeFileSync(transcript, [
+    { type: "event_msg", timestamp: "2026-01-01T00:00:00Z", payload: { type: "task_started" } },
+    { type: "response_item", timestamp: "2026-01-01T00:00:01Z", payload: { type: "message", role: "assistant" } },
+    { type: "token_usage_record", timestamp: "2026-01-01T00:00:02Z", payload: { response_id: "response", usage: { output_tokens: 40 } } },
+  ].map(JSON.stringify).join("\n"));
+  const allowed = "readonly-key";
+  let available = true;
+  const requests = [];
+  const server = createServer((request, response) => {
+    requests.push(request.headers.authorization);
+    if (!available) return response.writeHead(503).end();
+    response.end(JSON.stringify({ balance: 21 }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const baseUrl = `http://127.0.0.1:${server.address().port}/v1`;
+  const snapshot = join(root, "cache", "usage-snapshot.json");
+  await cache.updateJsonCache(snapshot, "items", "test", (items) => {
+    items[usageAccountCacheKey({ baseUrl, key: allowed })] = { text: "balance $7.0", updatedAt: new Date().toISOString() };
+  });
+  const blockedWrites = `
+    import fs from "node:fs/promises";
+    import { syncBuiltinESMExports } from "node:module";
+    import { join } from "node:path";
+    const root = process.env.AGENT_TOOLS_HOME;
+    const cache = join(root, "cache");
+    const logs = join(root, "logs");
+    const denied = () => Object.assign(new Error("Sandbox cannot write here"), { code: "EPERM" });
+    const { mkdir, open } = fs;
+    fs.mkdir = async (path, ...args) => {
+      if (path === logs || (path === cache && process.env.TEST_DENIED_OPERATION === "mkdir")) throw denied();
+      return mkdir(path, ...args);
+    };
+    fs.open = async (path, ...args) => {
+      if (String(path).startsWith(cache) && String(path).endsWith(".lock")) throw denied();
+      return open(path, ...args);
+    };
+    syncBuiltinESMExports();
+  `;
+  const preload = `data:text/javascript,${encodeURIComponent(blockedWrites)}`;
+  const cli = fileURLToPath(new URL("../dist/usage/cli.mjs", import.meta.url));
+  const run = promisify(execFile);
+  async function query(key, operation = "open") {
+    const { stdout, stderr } = await run(process.execPath, ["--import", preload, cli, "--agent", "codex", "--transcript", transcript], {
+      timeout: 5_000,
+      env: { ...process.env, AGENT_TOOLS_HOME: root, CODEX_HOME: root, TEST_DENIED_OPERATION: operation,
+        PROVIDER_USAGE_BASE_URL: baseUrl, PROVIDER_USAGE_API_KEY: key, PROVIDER_USAGE_PRESET: "sub2api", PROVIDER_USAGE_DEBUG: "1" },
+    });
+    assert.equal(stderr, "");
+    return stdout.trim();
+  }
+
+  assert.equal(await query(allowed), "balance $21.0 | 20.0 tok/s");
+  assert.equal(await query(allowed, "mkdir"), "balance $21.0 | 20.0 tok/s");
+  assert.deepEqual(requests, [`Bearer ${allowed}`, `Bearer ${allowed}`]);
+  available = false;
+  assert.equal(await query(allowed), "balance $7.0 | 20.0 tok/s");
+  assert.equal(await query("rotated-key"), "20.0 tok/s");
+  assert.match(readFileSync(snapshot, "utf8"), /balance \$7\.0/);
+});
+
 test("writes prune expired and excess entries from each persistent cache", async () => {
   const now = Date.now();
   const expired = new Date(now - 31 * 24 * 60 * 60_000).toISOString();
@@ -165,6 +261,11 @@ test("OpenCode session references use the shared quota, expire, and delete clean
   const serialized = readFileSync(join(home, "cache", "opencode-sessions.json"), "utf8");
   assert.doesNotMatch(serialized, /balance|fixture-secret|"text"/);
   const now = Date.now();
+  const usageAt = new Date(now - 11 * 60_000).toISOString();
+  await cache.updateJsonCache(join(home, "cache", "usage-snapshot.json"), "items", "test", (items) => {
+    items[usageAccountCacheKey(b)].updatedAt = usageAt;
+  });
+  assert.equal(await sessions.readOpenCodeUsage(home, "session-b"), "balance $20");
   t.mock.method(Date, "now", () => now + 11 * 60_000);
   assert.equal(await sessions.readOpenCodeUsage(home, "session-b"), "");
   t.mock.restoreAll();

@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { HOOK_SNAPSHOT_MAX_AGE_MS } from "./config.mjs";
-
 const MANAGED_AUTH = new Set(["github_copilot", "codex_oauth", "xai_oauth"]);
+// Without the local token, require a recent request to confirm this session's route.
+const SESSION_ROUTE_MAX_AGE_MS = 10 * 60_000;
 const DESKTOP_PROFILE_ID = "00000000-0000-4000-8000-000000157210";
 
 function desktopProfileLibrary(home) {
@@ -107,7 +107,7 @@ export function readCcSwitchRoutedProvider(app, { token, tokenSetting, sessionId
     // Recent successful requests identify the provider even when Desktop
     // keeps the local proxy credential out of the usage worker's environment.
     const age = latest ? Date.now() - latest.created_at * 1_000 : Infinity;
-    const confirmed = age >= 0 && age < HOOK_SNAPSHOT_MAX_AGE_MS;
+    const confirmed = age >= 0 && age < SESSION_ROUTE_MAX_AGE_MS;
     stage = "cc-switch-database-unreadable";
     const storedToken = db.prepare("SELECT value FROM settings WHERE key = ?").get(tokenSetting)?.value;
     const localToken = typeof storedToken === "string" ? storedToken.trim() : "";

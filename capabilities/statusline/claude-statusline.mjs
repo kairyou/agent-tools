@@ -17,7 +17,6 @@ import { fileURLToPath } from "node:url";
 import { parse as parseJsonc } from "jsonc-parser";
 import { claudeOutputSpeed } from "../usage/lib/output-speed.mjs";
 import { retainedCacheEntries, usageAccountCacheKey } from "../usage/lib/cache-policy.mjs";
-import { HOOK_SNAPSHOT_MAX_AGE_MS } from "../usage/lib/config.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const AGENT_TOOLS_HOME = process.env.AGENT_TOOLS_HOME || join(SCRIPT_DIR, "..", "..");
@@ -267,7 +266,7 @@ function claudeUsageKey() {
 function snapshotForBaseUrl(baseUrl) {
   const snapshot = readJsonFileRaw(SNAPSHOT_FILE);
   const key = usageAccountCacheKey({ baseUrl, key: claudeUsageKey() });
-  const item = snapshot?.items?.[key];
+  const item = retainedCacheEntries(snapshot?.items)[key];
   return item?.text ? item : null;
 }
 
@@ -317,7 +316,7 @@ function providerUsageStatus() {
   if (!baseUrl || isOfficialBaseUrl(baseUrl)) return "";
   const snapshot = snapshotForBaseUrl(baseUrl);
   if (shouldRefreshUsage(baseUrl, snapshot)) refreshUsageInBackground(baseUrl);
-  return ageMs(snapshot?.updatedAt) < HOOK_SNAPSHOT_MAX_AGE_MS ? snapshot?.text || "" : "";
+  return snapshot?.text || "";
 }
 
 function render(data, config) {

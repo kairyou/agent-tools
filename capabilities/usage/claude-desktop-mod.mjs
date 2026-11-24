@@ -3,8 +3,6 @@ import { usageSummary } from "./lib/usage-summary.mjs";
 
 const runtime = "__AGENT_TOOLS_DESKTOP_RUNTIME__";
 const PANE = "agent-tools-gateway-usage";
-// Match the shared gateway cache refresh interval while the session is open.
-const REFRESH_MS = 60_000;
 // Let the host answer during turn completion without holding up a finished turn.
 const SESSION_ID_TIMEOUT_MS = 250;
 
@@ -53,14 +51,13 @@ export function register(on) {
 
   on("session.end", ($, event, next) => {
     session.ended = true;
-    session.timer?.cancel();
     session = {};
     return next(event);
   });
 
   on("turn.step", async function* ($, event, next) {
     const state = session;
-    if (!state.timer || event.agentId) return yield* next(event);
+    if (!state.initialized || event.agentId) return yield* next(event);
     const request = Symbol();
     state.request = request;
     const start = await $.clock.now().catch(() => NaN);
@@ -77,22 +74,24 @@ export function register(on) {
   on("turn.complete", async ($, event, next) => {
     const state = session;
     const result = await next(event);
-    if (state.ended || !state.timer || state.routed === false || event.agentId || event.isAborted) return result;
-    let sessionId;
-    try {
-      const id = await Promise.race([$.session.id(), $.clock.sleep(SESSION_ID_TIMEOUT_MS)]);
-      if (typeof id === "string" && id.trim()) sessionId = id;
-    } catch { /* The usage worker can look up its parent process. */ }
-    if (state.ended) return result;
-    state.sessionId = sessionId;
+    if (state.ended || !state.initialized || event.agentId || event.isAborted) return result;
+    if (state.routed !== false) {
+      let sessionId;
+      try {
+        const id = await Promise.race([$.session.id(), $.clock.sleep(SESSION_ID_TIMEOUT_MS)]);
+        if (typeof id === "string" && id.trim()) sessionId = id;
+      } catch { /* The usage worker can look up its parent process. */ }
+      if (state.ended) return result;
+      state.sessionId = sessionId;
+    }
     void refreshGateway($, state);
     return result;
   });
 
   on("ui.render", { component: "AbovePrompt", surface: "desktop" }, async ($, event, next) => {
     const state = session;
-    if (!state.timer) {
-      state.timer = $.clock.every(REFRESH_MS, () => refresh($, state));
+    if (!state.initialized) {
+      state.initialized = true;
       void refresh($, state);
     }
     const summary = state.gateway ? usageSummary(state.gateway) : "";
@@ -103,6 +102,7 @@ export function register(on) {
     const row = summary ? Button({
       key: "gateway-usage", label, plain: true,
       onPress: async () => {
+        void refresh($, state);
         try { await $.ui.open({ id: PANE, title: "Gateway usage", focus: true, closeOnEscape: true }); }
         catch { /* The details may already be open. */ }
       },

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { canRefreshUsage } from "./cache.mjs";
-import { agentConfig, HOOK_SNAPSHOT_MAX_AGE_MS, REFRESH_INTERVAL_MS } from "./config.mjs";
+import { agentConfig, REFRESH_INTERVAL_MS } from "./config.mjs";
 import { withOutputSpeed } from "./output-speed.mjs";
 import { cachedUsage, queryCachedProviderUsage } from "./query.mjs";
 import { isOfficialBaseUrl } from "./urls.mjs";
@@ -24,7 +24,7 @@ async function gatewayUsage(data, resolveContext) {
   if ((!snapshot || snapshot.ageMs >= REFRESH_INTERVAL_MS) && await canRefreshUsage(context, REFRESH_INTERVAL_MS)) {
     refreshInBackground(context);
   }
-  return snapshot?.ageMs < HOOK_SNAPSHOT_MAX_AGE_MS ? snapshot.text : "";
+  return snapshot?.text || "";
 }
 
 export async function runUsageStatusline(agent, resolveContext, readSpeed) {

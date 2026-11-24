@@ -27,6 +27,12 @@ function limitText(windows, position, minutes, label) {
   return `${label} ${Math.round(Math.min(100, Math.max(0, 100 - window.used_percent)))}% left`;
 }
 
+export function codexSubscriptionQuota(limits, now = Date.now()) {
+  const windows = [limits?.primary, limits?.secondary].filter((window) =>
+    Number.isFinite(window?.window_minutes) && Number.isFinite(window?.resets_at) && window.resets_at * 1000 > now);
+  return [limitText(windows, 0, 300, "5h"), limitText(windows, 1, 10080, "7d")].filter(Boolean).join(" | ");
+}
+
 function compactAmount(value, label) {
   return Number.isFinite(value) && value >= 0 ? `${compact.format(value)} ${label}` : "";
 }
